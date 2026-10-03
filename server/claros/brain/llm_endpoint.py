@@ -303,6 +303,12 @@ async def route(body: dict) -> Reply:
     intent = ir.intent
 
     if mode in ("learn", "request"):
+        # privacy controls work for learners too ("не записывай" while a learner shares their screen)
+        from .intents import rule_intent
+        priv = rule_intent("capture", text)
+        if priv == "off_record":
+            await _control(sid, "off_record_on")
+            return Reply(text=L.phrase("off_record", lang))
         return await _learner(sid, sess, intent, text, lang, body)
     if mode == "debrief" and intent not in ("off_record", "strike_that", "end_session", "question_to_claros"):
         r = await _debrief(sess, intent, text, body)

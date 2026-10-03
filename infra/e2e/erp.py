@@ -40,7 +40,7 @@ async def open_list(page: Page, doctype_slug: str = "purchase-invoice", query: s
 
 async def open_doc(page: Page, name: str, doctype_slug: str = "purchase-invoice") -> None:
     """Click the record in the list view if visible, else navigate."""
-    link = page.locator(f"a[data-name='{name}'], a[href$='/{name}']").first
+    link = page.locator(f".list-row a[data-name='{name}']:visible, .list-row a[href$='/{name}']:visible").first
     if await link.count():
         await link.click()
     else:
@@ -131,7 +131,7 @@ async def save(page: Page) -> None:
 
 
 async def workflow_action(page: Page, action: str) -> None:
-    await page.locator(".actions-btn-group button, button:has-text('Actions')").filter(has_text="Actions").first.click()
+    await page.locator("button:visible").filter(has_text="Actions").first.click()
     await page.wait_for_timeout(400)
     await page.locator(".actions-btn-group .dropdown-menu a, .dropdown-menu.show a").filter(has_text=action).first.click()
     await page.wait_for_timeout(800)

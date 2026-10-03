@@ -192,6 +192,7 @@ class Heuristic:
     dialogs: list[str] = field(default_factory=list)
     pairs: list[Pair] = field(default_factory=list)
     ui_lang: Optional[str] = None
+    marks: list[OcrLine] = field(default_factory=list)
 
 
 def analyze(lines: list[OcrLine], dims: tuple[int, int]) -> Heuristic:
@@ -270,6 +271,14 @@ def analyze(lines: list[OcrLine], dims: tuple[int, int]) -> Heuristic:
                 break
         if h.dialogs:
             break
+    # status words set on the record outside the header badge (a tag/label "On Hold ×", a chip "Approved")
+    for ln in lines:
+        if id(ln) in used or ln.bbox[1] < H * 0.12:
+            continue
+        k = lexicon.status_of(re.sub(r"\s*[×✕xX]\s*$", "", ln.text.strip()))
+        if k in ("on_hold", "approved", "rejected") and ln.text.strip() != (h.status or ""):
+            h.marks.append(ln)
+            used.add(id(ln))
     h.pairs = pair_fields([ln for ln in lines if id(ln) not in used and
                            (h.title_bbox is None or ln.bbox[1] > h.title_bbox[1])])
     return h
@@ -494,6 +503,13 @@ class StateTracker:
                 elif tpl.seq == seq:
                     visible[k] = Field_(label=vf.label, value=vf.value, bbox=vf.bbox,
                                         normalized=normalize(vf.value, ui_lang))
+        if heur.entity_id and heur.marks:  # record-level marks → one pseudo-field the differ turns into hold/approve
+            m0 = heur.marks[0]
+            near = [ln for ln in lines if ln not in heur.marks and 0 <= m0.bbox[1] - ln.bbox[1] < 70
+                    and abs(ln.bbox[0] - m0.bbox[0]) < 60 and not lexicon.status_of(ln.text) and len(ln.text) < 30]
+            lab = (max(near, key=lambda ln: ln.bbox[1]).text.strip() if near else "Mark")
+            val = ", ".join(sorted({re.sub(r"\s*[×✕xX]\s*$", "", m.text.strip()) for m in heur.marks}))
+            visible[label_key(lab)] = Field_(label=lab, value=val, canonical="ui.mark", bbox=m0.bbox)
         if tpl is None and self.templates:
             # vision works in this session but hasn't read this screen yet: OCR pairs on an unknown dense layout are
             # mostly menu/label mis-pairs → keep them for context but not edit-eligible (bbox None) until it has
@@ -615,10 +631,16 @@ def _cell_below(lines: list[OcrLine], header: str, row: int) -> Optional[OcrLine
     left = hdr[i - 1].bbox[0] + hdr[i - 1].bbox[2] if i > 0 else h.bbox[0] - 2 * h.bbox[3]
     right = hdr[i + 1].bbox[0] if i + 1 < len(hdr) else h.bbox[0] + h.bbox[2] + 6 * h.bbox[3]
 
+    spans = [((hdr[k - 1].bbox[0] + hdr[k - 1].bbox[2]) if k > 0 else hdr[k].bbox[0] - 2 * hdr[k].bbox[3],
+              hdr[k + 1].bbox[0] if k + 1 < len(hdr) else hdr[k].bbox[0] + hdr[k].bbox[2] + 6 * hdr[k].bbox[3])
+             for k in range(len(hdr))]
+
     def inside(ln: OcrLine) -> bool:
         a, b = ln.bbox[0], ln.bbox[0] + ln.bbox[2]
+        ovs = [min(b, r_) - max(a, l_) for l_, r_ in spans]
         ov = min(b, right) - max(a, left)
-        return ov >= 0.6 * max(1, ln.bbox[2])
+        # the column this cell overlaps most (a long item name spilling into the qty column stays an item)
+        return ov >= 0.5 * max(1, ln.bbox[2]) and max(range(len(ovs)), key=lambda k: ovs[k]) == i
 
     top = h.bbox[1] + h.bbox[3] * 0.8
     below = [ln for ln in lines if ln not in hdr and ln.bbox[1] > top

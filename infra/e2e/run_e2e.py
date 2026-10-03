@@ -422,6 +422,8 @@ async def phase_c(lang: str = "en") -> None:
         results["intervene_7200"] = iv_7200
         if lang == "ru":
             await ask_learner("не записывай")
+            results["off_record_ack"] = c.of_type("control")[-1:] if c.of_type("control") else None
+            await c.send({"type": "control", "t": now_ms(), "action": "off_record_off"})  # orb button: back on
             await ask_learner("почему это капитальные затраты?")
         # 6,100 maintenance invoice, keep opex → expect NO intervention
         n0 = len(c.of_type("intervene"))

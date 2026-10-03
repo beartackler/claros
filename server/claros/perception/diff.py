@@ -132,13 +132,27 @@ class Differ:
             self.last_t = cur.t
             return evs
 
+        # ----- record marks (tag/chip "On Hold") -----
+        pm = {m for f in prev.fields if f.canonical == "ui.mark" and f.bbox for m in (f.value or "").split(", ") if m}
+        for f in cur.fields:
+            if f.canonical != "ui.mark" or not f.bbox:
+                continue
+            for mk in [m for m in (f.value or "").split(", ") if m and m not in pm]:
+                sk = lexicon.status_of(mk)
+                evs.append(self._ev(cur, lexicon.STATUS_EVENT.get(sk or "", "other"), f"{f.label}: {mk} set on {name}",
+                                    field=f.label, canonical="ui.mark", old=None, new=mk, source="typed"))
         # ----- field edits -----
+        # list/grid views (no open record, multi-row tables): cells and filters change on every scroll/filter
+        list_view = not cur.entity_id and any((t.get("row_count") or len(t.get("rows") or [])) > 1
+                                              for t in (cur.tables or []))
         prev_f = {label_key(f.label): f for f in prev.fields}
         changes = []
         for f in cur.fields:
             k = label_key(f.label)
             p = prev_f.get(k)
-            if p is None or f.bbox is None:      # newly seen or scrolled off: not an edit
+            if list_view or f.canonical == "ui.mark":
+                continue
+            if p is None or f.bbox is None or p.bbox is None:  # newly seen / scrolled in or off: not an edit
                 continue
             if (p.value or "") != (f.value or "") and not same_value(p, f):
                 changes.append((k, p, f))
@@ -192,8 +206,9 @@ class Differ:
         if cur.status and (cur.status or "") != (prev.status or ""):
             sk = lexicon.status_of(cur.status) or ""
             kind = lexicon.STATUS_EVENT.get(sk, "other")
-            evs.append(self._ev(cur, kind, f"{name} status {prev.status or '∅'} → {cur.status}",
-                                field="status", old=prev.status, new=cur.status))
+            if prev.status or kind != "other":  # "∅ → Draft" = badge just became readable, not a transition
+                evs.append(self._ev(cur, kind, f"{name} status {prev.status or '∅'} → {cur.status}",
+                                    field="status", old=prev.status, new=cur.status))
         if prev.status and lexicon.status_of(prev.status) == "not_saved" and \
                 (not cur.status or lexicon.status_of(cur.status) != "not_saved"):
             evs.append(self._ev(cur, "save", f"Saved {name}"))
