@@ -1,0 +1,105 @@
+/* Claros surface tokens (web-ui). Neobrutalist: ink borders, hard offset shadows.
+   Violet (--claros) is reserved for "Claros is speaking / asking / intervening". */
+:root {
+  --paper: #fbf6ea;
+  --paper-2: #f3ecdb;
+  --ink: #0b0b0f;
+  --ink-2: #3a3833;
+  --card-bg: #ffffff;
+  --claros: #6d28d9;
+  --claros-ink: #ffffff;
+  --claros-soft: #ede4ff;
+  --expert: #a5d8ff;
+  --expert-soft: #e3f2ff;
+  --ready: #6ee7a0;
+  --partial: #ffc94a;
+  --missing: #ff8a80;
+  --hard: 4px 4px 0 0 var(--ink);
+  --hard-lg: 6px 6px 0 0 var(--ink);
+  --hard-claros: 6px 6px 0 0 var(--claros);
+}
+
+.claros-root {
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100dvh;
+}
+.claros-root ::selection {
+  background: var(--claros);
+  color: var(--claros-ink);
+}
+.claros-root :focus-visible {
+  outline: 3px solid var(--claros);
+  outline-offset: 2px;
+}
+.claros-root input,
+.claros-root textarea {
+  caret-color: var(--claros);
+}
+.claros-root .tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* "not confirmed yet" hatch */
+.hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 8px,
+    color-mix(in srgb, var(--ink) 12%, transparent) 8px 10px
+  );
+}
+.hatch-partial {
+  background-color: color-mix(in srgb, var(--partial) 35%, white);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 8px,
+    color-mix(in srgb, var(--ink) 14%, transparent) 8px 10px
+  );
+}
+
+/* Claros orb: breathing when speaking */
+@keyframes claros-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@keyframes claros-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--claros) 55%, transparent); }
+  100% { box-shadow: 0 0 0 18px color-mix(in srgb, var(--claros) 0%, transparent); }
+}
+.orb-speaking {
+  animation: claros-breathe 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite, claros-ring 1.6s ease-out infinite;
+}
+@keyframes claros-in {
+  from { transform: translate(6px, 6px); box-shadow: 0 0 0 0 var(--ink); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+.claros-enter {
+  animation: claros-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes ledger-tick {
+  0% { transform: translateY(-30%); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+.ledger-tick {
+  animation: ledger-tick 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.flip-frame {
+  transition: opacity 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-speaking,
+  .claros-enter,
+  .ledger-tick {
+    animation: none !important;
+  }
+  .claros-root * {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* custom scrollbars within Claros surfaces */
+.claros-root .scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink) var(--paper-2);
+}

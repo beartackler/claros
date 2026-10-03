@@ -1,0 +1,12 @@
+Scaffold ready (web-capture agent).
+- Next.js 16 App Router, TS, Tailwind v4, pnpm, src/ dir. Read web/AGENTS.md (Next 16 has breaking changes).
+- neobrutalism.dev (blue theme) components in src/components/ui: button card badge dialog tabs progress tooltip
+  toast(Toaster + `toast` manager; no sonner in the registry) input textarea select avatar scroll-area separator switch alert label.
+  NOTE: these are Base UI based (@base-ui/react) -> use `render={<Link/>}` prop instead of `asChild`.
+- Root layout wraps everything in <Providers> (src/voice/providers.tsx): ElevenLabs ConversationProvider, TooltipProvider, Toaster.
+- Types: src/lib/contracts.ts (mirror of server/claros/models.py + WS messages + API_BASE/WS_BASE).
+- Live session state for UI: src/voice/store.ts -> `useClaros(selector)` (events, ledger, transcript,
+  highlightedStepId, moment, openMapId, expertRequest, offRecord, activity, voice/ws status, caption).
+- Coming (owned by web-capture): src/capture/useScreenCapture, src/voice/useClarosVoice, src/voice/ClarosOrb,
+  src/voice/ClarosCompanion (PiP), src/lib/ws.ts, src/lib/clock.ts, /dev harness.
+- Deps installed: @elevenlabs/react @elevenlabs/client motion @xyflow/react json-logic-js @ricky0123/vad-web zustand lucide-react.

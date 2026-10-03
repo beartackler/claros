@@ -1,0 +1,103 @@
+# Claros — integration contracts (source of truth)
+
+Python models: `server/claros/models.py` (authoritative). TS mirror: `web/src/lib/contracts.ts`
+(keep in sync by hand; field names identical, camelCase NOT used — snake_case on the wire).
+
+## Repo layout & ownership
+```
+server/                 FastAPI (Python 3.11, uv)       port 8787
+  claros/models.py      shared pydantic models (owner: lead)
+  claros/app.py         FastAPI app, routers mount       (owner: server-core)
+  claros/store.py       SQLite session log + FTS5 + sqlite-vec (owner: server-core)
+  claros/perception/    frames → redaction → OCR → vision → ScreenState → events (owner: perception)
+  claros/brain/         ledger, pause gate, custom-LLM endpoint, intents, systemone adapter (owner: brain)
+  claros/knowledge/     map builder, debrief, teach-back, exam, merge, tutor, guardrails, MCP (owner: knowledge)
+  claros/context/       O*NET, web search/read tools (Bright Data / Jina), scope classifier (owner: context)
+  claros/llm.py         OpenAI-compatible client w/ provider fallback router (owner: server-core)
+web/                    Next.js (App Router, TS, Tailwind v4, neobrutalism.dev/shadcn) port 3000
+  src/lib/contracts.ts  TS mirror of models
+  src/capture/          capture worker, frame sampler, activity classifier (owner: web-capture)
+  src/voice/            ElevenLabs session, PiP companion, client tools (owner: web-capture)
+  src/app/...           surfaces: library, capture, debrief, map, learn, inbox (owner: web-ui)
+infra/erpnext/          docker compose + seed scripts (owner: erpnext)
+agents/                 ElevenLabs agent configs (CLI) (owner: voice-config)
+docs/research/          research notes
+```
+Rule: only edit files in your owned paths; if you need a change elsewhere, write it in
+`docs/REQUESTS.md` (append) instead. Do not `git commit` — the lead commits.
+
+## Env (`.env` at repo root, see `.env.example`)
+ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ISOQUANT_API_KEY, JINA_API_KEY, FASTINO_API_KEY,
+BRIGHTDATA_API_KEY, OPENROUTER_API_KEY (fallback), GEMINI_API_KEY (fallback),
+CLAROS_PUBLIC_URL (tunnel URL for ElevenLabs → brain), CLAROS_DB=./data/claros.db,
+OLLAMA_URL=http://localhost:11434, ERPNEXT_URL=http://localhost:8080, ERPNEXT_API_KEY/SECRET.
+Every component must run in a degraded mode when its key is missing (log + fallback), never crash.
+
+## Session modes
+`capture` (expert works, Claros watches/asks) · `debrief` (expert) · `learn` (learner) ·
+`request` (learner asked for an uncovered workflow).
+
+## Browser ↔ server WebSocket  `ws://localhost:8787/ws/session/{session_id}`
+All messages JSON `{type, ...}`; client stamps `t` = ms on the session clock
+(`performance.timeOrigin + performance.now()` minus offset from `clock_sync`).
+
+Client → server:
+- `hello {session_id, mode, user:{id,name,role}, lang, workflow_id?}`
+- `clock_sync {client_t}` → server replies `clock_sync {client_t, server_t}`
+- `activity {t, kind: typing|scrolling|navigating|idle|away, tiles_changed, dims:[w,h]}` (≤2/s)
+- `keyframe {t, seq, reason: settle|boundary|heartbeat|toast, jpeg_b64, dims:[w,h], changed_tiles:[[x,y,w,h]]}`
+- `vad {t, speaking: bool, score}` (on change)
+- `utterance {t_start, t_end, role: user|agent, text, lang?, event_id}` (final transcripts from ElevenLabs onMessage)
+- `agent_state {t, mode: speaking|listening}`
+- `control {t, action: off_record_on|off_record_off|strike_that|not_now|end_task}`
+
+Server → client:
+- `events {items: ScreenEvent[]}`  (for the notebook)
+- `ledger {open: int, saved_for_later: int, top?: Unknown}`
+- `ask {unknown_id, text}` → client calls `conversation.sendUserMessage("⟦ask:" + unknown_id + "⟧")`
+- `intervene {guardrail_id, text, moment: Moment}` → client calls `sendUserMessage("⟦intervene:" + id + "⟧")` and shows moment
+- `context_update {text}` → client calls `sendContextualUpdate(text)`
+- `show_moment {moment: Moment}` / `highlight_step {step_id}`
+- `map_updated {workflow_id, version}`
+- `status {level: info|warn|error, text}`
+
+## Custom LLM endpoint (ElevenLabs → brain)  `POST /llm/v1/chat/completions`
+OpenAI chat-completions, `stream: true` → SSE `data: {chunk}\n\n` ... `data: [DONE]`.
+Session binding: `elevenlabs_extra_body.session_id` (sent by client via `customLlmExtraBody`).
+Routing of the latest user message:
+- `⟦ask:U⟧` → stream pre-written `Unknown.spoken_question` verbatim (no model call).
+- `⟦intervene:G⟧` → stream pre-written intervention text verbatim.
+- otherwise → intent classification (mode-specific) → handler. Handlers may stream text or
+  return a tool call to `skip_turn` (silence). Default in `capture` for `narration` = `skip_turn`.
+Response language = session lang (switch if `language_detection` fires).
+
+## Agent client tools (registered in ElevenLabs, implemented in web/src/voice)
+`highlight_step {step_id}` · `show_moment {keyframe_ids, t}` · `go_off_record {}` ·
+`go_on_record {}` · `open_map {workflow_id}` · `request_expert {workflow_hint}`.
+
+## REST (server)
+- `POST /api/sessions {mode, user, lang, workflow_id?}` → `{session_id}`
+- `POST /api/sessions/{id}/end` → triggers map build (capture) / report (learn)
+- `GET /api/workflows` · `GET /api/workflows/{id}` (merged WorkMap) · `GET /api/workflows/{id}/coverage`
+- `POST /api/workflows/lookup {screen_state?, utterance, lang}` → `{match?: {workflow_id, score, coverage}, onet?: OnetMatch}`
+- `GET /api/requests` · `POST /api/requests {workflow_hint, requested_by, moment?}` · `POST /api/requests/{id}/accept`
+- `GET /api/keyframes/{id}.jpg` (redacted only)
+- `GET /api/el/token?agent=claros` → ElevenLabs conversation token (server holds API key)
+- `GET /api/export/{workflow_id}.skill.md` · MCP at `/mcp`
+- `GET /api/learners/{id}/mastery?workflow_id=`
+
+## Server internals (in-process)
+- `claros/bus.py` (server-core): `bus.publish(session_id, topic, payload)`, `bus.subscribe(topic, async handler(session_id, payload))`.
+  Topics: `ws.in.<type>` (every client message, payload = dict), `ws.out` (payload = server→client msg dict;
+  server-core forwards to the socket), `screen.state` (ScreenState), `screen.events` (list[ScreenEvent]),
+  `utterance` (dict), `ledger.changed`, `session.ended` ({session_id, mode}), `map.updated`.
+- `claros/store.py` (server-core): append-only `log(session_id, kind, payload, t)`; `iter_log(session_id)`;
+  kv tables for sessions, workflows (WorkMap JSON by version), requests, keyframes (redacted JPEG path),
+  mastery; FTS5 + sqlite-vec helpers `index_text(ns, id, text)`, `search_text(ns, q)`, `index_vec(ns, id, vec)`, `search_vec(ns, vec, k)`.
+- `claros/llm.py` (server-core): `async chat(messages, *, model_role: "vision"|"fast"|"smart", json_schema=None, images=None, stream=False)`
+  with provider fallback (Isoquant GLM-5.3-Flash → OpenRouter → Gemini); `async embed(inputs, task)` via Jina (text or image);
+  `async rerank(query, docs)` via Jina.
+- Each package exposes `router: APIRouter` (optional) and `def register(bus)`; `app.py` imports
+  `claros.{perception,brain,knowledge,context}` and calls `register(bus)` + `include_router` if present
+  (wrapped in try/except so a missing package never breaks boot).
+- Session state object: `claros/session.py` (server-core) `Session{id, mode, user, lang, workflow_id, clock_offset, off_record: bool, ...}` with `sessions.get(id)`.

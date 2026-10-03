@@ -1,0 +1,7 @@
+.env
+data/
+node_modules/
+.venv/
+__pycache__/
+.next/
+*.db
