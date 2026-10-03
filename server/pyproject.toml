@@ -18,7 +18,15 @@ dependencies = [
     "fastmcp>=2.0",
     "rapidocr>=3.4",
     "onnxruntime>=1.17",
+]
+
+[project.optional-dependencies]
+# heavy / local-only (torch, headless browser): `uv sync --extra local`. The cloud slim image omits these;
+# every import is guarded and degrades (regex PII, LLM/regex rule extraction, Exa/Jina reads, greedy merge).
+local = [
     "gliner2[local]",
+    "crawl4ai",
+    "scipy",
     "presidio-analyzer>=2.2",
 ]
 
