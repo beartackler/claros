@@ -1,0 +1,9 @@
+# Build context = repo root (server/Dockerfile). Allow-list only what the image needs.
+*
+!server/pyproject.toml
+!server/uv.lock
+!server/claros
+!data/fixtures
+**/__pycache__
+**/*.pyc
+data/fixtures/e2e

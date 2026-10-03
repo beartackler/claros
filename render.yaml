@@ -1,0 +1,38 @@
+# Render Blueprint for the Claros backend (FastAPI + WS + custom-LLM SSE).
+# Free instance: 512 MB RAM, 0.1 CPU, spins down after ~15 min idle, ephemeral disk
+# (fixtures are re-seeded on every boot via CLAROS_AUTOSEED). See docs/DEPLOY.md.
+services:
+  - type: web
+    name: claros-server
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: CLAROS_PROFILE
+        value: slim
+      - key: CLAROS_CORS_ORIGINS
+        value: https://*.vercel.app
+      # secrets: set in the dashboard / via MCP, never committed
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_AGENT_ID
+        sync: false
+      - key: ISOQUANT_API_KEY
+        sync: false
+      - key: JINA_API_KEY
+        sync: false
+      - key: EXA_API_KEY
+        sync: false
+      - key: BRIGHTDATA_API_KEY
+        sync: false
+      - key: FASTINO_API_KEY   # optional: enables GLiDE decisions (else LLM, else rules)
+        sync: false
+      - key: OPENROUTER_API_KEY  # optional LLM fallback
+        sync: false
+      - key: GEMINI_API_KEY      # optional LLM fallback
+        sync: false

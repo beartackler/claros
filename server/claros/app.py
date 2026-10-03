@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import re
 import time
 import traceback
 import uuid
@@ -43,18 +44,38 @@ ENV_KEYS = ["ELEVENLABS_API_KEY", "ELEVENLABS_AGENT_ID", "ISOQUANT_API_KEY", "JI
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     ws.install(bus)
+    seed_task = None
+    if os.getenv("CLAROS_AUTOSEED") == "1":  # ephemeral cloud disk: seed fixture maps once (idempotent)
+        import asyncio
+        seed_task = asyncio.create_task(_autoseed())
     yield
+    if seed_task is not None and not seed_task.done():
+        seed_task.cancel()
     if llm.HTTP is not None:
         await llm.HTTP.aclose()
         llm.HTTP = None
 
 
+async def _autoseed() -> None:
+    try:
+        if store.list_workflows():
+            return
+        from .knowledge import seed_fixtures_async
+        log.info("autoseed: %s", sorted(set(await seed_fixtures_async())))
+    except Exception as e:  # noqa: BLE001
+        log.warning("autoseed failed: %s", e)
+
+
+_CORS = [o.strip() for o in os.getenv("CLAROS_CORS_ORIGINS", "").split(",") if o.strip()]
+# entries with "*" (e.g. https://*.vercel.app) become regex alternatives
+_CORS_RE = "|".join([r"https://.*\.trycloudflare\.com"] +
+                    [re.escape(o).replace(r"\*", "[a-z0-9-]+") for o in _CORS if "*" in o])
+
 app = FastAPI(title="Claros", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"] +
-                  [o for o in os.getenv("CLAROS_CORS_ORIGINS", "").split(",") if o],
-    allow_origin_regex=r"https://.*\.trycloudflare\.com",
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"] + [o for o in _CORS if "*" not in o],
+    allow_origin_regex=_CORS_RE,
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
