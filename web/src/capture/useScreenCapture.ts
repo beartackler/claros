@@ -82,7 +82,8 @@ export function useScreenCapture(opts: CaptureOptions = {}) {
       const sock = getSocket();
       const o = optsRef.current;
       let dropped = false;
-      if (o.send !== false && sock) {
+      if (useClaros.getState().offRecord) dropped = true; // off the record: nothing leaves the browser
+      else if (o.send !== false && sock) {
         const tooBusy = sock.buffered > (o.maxBuffered ?? 4_000_000);
         if (tooBusy && m.reason !== "boundary" && m.reason !== "toast") dropped = true;
         else sock.send(msg);
@@ -138,7 +139,7 @@ export function useScreenCapture(opts: CaptureOptions = {}) {
           break;
         case "activity": {
           const sock = getSocket();
-          if (optsRef.current.send !== false && sock)
+          if (optsRef.current.send !== false && sock && !useClaros.getState().offRecord)
             sock.send({ type: "activity", t: toSession(m.t), kind: m.kind, tiles_changed: m.tiles_changed, dims: m.dims });
           optsRef.current.onActivity?.(m.kind);
           setState((s) => (s.activity === m.kind ? s : { ...s, activity: m.kind }));
@@ -218,6 +219,12 @@ export function useScreenCapture(opts: CaptureOptions = {}) {
   const snap = useCallback((reason: KeyframeMsg["reason"] = "boundary") => post({ type: "force", reason }), []);
 
   useEffect(() => () => stop(), [stop]);
+  useEffect(
+    () => useClaros.subscribe((s, prev) => {
+      if (s.sessionEnded && !prev.sessionEnded && streamRef.current) stop();
+    }),
+    [stop],
+  );
 
   return { ...state, start, stop, snap, stream: streamRef };
 }

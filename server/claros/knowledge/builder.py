@@ -100,6 +100,19 @@ def replay(session_id: str) -> Replay:
                         r.notes.append(ContextNote.model_validate(x))
         except (ValidationError, TypeError, ValueError):
             d.log.debug("skip log entry %s", kind, exc_info=True)
+    try:  # live brain ledger (authoritative for unknowns + context notes)
+        from claros.brain import get_ledger  # type: ignore
+        lg = get_ledger(session_id)
+        for u in (lg.unknowns.values() if isinstance(lg.unknowns, dict) else lg.unknowns):
+            uu = u if isinstance(u, Unknown) else Unknown.model_validate(u)
+            unknowns[uu.id] = uu
+        have = {n.id for n in r.notes}
+        for n in getattr(lg, "context_notes", None) or []:
+            nn = n if isinstance(n, ContextNote) else ContextNote.model_validate(n)
+            if nn.id not in have:
+                r.notes.append(nn)
+    except Exception:  # noqa: BLE001
+        pass
     r.unknowns = list(unknowns.values())
     return r
 
@@ -140,7 +153,10 @@ def timeline(r: Replay, max_lines: int = 500) -> str:
 SYSTEM = """You turn a recorded expert work session into a Work Map (JSON matching the schema).
 Rules:
 - Steps describe the GENERAL action (Agent Workflow Memory abstraction): never mention specific record ids,
-  amounts or names of this one case ("invoice 4471" -> "the invoice"). Variables go into decisions/guardrails.
+  amounts or names of this one case ("invoice 4471" -> "the invoice"); abstract case values into {slots}
+  named after canonical vars (e.g. "Set {line.expense_account} for each line"). Thresholds/rules go into
+  decisions/guardrails.
+- Segment by sub-goal: each step = one sub-goal with its precondition screen state.
 - Merge micro-events into meaningful steps (typically 4-12). order = 1..n; after = ids of prerequisite steps.
 - state_signature = {"app","view","entity_type"} copied from STATE lines.
 - EVERY step and EVERY guardrail must cite evidence: step.moment / guardrail.evidence[] =
@@ -168,6 +184,56 @@ async def _llm_map(r: Replay, wm_seed: dict, errors: Optional[list[str]] = None,
                                              "full corrected JSON:\n- " + "\n- ".join(errors)}]
     out = await d.chat(msgs, model_role="smart", json_schema=WorkMap)
     return out if isinstance(out, dict) else None
+
+
+SELF_CONSISTENCY_N = 3
+MAJORITY_SIM = 0.6
+
+
+async def self_consistent_map(r: Replay, seed: dict, n: Optional[int] = None) -> Optional[dict]:
+    """Sample n candidate maps; keep steps supported by a majority, minority steps → open unknowns."""
+    import asyncio
+    n = n or SELF_CONSISTENCY_N
+    cands = [c for c in await asyncio.gather(*(_llm_map(r, seed) for _ in range(n))) if c]
+    valid = [(c, _schema_errors(c)[0]) for c in cands]
+    valid = [(c, w) for c, w in valid if w is not None]
+    if len(valid) < 2:
+        return cands[0] if cands else None
+    from .merge import _similarity
+    support: list[list[int]] = []
+    for i, (_, wi) in enumerate(valid):
+        sup = [1] * len(wi.steps)
+        for j, (_, wj) in enumerate(valid):
+            if i == j or not wi.steps or not wj.steps:
+                continue
+            sim = await _similarity(wi.steps, wj.steps)
+            for k in range(len(wi.steps)):
+                if max(sim[k]) >= MAJORITY_SIM:
+                    sup[k] += 1
+        support.append(sup)
+    need = len(valid) // 2 + 1
+    best = max(range(len(valid)), key=lambda i: (sum(x >= need for x in support[i]), -len(valid[i][1].steps)))
+    raw, wm = valid[best]
+    raw = json.loads(json.dumps(raw))
+    keep = [st_raw for st_raw, sup in zip(raw.get("steps", []), support[best]) if sup >= need]
+    minority, seen_t = [], set()
+    for (c, _), sup_c in zip(valid, support):
+        for st_raw, sup in zip(c.get("steps", []), sup_c):
+            key = (st_raw.get("title") or "").strip().lower()
+            if sup < need and key not in seen_t:
+                seen_t.add(key)
+                minority.append(st_raw)
+    raw["steps"] = keep
+    unk = raw.setdefault("open_unknowns", [])
+    for m in minority:
+        unk.append(new_unknown("coverage", f"I'm not sure “{m.get('title')}” is a real step. Is it?",
+                               entity=m.get("id"), priority=0.3,
+                               moment=Moment.model_validate(m["moment"]) if m.get("moment") else None,
+                               hypothesis=m.get("title")).model_dump(mode="json"))
+    kept = {k.get("id") for k in keep}
+    for k in keep:
+        k["after"] = [a for a in k.get("after", []) if a in kept]
+    return raw
 
 
 def _schema_errors(raw: Optional[dict]) -> tuple[Optional[WorkMap], list[str]]:
@@ -275,7 +341,7 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     workflow_id = workflow_id or getattr(sess, "workflow_id", None)
     seed = {"id": d.new_id("wm"), "workflow_id": workflow_id or "TBD", "name": "", "session_ids": [session_id]}
 
-    raw = await _llm_map(r, seed)
+    raw = await self_consistent_map(r, seed)
     wm, errs = _schema_errors(raw)
     if wm is not None:
         errs = validate_evidence(_with_repairs(wm, r), set(r.keyframes), {u["id"] for u in r.utterances})
@@ -283,6 +349,12 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
         raw2 = await _llm_map(r, seed, errs, raw)
         wm2, errs2 = _schema_errors(raw2)
         if wm2 is not None:
+            # keep self-consistency verdicts: minority steps stay out, their unknowns stay in
+            dropped = {(u.hypothesis or "").strip().lower() for u in (wm.open_unknowns if wm else [])
+                       if u.type == "coverage" and u.hypothesis}
+            wm2.steps = [s_ for s_ in wm2.steps if s_.title.strip().lower() not in dropped]
+            have = {u.id for u in wm2.open_unknowns}
+            wm2.open_unknowns += [u for u in (wm.open_unknowns if wm else []) if u.id not in have]
             wm = wm2
     if wm is None:
         wm = WorkMap.model_validate(_fallback_map(r, {**seed, "name": "Untitled workflow"}))

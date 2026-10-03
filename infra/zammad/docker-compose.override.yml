@@ -1,0 +1,25 @@
+# Claros local tweaks on top of the verbatim upstream docker-compose.yml (auto-loaded by
+# `docker compose`). Needs Docker Compose >= 2.24 (for !override); OrbStack/Docker Desktop
+# ship newer. (No .env file on purpose: the repo .gitignore ignores every `.env`.)
+name: claros-zammad
+
+x-es: &es
+  environment:
+    # Elasticsearch is OPTIONAL (saves ~1.5 GB RAM); Zammad falls back to DB search.
+    # Enable:  ./up.sh --search   (sets ELASTICSEARCH_ENABLED=true + --profile search)
+    ELASTICSEARCH_ENABLED: ${ELASTICSEARCH_ENABLED:-false}
+
+services:
+  zammad-elasticsearch:
+    profiles:
+      - search
+  zammad-nginx:
+    <<: *es
+    # ERPNext owns 8080 -> Zammad UI/API on http://localhost:8081
+    ports: !override
+      - "${ZAMMAD_PORT:-8081}:8080"
+  zammad-init: *es
+  zammad-railsserver: *es
+  zammad-scheduler: *es
+  zammad-websocket: *es
+  zammad-backup: *es

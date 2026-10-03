@@ -5,7 +5,8 @@ Open System One schema:
   {model, state, questions: {name: {type: choice|score|noul, instructions, criteria}}}
   → {answers: {name: {choice|score|noul, probabilities, confidence}}}
 
-For `choice` questions, `criteria` is a dict {label: description} (labels = options).
+For `choice` questions, `criteria` is a dict {label: description} (labels = options);
+for `score`, `criteria` is a list of anchors (low→high) and `score` ∈ 0..1.
 Backends (in order): Ollama (OLLAMA_URL) → Fastino GLiDE → LLM (claros.llm fast) → rules.
 Confidence is always recomputed as top1 - top2 over `probabilities`.
 """
@@ -190,6 +191,10 @@ class SystemOne:
                 self._mark_down(b, 60)
             except asyncio.TimeoutError:
                 log.info("systemone %s timed out", b)
+            except httpx.HTTPStatusError as e:
+                log.info("systemone %s HTTP %s: %s", b, e.response.status_code, e.response.text[:200])
+                if e.response.status_code >= 500:
+                    self._mark_down(b, 15)
             except Exception as e:  # noqa: BLE001
                 log.info("systemone %s failed: %s", b, e)
                 if b != "llm":

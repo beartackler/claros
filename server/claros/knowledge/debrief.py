@@ -103,6 +103,7 @@ class DebriefState:
     exam: list[ExamCase] = field(default_factory=list)
     exam_idx: int = 0
     seq: int = 0
+    probed: bool = False
 
 
 _states: dict[str, DebriefState] = {}
@@ -162,6 +163,34 @@ def gap_unknowns(wm: WorkMap) -> list[Unknown]:
         if g.id not in have and not g.quote_ids:
             out.append(Unknown(id=d.new_id("u"), type="limit", entity=g.id, priority=0.8, created_t=d.now_ms(),
                                hypothesis=g.text, hypothesis_confidence=0.7, spoken_question=g.text))
+    return out
+
+
+PROBE = {"en": "What if it were {v}? Would “{g}” still apply?",
+         "de": "Und wenn es {v} wäre? Gilt „{g}“ dann noch?",
+         "fr": "Et si c'était {v} ? « {g} » s'appliquerait-il encore ?",
+         "es": "¿Y si fuera {v}? ¿Seguiría aplicando «{g}»?",
+         "ru": "А если бы было {v}? Правило «{g}» всё ещё действует?"}
+
+
+def boundary_probes(wm: WorkMap, lang: str = "en", max_n: int = 2) -> list[Unknown]:
+    """Critical-Decision-Method edge cases: vary a threshold slot just past the boundary ('what if 4,999?')."""
+    have = {u.entity for u in wm.open_unknowns if u.type == "limit"}
+    out = []
+    for g in wm.guardrails:
+        if len(out) >= max_n or g.approved or g.id in have or not g.predicate:
+            continue
+        for a in _atoms(g.predicate):
+            op, args = next(iter(a.items()))
+            if op in (">", ">=", "<", "<=") and isinstance(args, list) and len(args) == 2 \
+                    and isinstance(args[1], (int, float)):
+                b = args[1]
+                v = b - 1 if op == ">" else b + 1 if op == "<" else b
+                v = int(v) if float(v).is_integer() else v
+                out.append(Unknown(id=d.new_id("u"), type="limit", entity=g.id, priority=0.2, scope="company",
+                                   created_t=d.now_ms(), hypothesis=g.text,
+                                   spoken_question=(PROBE.get(lang) or PROBE["en"]).format(v=f"{v:,}", g=g.text)))
+                break
     return out
 
 
@@ -226,18 +255,25 @@ def _truncate(script: str, limit: int) -> str:
 
 
 def _template_teachback(wm: WorkMap, lang: str) -> str:
-    parts = [t("teach_intro", lang)]
+    """Whole sentences only, within the word budget (steps first, then guardrails)."""
+    end = t("teach_end", lang)
+    budget = CONFIG["teachback_words"] - len(end.split())
+    out = [t("teach_intro", lang)]
     for i, s in enumerate(ordered_steps(wm)):
         lead = t("first", lang) if i == 0 else t("then", lang)
-        txt = s.title[0].lower() + s.title[1:] if s.title else s.title
+        txt = s.title
         if s.decision and s.decision.kind == "judgment":
-            txt = s.decision.description[0].lower() + s.decision.description[1:]
-        parts.append(f"[[step:{s.id}]] {lead}, {txt}.")
-    if wm.guardrails:
-        parts.append(t("watch", lang) + " " + " ".join(g.text.rstrip(".") + "." for g in wm.guardrails[:4]))
-    end = t("teach_end", lang)
-    body = _truncate(" ".join(parts), CONFIG["teachback_words"] - len(end.split()))
-    return body + " " + end
+            txt = s.decision.description
+        sent = f"[[step:{s.id}]] {lead}, {txt[:1].lower() + txt[1:]}."
+        if _word_count(" ".join(out + [sent])) <= budget:
+            out.append(sent)
+    watch_added = False
+    for g in wm.guardrails:
+        sent = ("" if watch_added else t("watch", lang) + " ") + g.text.rstrip(".") + "."
+        if _word_count(" ".join(out + [sent])) <= budget:
+            out.append(sent)
+            watch_added = True
+    return " ".join(out) + " " + end
 
 
 async def teach_back(wm: WorkMap, lang: str) -> str:
@@ -497,6 +533,12 @@ async def next_debrief_utterance(session: Any) -> str:
         return t("no_map", lang)
     _, ename = _expert(session)
     if st.phase == "questions":
+        if not st.probed:
+            st.probed = True
+            probes = boundary_probes(wm, lang)
+            if probes:
+                wm.open_unknowns += probes
+                await save_map(wm, st.session_id)
         q = plan(wm, expert_name=ename)
         if not q and not checks_pass(wm) and not budget_spent(st):
             gaps = gap_unknowns(wm)

@@ -112,11 +112,12 @@ def _content_of(r: Any) -> str:
         return str(r)
 
 
-async def llm_chat(messages: list[dict], *, model_role: str = "fast", json_schema: Any = None) -> Optional[str]:
+async def llm_chat(messages: list[dict], *, model_role: str = "fast", json_schema: Any = None,
+                   **extra: Any) -> Optional[str]:
     m = _llm()
     if m is None or not hasattr(m, "chat"):
         return None
-    kw: dict[str, Any] = {"model_role": model_role}
+    kw: dict[str, Any] = {"model_role": model_role, **extra}
     if json_schema is not None:
         kw["json_schema"] = json_schema
     r = await m.chat(messages, **kw)

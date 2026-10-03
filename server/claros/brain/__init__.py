@@ -27,7 +27,10 @@ async def ledger_view(session_id: str) -> dict:
     return {**lg.snapshot(),
             "unknowns": [u.model_dump(mode="json") for u in lg.unknowns.values()],
             "context_notes": [n.model_dump(mode="json") for n in lg.context_notes],
-            "event_class": lg.event_class}
+            "event_class": lg.event_class,
+            "tags": {uid: m.get("tag") for uid, m in lg.meta.items()},
+            "hypotheses": {uid: {"samples": m.get("hypotheses"), "share": m.get("hypothesis_share")}
+                           for uid, m in lg.meta.items() if m.get("hypotheses")}}
 
 
 @router.get("/api/sessions/{session_id}/gate")

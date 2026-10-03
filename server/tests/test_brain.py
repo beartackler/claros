@@ -363,3 +363,62 @@ def test_systemone_confidence_recomputed():
     from claros.brain.systemone import normalize_answer
     a = normalize_answer({"type": "choice"}, {"probabilities": {"a": 0.6, "b": 0.3, "c": 0.1}, "confidence": 0.99})
     assert a["choice"] == "a" and abs(a["confidence"] - 0.3) < 1e-9
+
+
+# ---------------- follow-ups: |text suffix, PRISM, hypotheses ----------------
+
+def test_endpoint_ask_suffix_fallback(offline, client):
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦ask:u_unknown|Why 0400 here?⟧", sid="e5")))
+    assert _content(ch) == "Why 0400 here?"
+    lg = ledger_mod.get_ledger("e5")
+    u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body(f"⟦ask:{u.id}|other text⟧", sid="e5")))
+    assert _content(ch) == u.spoken_question
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦intervene:gx|Stop, needs CFO.⟧", sid="e5")))
+    assert _content(ch) == "Stop, needs CFO."
+
+
+def test_gate_prism_numbers_logged(offline):
+    g, lg = _gate_ready(offline)
+    r = run(g.evaluate("g1"))
+    for k in ("p_pause", "p_accept", "tau", "score"):
+        assert k in r
+    assert r["score"] == pytest.approx(r["p_pause"] * r["p_accept"], abs=1e-2)
+    assert r["decision"] == ("ask_now" if r["score"] > r["tau"] else "wait")
+    assert r["tag"] == "mandatory"
+
+
+def test_gate_low_value_waits(offline):
+    g = Gate(GateConfig())
+    lg = ledger_mod.get_ledger("g2")
+    run(lg.on_events([ev(1, "undo", field="Qty", summary="undo qty")]))  # slip: low criticality
+    offline.clock.t += 1600
+    r = run(g.evaluate("g2"))
+    assert r["decision"] in ("wait", "idle")
+
+
+def test_hypothesis_first_confirm(offline, monkeypatch):
+    async def llm(messages, **k):
+        return json.dumps({"hypotheses": ["group vendors book to cost center 0400",
+                                          "group vendors book to cost center 0400 always",
+                                          "group vendors book to 0400 cost center",
+                                          "intercompany vendors book to cost center 0400",
+                                          "the manager told them to"]})
+
+    monkeypatch.setattr(deps, "llm_chat", llm)
+    lg = ledger_mod.get_ledger("h1")
+    u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
+    assert u.hypothesis_confidence >= 0.7 and "0400" in u.hypothesis
+    assert "is that your rule" in u.spoken_question
+    assert lg.meta[u.id]["tag"] == "opportunistic"
+
+
+def test_hypothesis_spread_keeps_open_why(offline, monkeypatch):
+    async def llm(messages, **k):
+        return json.dumps({"hypotheses": ["budget ran out", "vendor is intercompany", "manager asked",
+                                          "tax reasons apply", "project closed early"]})
+
+    monkeypatch.setattr(deps, "llm_chat", llm)
+    lg = ledger_mod.get_ledger("h2")
+    u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
+    assert u.hypothesis_confidence < 0.7 and u.spoken_question.startswith("Why")

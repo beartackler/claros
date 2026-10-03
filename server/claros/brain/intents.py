@@ -130,7 +130,7 @@ def _default(mode: str, text: str, context: dict) -> str:
 
 
 async def classify_intent(mode: str, text: str, context: Optional[dict] = None,
-                          *, timeout: float = 0.6) -> IntentResult:
+                          *, timeout: float = 0.9) -> IntentResult:
     context = context or {}
     r = rule_intent(mode, text)
     if r:

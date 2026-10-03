@@ -116,11 +116,26 @@ class Ledger:
         m = self.meta.get(u.id, {})
         w = TYPE_WEIGHT.get(u.type, 1.0)
         cls_w = CLASS_WEIGHT.get(m.get("class", ""), w)
-        w = max(w, cls_w)
+        crit = max(w, cls_w)  # criticality: guardrail 3, decision 2, step/slip 1
         sal = m.get("salience", 0.6)
         rec = math.exp(-max(0.0, now - u.created_t) / RECENCY_TAU_MS)
-        nov = 1.0 / (1.0 + m.get("dupes", 0))
-        return round(w * sal * rec * nov, 4)
+        unc = 1.0 - (u.hypothesis_confidence if u.hypothesis else 0.0)
+        voi = sal * rec * (0.6 + 0.4 * unc)  # EVPI proxy: confident hypotheses are worth less (but still confirm)
+        return round(max(0.0, voi * crit - self.redundancy(u)), 4)
+
+    def redundancy(self, u: Unknown) -> float:
+        """Penalty when the same aspect (field × type) was already asked/answered."""
+        asp = self.meta.get(u.id, {}).get("aspect")
+        if not asp:
+            return 0.0
+        n = sum(1 for o in self.unknowns.values() if o.id != u.id and o.status in ("asked", "answered")
+                and self.meta.get(o.id, {}).get("aspect") == asp)
+        return 0.8 * n
+
+    def tag(self, u: Unknown) -> str:
+        """mandatory → must be closed (debrief if not live); opportunistic → only if a good pause comes."""
+        return "mandatory" if (u.type in GUARDRAIL_TYPES or u.scope == "company"
+                               or self.meta.get(u.id, {}).get("synthetic")) else "opportunistic"
 
     def guardrail_asked(self) -> bool:
         return any(self.unknowns[i].type in GUARDRAIL_TYPES for i in self.asked_ids if i in self.unknowns)
@@ -163,7 +178,8 @@ class Ledger:
         top = max(live, key=lambda u: self.priority(u)) if live else None
         return {"type": "ledger", "open": len(live),
                 "saved_for_later": sum(1 for u in self.unknowns.values() if u.status == "deferred"),
-                "top": top.model_dump(mode="json") if top else None}
+                "top": ({**top.model_dump(mode="json"), "tag": self.meta.get(top.id, {}).get("tag")}
+                        if top else None)}
 
     # ---------- lifecycle ----------
     def expire(self, now: Optional[float] = None) -> list[Unknown]:
@@ -287,7 +303,7 @@ class Ledger:
                     moment=Moment(session_id=self.session_id, keyframe_ids=[e.keyframe_id] if e.keyframe_id else [],
                                   t=e.t))
         self.unknowns[u.id] = u
-        self.meta[u.id] = {"class": "guardrail", "salience": 0.9, "dupes": 0, "synthetic": True}
+        self.meta[u.id] = {"class": "guardrail", "salience": 0.9, "dupes": 0, "synthetic": True, "tag": "mandatory", "aspect": ("task", "stop_and_ask")}
         return u
 
     def _shape(self, e: ScreenEvent, cls: str) -> tuple[str, Optional[str], float, Optional[float]]:
@@ -358,7 +374,8 @@ class Ledger:
                     moment=Moment(session_id=self.session_id,
                                   keyframe_ids=[e.keyframe_id] if e.keyframe_id else [], t=e.t))
         self.meta[u.id] = {"class": cls, "salience": salience, "dupes": 0, "vec": vec,
-                           "key": (utype, e.canonical or e.field, e.kind), "event": e, "threshold": th}
+                           "key": (utype, e.canonical or e.field, e.kind), "event": e, "threshold": th,
+                           "aspect": (e.canonical or e.field or e.kind, utype)}
         u.spoken_question = self.make_question(u, e)
         u.scope = "company" if utype in GUARDRAIL_TYPES else "personal_judgment"
         u.priority = self.priority(u, now)
@@ -391,11 +408,31 @@ class Ledger:
                 self.context_notes.append(note)
             else:
                 u.scope = "company" if u.type in GUARDRAIL_TYPES else "personal_judgment"
+        if u.status == "open" and u.scope in EXPERT_SCOPES:
+            try:
+                await asyncio.wait_for(self._hypothesize(u, e), 8.0)
+            except Exception:  # noqa: BLE001
+                deps.log.debug("hypothesis sampling failed", exc_info=True)
+        self.meta.setdefault(u.id, {})["tag"] = self.tag(u)
         if u.status == "open":
             now = deps.now_ms()
             u.expires_t = max(u.expires_t or 0, now + EXPIRE_MS - 0)  # scoping time doesn't eat the window
         self.meta.get(u.id, {}).pop("scoping", None)
         deps.store_log(self.session_id, "unknown.opened", u.model_dump(mode="json"))
+
+    async def _hypothesize(self, u: Unknown, e: ScreenEvent) -> None:
+        """Sample 5 hypotheses, cluster; top cluster share ≥0.7 → confirm-style question, else open why."""
+        hyps = await sample_hypotheses(u, e, self.lang(), [x.summary for x in self.events[-6:] if x.summary])
+        if len(hyps) < 3:
+            return
+        rep, share = await cluster_top(hyps)
+        m = self.meta.setdefault(u.id, {})
+        m["hypotheses"] = hyps
+        m["hypothesis_share"] = share
+        if share >= 0.7 or share > u.hypothesis_confidence:
+            u.hypothesis, u.hypothesis_confidence = rep, round(share, 2)
+        u.spoken_question = self.make_question(u, e)
+        u.priority = self.priority(u)
 
     # ---------- utterances ----------
     async def on_utterance(self, p: dict) -> list[Unknown]:
@@ -518,6 +555,51 @@ def _as_note(r: Any, scope: str) -> Optional[ContextNote]:
         return ContextNote(id=getattr(r, "id", None) or f"cn_{uuid.uuid4().hex[:8]}", text=t,
                            scope=getattr(r, "scope", scope) or scope, source=getattr(r, "source", "llm") or "llm")
     return None
+
+
+# ---------- hypotheses (sample → cluster) ----------
+async def sample_hypotheses(u: Unknown, e: ScreenEvent, lang: str, recent: list[str], n: int = 5) -> list[str]:
+    sys = (f"An expert did this on screen; guess WHY. Give {n} independent hypotheses for the rule/reason, each "
+           f"≤10 words, phrased as a rule clause (e.g. 'invoices over 5,000 go to the CFO'), in "
+           f"{L.LANG_NAMES.get(lang, 'English')}. Reply JSON {{\"hypotheses\": [..{n} strings..]}}.")
+    user = json.dumps({"event": e.summary or f"{e.kind} {e.field}: {e.old} → {e.new}", "field": e.field,
+                       "old": e.old, "new": e.new, "entity": e.entity_type, "recent": recent,
+                       "question_type": u.type}, ensure_ascii=False)
+    txt = await deps.llm_chat([{"role": "system", "content": sys}, {"role": "user", "content": user}],
+                              model_role="fast", json_schema={"type": "object"}, temperature=0.9)
+    if not txt:
+        return []
+    d = systemone._parse_json(txt)
+    hs = d.get("hypotheses") if isinstance(d, dict) else None
+    return [str(h).strip() for h in (hs or []) if str(h).strip()][:n]
+
+
+def _tokens(s: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", s.lower()) if len(w) > 2}
+
+
+async def cluster_top(hyps: list[str], cos: float = 0.85) -> tuple[str, float]:
+    """Greedy clustering; returns (representative of largest cluster, its share)."""
+    vecs = await deps.embed(hyps)
+
+    def sim(i: int, j: int) -> float:
+        if vecs:
+            return deps.cosine(vecs[i], vecs[j])
+        a, b = _tokens(hyps[i]), _tokens(hyps[j])
+        return len(a & b) / max(1, len(a | b))
+
+    thr = cos if vecs else 0.5
+    clusters: list[list[int]] = []
+    for i in range(len(hyps)):
+        for c in clusters:
+            if sim(i, c[0]) >= thr:
+                c.append(i)
+                break
+        else:
+            clusters.append([i])
+    best = max(clusters, key=len)
+    rep = max(best, key=lambda i: sum(sim(i, j) for j in best))
+    return hyps[rep], len(best) / len(hyps)
 
 
 # ---------- rule extraction ----------

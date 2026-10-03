@@ -16,8 +16,9 @@ dependencies = [
     "openai>=1.40",
     "json-logic-qubit>=0.9",
     "fastmcp>=2.0",
-    "rapidocr-onnxruntime>=1.3",
-    "gliner2",
+    "rapidocr>=3.4",
+    "onnxruntime>=1.17",
+    "gliner2[local]",
     "presidio-analyzer>=2.2",
 ]
 

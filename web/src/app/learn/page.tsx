@@ -218,7 +218,7 @@ function Invoke(p: {
               )}
             >
               <Mic className="size-5" aria-hidden />
-              {t("learn.predict.voice")}
+              {t("learn.invoke.voice")}
             </button>
           </div>
           <label className="block">
@@ -656,7 +656,7 @@ function Intervention({ map, step, onDone }: { map: WorkMap; step: Step; onDone:
   const name = firstName(who.name);
   const quotes = quotesFor(map, g.quote_ids);
   const correct = g.text;
-  const options = useMemo(() => shuffle([correct, ...(MOCK_DISTRACTORS[g.id] ?? []).slice(0, 2)], g.id.length * 13), [correct, g.id]);
+  const options = shuffle([correct, ...(MOCK_DISTRACTORS[g.id] ?? []).slice(0, 2)], g.id.length * 13);
   const [picked, setPicked] = useState<string | null>(null);
   const frames = g.evidence.flatMap((e) => e.keyframe_ids);
   return (

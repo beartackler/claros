@@ -431,3 +431,26 @@ T: dict[str, dict[str, str]] = {
 def tr(key: str, lang: str, **kw: Any) -> str:
     tpl = T.get(key, {}).get(lang) or T.get(key, {}).get("en", key)
     return tpl.format(**kw)
+
+
+# ---------------- compiled guardrails ----------------
+
+ENFORCE = {"block_and_explain": "block", "warn": "warn", "stop_and_ask": "ask", "hold": "hold"}
+STATE_CHANGING = ("save", "submit", "approve", "hold", "escalate", "reject")
+
+
+def compile_guardrails(wm: WorkMap) -> list[dict[str, Any]]:
+    """Publish-time compile: {id, trigger, scope, condition, exceptions, evidence, enforce, quote_id}.
+    Runtime check is deterministic json-logic on state-changing actions (no LLM in the hot path)."""
+    out = []
+    for g in wm.guardrails:
+        scope = [s.id for s in wm.steps if g.id in s.guardrail_ids]
+        exc = [s.decision.counterfactual for s in wm.steps
+               if s.id in scope and s.decision and s.decision.counterfactual]
+        out.append({"id": g.id, "text": g.text,
+                    "trigger": {"on": list(STATE_CHANGING), "also": "every screen state (soft)"},
+                    "scope": scope, "condition": g.predicate if g.predicate else {"fuzzy": g.text},
+                    "deterministic": bool(g.predicate), "exceptions": exc,
+                    "evidence": [m.model_dump(mode="json") for m in g.evidence], "enforce": ENFORCE.get(g.action, "block"),
+                    "owner": g.owner, "quote_id": g.quote_ids[0] if g.quote_ids else None, "experts": g.experts})
+    return out

@@ -60,14 +60,18 @@ function TopBar() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          <RoleSwitch />
+          {path !== "/" ? (
+            <div className="hidden sm:block">
+              <RoleSwitch />
+            </div>
+          ) : null}
           <label className="relative inline-flex items-center">
             <span className="sr-only">{t("lang.label")}</span>
             <Languages className="pointer-events-none absolute left-2 size-4" aria-hidden />
             <select
               value={lang}
               onChange={(e) => setLang(e.target.value as UiLang)}
-              className="h-9 appearance-none rounded-[4px] border-2 border-[var(--ink)] bg-white pl-7 pr-2 text-sm font-bold uppercase"
+              className="h-9 w-[4.75rem] appearance-none rounded-[4px] border-2 border-[var(--ink)] bg-white pl-7 pr-2 text-sm font-bold uppercase sm:w-auto"
             >
               {LANGS.map((l) => (
                 <option key={l} value={l}>

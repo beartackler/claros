@@ -114,6 +114,8 @@ class Unknown(BaseModel):
     resolution: Optional[str] = None       # text of the answer or the tool-found context
     resolution_source: Optional[str] = None  # "expert", "app_docs:<url>", "onet:<code>", "llm"
     extracted_rule: Optional[ExtractedRule] = None
+    mandatory: bool = False                # must be resolved before map is 'ready'
+    meta: dict[str, Any] = Field(default_factory=dict)  # VoI, hypotheses, gate numbers
 
 
 # ---------- knowledge ----------

@@ -182,5 +182,9 @@ async def on_map_updated(session_id: str, payload: Any) -> None:
 
 @router.get("/api/learners/{learner_id}/mastery")
 async def mastery_ep(learner_id: str, workflow_id: str) -> dict:
-    from .tutor import load_mastery
-    return {k: v.model_dump() for k, v in load_mastery(learner_id, workflow_id).items()}
+    from .tutor import BKT, load_bkt, load_mastery
+    m = {k: v.model_dump() for k, v in load_mastery(learner_id, workflow_id).items()}
+    for node, b in load_bkt(learner_id, workflow_id).items():
+        m.setdefault(node, {"step_id": node, "level": "unseen", "attempts": 0})
+        m[node].update(p_known=b.get("p", BKT["p_init"]), mastered=bool(b.get("mastered")))
+    return m

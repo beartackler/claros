@@ -256,4 +256,5 @@ async def merge_workflow(workflow_id: str) -> Optional[WorkMap]:
 
 
 def merged_payload(wm: WorkMap) -> dict[str, Any]:
-    return {**wm.model_dump(mode="json"), "consensus": consensus(wm)}
+    from .common import compile_guardrails
+    return {**wm.model_dump(mode="json"), "consensus": consensus(wm), "guardrail_specs": compile_guardrails(wm)}

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 from dataclasses import dataclass, field
 from typing import Optional
@@ -44,9 +45,20 @@ def _is_cyr(c: str) -> bool:
     return "Ѐ" <= c <= "ӿ"
 
 
+_ID_O = re.compile(r"(?<=[\d\-/.,])[oOоО](?=[\doOоО.,]*\d)|(?<=\d)[oOоО](?=\b|[\d\-/])")
+
+
 def fix_homoglyphs(text: str) -> str:
     out = []
+    line_cyr = sum(1 for c in text if _is_cyr(c) and c not in _CYR_HOMO)
+    line_lat = sum(1 for c in text if c.isascii() and c.isalpha() and c not in _LAT_HOMO)
     for tok in text.split(" "):
+        if sum(c.isdigit() for c in tok) >= 2:
+            for _ in range(4):
+                nt = _ID_O.sub("0", tok)
+                if nt == tok:
+                    break
+                tok = nt
         if not tok:
             out.append(tok)
             continue
@@ -61,8 +73,10 @@ def fix_homoglyphs(text: str) -> str:
             tok = tok.translate(_CYR2LAT)
             if lat_u >= 3 * max(cyr_u, 1):
                 tok = tok.translate(_LAT_EXTRA)
-        elif cyr_u >= max(1, lat_u):
+        elif cyr_u >= max(1, lat_u) or (cyr_u == lat_u == 0 and line_cyr > line_lat):
             tok = tok.translate(_LAT2CYR)
+        elif cyr_u == lat_u == 0:
+            tok = tok.translate(_CYR2LAT)
         out.append(tok)
     return " ".join(out)
 
@@ -94,6 +108,10 @@ class _Engine:
                     "Rec.ocr_version": OCRVersion.PPOCRV5,
                     "Rec.lang_type": lang,
                     "Rec.model_type": ModelType.MOBILE,
+                    # never upscale small tile crops (default "min 736" made a 270x90 tile cost as much
+                    # as a full frame); 2000 keeps full-HD screenshots at native resolution
+                    "Det.limit_type": "max",
+                    "Det.limit_side_len": 2000,
                     "EngineConfig.onnxruntime.intra_op_num_threads": threads,
                 })
                 self._kind = "rapidocr3"

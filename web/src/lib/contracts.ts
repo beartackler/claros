@@ -103,6 +103,8 @@ export interface Unknown {
   resolution?: string | null;
   resolution_source?: string | null;
   extracted_rule?: ExtractedRule | null;
+  mandatory?: boolean;
+  meta?: Record<string, unknown>;
 }
 
 // ---------- knowledge ----------
@@ -347,11 +349,13 @@ export interface ShowMomentMsg { type: "show_moment"; moment: Moment }
 export interface HighlightStepMsg { type: "highlight_step"; step_id: string }
 export interface MapUpdatedMsg { type: "map_updated"; workflow_id: string; version: number }
 export interface StatusMsg { type: "status"; level: "info" | "warn" | "error"; text: string }
+/** brain → client when the expert says it by voice */
+export interface ServerControlMsg { type: "control"; action: ControlAction }
 export interface ClockSyncIn { type: "clock_sync"; client_t: number; server_t: number }
 
 export type ServerMsg =
   | EventsMsg | LedgerMsg | AskMsg | InterveneMsg | ContextUpdateMsg
-  | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn;
+  | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn | ServerControlMsg;
 
 export type ServerMsgType = ServerMsg["type"];
 export type ServerMsgOf<T extends ServerMsgType> = Extract<ServerMsg, { type: T }>;

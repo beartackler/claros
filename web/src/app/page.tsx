@@ -13,7 +13,6 @@ import {
   EmptyState,
   ErrorState,
   Loading,
-  Panel,
   SectionTitle,
   SourceNote,
   useResource,

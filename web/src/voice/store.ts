@@ -34,6 +34,8 @@ export interface ClarosState {
   agentMode: "speaking" | "listening";
   userSpeaking: boolean;
   offRecord: boolean;
+  /** set when the session ended (server control end_task or local end) */
+  sessionEnded: boolean;
   activity: ActivityKind;
   /** Date.now() of the last activity report from the capture worker */
   activityT: number;
@@ -66,6 +68,7 @@ const initial = {
   agentMode: "listening" as const,
   userSpeaking: false,
   offRecord: false,
+  sessionEnded: false,
   activity: "idle" as ActivityKind,
   activityT: 0,
   captureActive: false,
@@ -124,6 +127,11 @@ export const useClaros = create<ClarosState>((set) => ({
           break;
         case "highlight_step":
           patch.highlightedStepId = m.step_id;
+          break;
+        case "control":
+          if (m.action === "off_record_on") patch.offRecord = true;
+          if (m.action === "off_record_off") patch.offRecord = false;
+          if (m.action === "end_task") patch.sessionEnded = true;
           break;
       }
       return patch;

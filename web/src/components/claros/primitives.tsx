@@ -22,13 +22,11 @@ import { useT, useUi, type DictKey } from "./i18n";
 export function useResource<T>(load: () => Promise<Result<T>>, deps: unknown[]) {
   const [state, setState] = useState<{ data?: T; source?: Source; loading: boolean; error?: string }>({ loading: true });
   const [nonce, setNonce] = useState(0);
-  const loadRef = useRef(load);
-  loadRef.current = load;
   useEffect(() => {
     let alive = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState((s) => ({ ...s, loading: true, error: undefined }));
-    loadRef.current()
+    load()
       .then((r) => alive && setState({ data: r.data, source: r.source, loading: false }))
       .catch((e: unknown) => alive && setState({ loading: false, error: e instanceof Error ? e.message : String(e) }));
     return () => {

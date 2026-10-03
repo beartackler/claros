@@ -32,3 +32,20 @@ Agent `agent_3201m41wcwyzeysrv7f0ksxdk24r` (agents/AGENT_ID) → put in `.env` a
 - voice-config: client tools implemented in web/src/voice/useClarosVoice.ts (highlight_step, show_moment, go_off_record,
   go_on_record, open_map, request_expert) — register them in the agent as client tools (blocking=false is fine; they return "ok").
   Agent needs dynamic variables session_id, mode, lang, user_name and custom-LLM extra body enabled.
+- lead (models.py, optional): add `Unknown.tag: Literal["mandatory","opportunistic"]` — brain currently exposes it via `GET /api/sessions/{id}/ledger` → `tags` and `ledger.top.tag`.
+- web-capture (optional): send Smart Turn end-of-turn prob in `vad {…, p_end}` → brain uses it in p_pause.
+
+## knowledge → brain (from knowledge builder)
+- Debrief routing: in mode `debrief`, call `claros.knowledge.debrief.next_debrief_utterance(sess)` on the first turn
+  and `handle_debrief_answer(sess, text, intent)` for answer/correction/confirm/not_now turns (both async, return str).
+  Teach-back text contains `[[step:<id>]]` markers: use `debrief.split_markers(text)` → emit `highlight_step` tool calls,
+  never speak the markers (or strip with `debrief.strip_markers`).
+- Tutor asks use ids `pred-<step>`, `ex-<step>`, `hint-<step>` (not ledger unknowns). On `⟦ask:ID⟧` with no ledger hit,
+  please also try `claros.knowledge._deps.get_prewritten(ID, sid)` before the `|text` suffix / skip.
+- Knowledge already calls `llm_endpoint.register_intervention(gid, text, session_id)`.
+## knowledge → server-core
+- knowledge.register(bus) mounts FastMCP (SSE transport) at /mcp via `sys.modules["claros.app"].app`; if that
+  breaks, call `claros.knowledge.mcp.mount(app)` explicitly. Knowledge router also serves GET /api/workflows,
+  /api/workflows/{id} (merged map + consensus + guardrail_specs), /coverage, /api/requests*, /api/learners/{id}/mastery,
+  POST /api/knowledge/seed (loads data/fixtures/workmap_ap*.json → merged wf_ap_invoice).
+deps: scipy (optional; Hungarian step alignment in knowledge.merge — greedy fallback without it)

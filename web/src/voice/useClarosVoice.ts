@@ -16,13 +16,15 @@ import { API_BASE, type ClientToolParams, type Mode } from "@/lib/contracts";
 import { now } from "@/lib/clock";
 import { getSocket, onSocketChange } from "@/lib/ws";
 import { useClaros } from "./store";
-import { sendControl } from "./useClarosSession";
+import { endSessionLocal, sendControl } from "./useClarosSession";
 
 export interface ClarosVoiceOptions {
   sessionId: string | null;
   mode: Mode;
   lang: string;
   userName?: string;
+  /** spoken name of the workflow for the agent prompt */
+  workflowName?: string;
   agent?: string; // agent alias for the token endpoint (default "claros")
 }
 
@@ -40,7 +42,7 @@ async function fetchToken(agent: string): Promise<TokenResp> {
   return { token: (await r.text()).trim() };
 }
 
-export function useClarosVoice({ sessionId, mode, lang, userName = "", agent = "claros" }: ClarosVoiceOptions) {
+export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowName = "this task", agent = "claros" }: ClarosVoiceOptions) {
   const set = useClaros((s) => s.set);
   const offRecord = useClaros((s) => s.offRecord);
   const vadSpeaking = useRef(false);
@@ -117,8 +119,18 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", agent = "
       const s = getSocket();
       if (!s) return;
       offs.push(
-        s.on("ask", (m) => { if (connected()) convRef.current.sendUserMessage(`⟦ask:${m.unknown_id}⟧`); }),
-        s.on("intervene", (m) => { if (connected()) convRef.current.sendUserMessage(`⟦intervene:${m.guardrail_id}⟧`); }),
+        s.on("ask", (m) => { if (connected()) convRef.current.sendUserMessage(`⟦ask:${m.unknown_id}|${m.text}⟧`); }),
+        s.on("intervene", (m) => { if (connected()) convRef.current.sendUserMessage(`⟦intervene:${m.guardrail_id}|${m.text}⟧`); }),
+        // brain-originated control (expert said it by voice): store already mirrors it; don't echo back
+        s.on("control", (m) => {
+          if (m.action === "off_record_on" || m.action === "off_record_off") {
+            try { convRef.current.setMuted(m.action === "off_record_on"); } catch {}
+          }
+          if (m.action === "end_task") {
+            try { convRef.current.endSession(); } catch {}
+            void endSessionLocal();
+          }
+        }),
         s.on("context_update", (m) => { if (connected()) convRef.current.sendContextualUpdate(m.text); }),
       );
     };
@@ -184,7 +196,7 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", agent = "
     });
     const common = {
       customLlmExtraBody: { session_id: sessionId, mode },
-      dynamicVariables: { session_id: sessionId, mode, lang, user_name: userName },
+      dynamicVariables: { session_id: sessionId, mode, lang, user_name: userName, workflow_name: workflowName },
       clientTools: clientTools.current as unknown as Record<string, (p: unknown) => string>,
     };
     let tok: TokenResp = {};
@@ -207,7 +219,7 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", agent = "
       set({ voiceStatus: "error" });
       useClaros.getState().pushServer({ type: "status", level: "error", text: "voice token: empty response" });
     }
-  }, [sessionId, mode, lang, userName, agent, conv, set]);
+  }, [sessionId, mode, lang, userName, workflowName, agent, conv, set]);
 
   const end = useCallback(() => {
     try { conv.endSession(); } catch {}

@@ -65,6 +65,13 @@ export function sendControl(action: ControlAction) {
   getSocket()?.send({ type: "control", t: now(), action });
 }
 
+/** Close the session client-side (server already knows, e.g. it sent control end_task). */
+export async function endSessionLocal() {
+  useClaros.getState().set({ sessionEnded: true });
+  disconnectSession();
+  useClaros.getState().set({ wsStatus: "closed" });
+}
+
 export function useClarosSession() {
   const [sessionId, setSessionId] = useState<string | null>(() => getSocket()?.sessionId ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -100,8 +107,7 @@ export function useClarosSession() {
     const id = getSocket()?.sessionId;
     sendControl("end_task");
     if (id) await endSessionApi(id);
-    disconnectSession();
-    useClaros.getState().set({ wsStatus: "closed" });
+    await endSessionLocal();
   }, []);
 
   return { sessionId, error, createSession, join, end, sendControl };

@@ -2,12 +2,14 @@
 
 Hard conditions (all must hold): not off-record, not snoozed, screen settled ≥1.2s, no speech ≥1.5s,
 agent listening, not typing, not away, reading grace over, budget (≤5/10min, ≥90s apart).
-Then System One (≤300ms) chooses ask_now / wait / defer; rules fallback.
+Then PRISM rule: ask iff p_pause × p_accept > τ = c_FA/(c_FA+c_miss) (no model in the hot path;
+System One refines p_accept in the background). Guardrail-risk unknowns bypass budget/gap.
 Every decision is logged with reasons for the "why Claros asked" inspector.
 """
 from __future__ import annotations
 
 import asyncio
+import math
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -28,6 +30,8 @@ class GateConfig:
     grace_cap_ms: float = 8000
     boundary_bonus_ms: float = 6000
     decide_timeout_s: float = 0.3
+    c_fa: float = 3.0   # cost of a false alarm (interrupting at a bad moment / low-value question)
+    c_miss: float = 1.0  # cost of missing a question → τ = 0.75 for expert capture
     recheck_after_wait_ms: float = 2000
     tick_s: float = 0.3
 
@@ -40,6 +44,7 @@ class GateState:
     speaking: bool = False
     last_speech_t: float = 0.0
     agent_mode: str = "listening"
+    p_end: Optional[float] = None
     asks: list = field(default_factory=list)
     snooze_until: float = 0.0
     off_record: bool = False
@@ -81,6 +86,9 @@ class Gate:
         if sp:
             s.last_speech_t = deps.now_ms()
         s.speaking = sp
+        for k in ("p_end", "smart_turn", "end_of_turn"):
+            if isinstance(p.get(k), (int, float)):
+                s.p_end = float(p[k])
 
     def on_agent_state(self, sid: str, p: dict) -> None:
         s = self.st(sid)
@@ -120,7 +128,7 @@ class Gate:
         self.st(sid).off_record = on
 
     # ---------- decision ----------
-    def blockers(self, sid: str, now: float) -> list[str]:
+    def blockers(self, sid: str, now: float, bypass: bool = False) -> list[str]:
         s, c = self.st(sid), self.cfg
         r = []
         sess = deps.get_session(sid)
@@ -128,6 +136,9 @@ class Gate:
             r.append("off_record")
         if getattr(sess, "mode", "capture") not in ("capture", "debrief"):
             r.append(f"mode={getattr(sess, 'mode', None)}")
+        if bypass:  # guardrail risk: only never talk over someone / off-record
+            return [x for x in r if x == "off_record"] + (["speech"] if s.speaking else []) + \
+                ([f"agent {s.agent_mode}"] if s.agent_mode == "speaking" else [])
         if now < s.snooze_until:
             r.append(f"snoozed {int((s.snooze_until - now) / 1000)}s")
         if now - s.last_change_t < c.settle_ms:
@@ -152,11 +163,79 @@ class Gate:
     def _log(self, sid: str, entry: dict) -> None:
         s = self.st(sid)
         sig = (entry.get("decision"), entry.get("unknown_id"), tuple(entry.get("reasons", [])))
-        if entry.get("decision") == "blocked" and sig == s.last_reasons:
+        if entry.get("decision") == "blocked" and s.last_reasons and sig == s.last_reasons:
             return
         s.last_reasons = sig
         s.log.append(entry)
         deps.store_log(sid, "gate", entry, entry["t"])
+
+    # ---------- PRISM-style decision-theoretic rule ----------
+    def p_pause(self, sid: str, now: float) -> dict:
+        """p_pause = p_end(turn) × p_silence × p_settle × p_not_typing (boundary bonus)."""
+        s = self.st(sid)
+        silence = now - s.last_speech_t
+        settle = now - s.last_change_t
+        p_sil = 0.0 if s.speaking else 1 - math.exp(-silence / 700)
+        p_set = 1 - math.exp(-settle / 600)
+        p_nt = 0.05 if (s.activity == "typing" and now - s.activity_t < 5000) else (0.0 if s.activity == "away" else 1.0)
+        p_end = s.p_end if s.p_end is not None else 1.0  # Smart Turn end-of-turn prob (when client sends it)
+        p = p_end * p_sil * p_set * p_nt
+        boundary = now - s.boundary_t < self.cfg.boundary_bonus_ms
+        if boundary:
+            p = 1 - (1 - p) * 0.5
+        return {"p_pause": round(p, 3), "p_end": round(p_end, 3), "p_silence": round(p_sil, 3),
+                "p_settle": round(p_set, 3), "p_not_typing": p_nt, "boundary": boundary}
+
+    def p_accept(self, lg: Any, u: Any, now: float) -> dict:
+        thr = lg.ask_threshold(now)
+        prio = lg.priority(u, now)
+        p_prio = 1 - math.exp(-1.2 * prio / max(thr, 1e-3))
+        m = lg.meta.get(u.id, {})
+        p_s1 = m.get("p_accept_s1")
+        p = p_prio if p_s1 is None else 0.5 * p_prio + 0.5 * p_s1
+        if u.hypothesis and u.hypothesis_confidence >= 0.7:
+            p = min(0.99, p + 0.05)  # confirm questions are cheap to answer
+        return {"p_accept": round(p, 3), "priority": prio, "ask_threshold": round(thr, 3),
+                "p_accept_systemone": p_s1}
+
+    def tau(self, lg: Any, u: Any) -> dict:
+        c_fa, c_miss = self.cfg.c_fa, self.cfg.c_miss
+        tag = lg.meta.get(u.id, {}).get("tag")
+        if u.type in GUARDRAIL_TYPES:
+            c_miss *= 2  # missing a guardrail is costly
+        if tag == "mandatory" and len(lg.asked_ids) < 3:
+            c_miss *= 1.5  # requirement guard: ≥3 live questions
+        return {"tau": round(c_fa / (c_fa + c_miss), 3), "c_fa": c_fa, "c_miss": c_miss}
+
+    def _prefetch_accept(self, sid: str, lg: Any, u: Any) -> None:
+        m = lg.meta.setdefault(u.id, {})
+        if m.get("p_accept_pending") or "p_accept_s1" in m:
+            return
+        m["p_accept_pending"] = True
+
+        async def run() -> None:
+            q = {"accept": {"type": "score", "instructions": "How likely is a busy expert to welcome and "
+                            "answer this question during their work (0..1)?",
+                            "criteria": ["unwelcome, breaks flow", "neutral", "welcome, specific and cheap to answer"]}}
+            try:
+                r = await systemone.decide({"question": u.spoken_question, "type": u.type}, q,
+                                           timeout=1.5, fallback=False)
+                a = r["answers"].get("accept") or {}
+                if "score" in a:
+                    n = len(q["accept"]["criteria"])
+                    sc = float(a["score"])
+                    sc = sc / (n - 1) if n > 1 and sc > 1.0 or (n > 1 and "legend" in a) else sc
+                    m["p_accept_s1"] = max(0.0, min(1.0, sc))
+                elif a.get("probabilities"):
+                    pr = a["probabilities"]
+                    m["p_accept_s1"] = float(pr.get("yes", pr.get("likely", 0.5)))
+            except Exception:  # noqa: BLE001
+                pass
+
+        try:
+            asyncio.get_running_loop().create_task(run())
+        except RuntimeError:
+            pass
 
     async def evaluate(self, sid: str, now: Optional[float] = None) -> dict:
         now = now if now is not None else deps.now_ms()
@@ -165,52 +244,38 @@ class Gate:
         u = lg.top_candidate(now)
         if u is None:
             return {"decision": "idle", "reasons": ["no candidate"]}
-        bl = self.blockers(sid, now)
+        self._prefetch_accept(sid, lg, u)
+        risk = bool(lg.meta.get(u.id, {}).get("risk"))
+        bl = self.blockers(sid, now, bypass=risk)
         if bl:
             e = {"t": now, "unknown_id": u.id, "decision": "blocked", "reasons": bl, "backend": "rules"}
             self._log(sid, e)
             return e
-        if now - s.last_decide_t < c.recheck_after_wait_ms:
-            return {"decision": "cooldown", "reasons": []}
-        s.last_decide_t = now
-        boundary = now - s.boundary_t < c.boundary_bonus_ms
-        thr = lg.ask_threshold(now)
+        pp, pa, tt = self.p_pause(sid, now), self.p_accept(lg, u, now), self.tau(lg, u)
+        score = pp["p_pause"] * pa["p_accept"]
         age_s = (now - u.created_t) / 1000
-        need_guard = u.type in GUARDRAIL_TYPES and not lg.guardrail_asked()
-        reasons = [f"priority {u.priority:.2f} (threshold {thr:.2f})", f"age {age_s:.0f}s",
-                   f"silence {int((now - s.last_speech_t) / 1000)}s", f"settled {int((now - s.last_change_t) / 1000)}s"]
-        if boundary:
+        if risk or score > tt["tau"]:
+            ch = "ask_now"
+        elif age_s > 35 and score < 0.5 * tt["tau"]:
+            ch = "defer"
+        else:
+            ch = "wait"
+        reasons = [f"p_pause {pp['p_pause']:.2f} × p_accept {pa['p_accept']:.2f} = {score:.2f} "
+                   f"{'>' if score > tt['tau'] else '≤'} τ {tt['tau']:.2f}",
+                   f"priority {pa['priority']:.2f} (threshold {pa['ask_threshold']:.2f})", f"age {age_s:.0f}s"]
+        if pp["boundary"]:
             reasons.append("task boundary (save/submit/list)")
-        if need_guard:
+        if risk:
+            reasons.append("guardrail risk: bypass")
+        if u.type in GUARDRAIL_TYPES and not lg.guardrail_asked():
             reasons.append("no guardrail question asked yet")
-
-        def rules(_st: Any, _q: dict) -> dict:
-            score = u.priority + (0.5 if boundary else 0) + (0.3 if need_guard else 0)
-            if score >= thr:
-                ch = "ask_now"
-            elif age_s > 35:
-                ch = "defer"
-            else:
-                ch = "wait"
-            return {"decision": {"choice": ch, "probabilities": {ch: 1.0}}}
-
-        state = {"unknown": {"type": u.type, "question": u.spoken_question, "priority": u.priority,
-                             "age_s": round(age_s)}, "boundary": boundary, "activity": s.activity,
-                 "asked_so_far": len(lg.asked_ids), "threshold": thr}
-        q = {"decision": {"type": "choice", "instructions": "Is this a good moment to interrupt an expert "
-                          "with this question? Prefer task boundaries; avoid breaking flow.",
-                          "criteria": {"ask_now": "natural pause, worth asking now",
-                                       "wait": "might be a better moment soon",
-                                       "defer": "save for the debrief"}}}
-        try:
-            res = await systemone.decide(state, q, timeout=c.decide_timeout_s, rules=rules,
-                                         backends=[b for b in systemone.default.backends() if b != "llm"])
-        except Exception:  # noqa: BLE001
-            res = {"answers": rules(None, q), "backend": "rules"}
-        a = res["answers"].get("decision") or {}
-        ch = a.get("choice") or "wait"
-        entry = {"t": now, "unknown_id": u.id, "decision": ch, "reasons": reasons, "backend": res.get("backend"),
-                 "confidence": a.get("confidence"), "question": u.spoken_question}
+        entry = {"t": now, "unknown_id": u.id, "decision": ch, "reasons": reasons, "backend": "prism",
+                 "score": round(score, 3), **pp, **pa, **tt, "tag": lg.meta.get(u.id, {}).get("tag"),
+                 "question": u.spoken_question}
+        if ch == "wait" and s.last_reasons and s.last_reasons[0] == "wait" and s.last_reasons[1] == u.id \
+                and now - s.last_decide_t < c.recheck_after_wait_ms:
+            return entry  # don't flood the inspector with identical waits
+        s.last_decide_t = now
         if ch == "ask_now":
             lg.mark_asked(u.id)
             s.asks.append(now)

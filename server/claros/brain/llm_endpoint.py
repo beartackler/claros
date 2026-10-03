@@ -34,8 +34,9 @@ def register_intervention(key: str, text: str, session_id: Optional[str] = None)
 
 register_text = register_intervention
 
-ASK_RE = re.compile(r"[⟦\[]{1,2}\s*ask\s*:\s*([\w\-]+)\s*[⟧\]]{1,2}")
-INTERVENE_RE = re.compile(r"[⟦\[]{1,2}\s*intervene\s*:\s*([\w\-]+)\s*[⟧\]]{1,2}")
+# ⟦ask:ID⟧ or ⟦ask:ID|fallback text⟧ (same for intervene)
+ASK_RE = re.compile(r"[⟦\[]{1,2}\s*ask\s*:\s*([\w\-]+)\s*(?:\|\s*([^⟧\]]*?))?\s*[⟧\]]{1,2}", re.S)
+INTERVENE_RE = re.compile(r"[⟦\[]{1,2}\s*intervene\s*:\s*([\w\-]+)\s*(?:\|\s*([^⟧\]]*?))?\s*[⟧\]]{1,2}", re.S)
 SESSION_LINE_RE = re.compile(r"claros-session\s*:\s*([\w\-]+)", re.I)
 BUFFER_AFTER_S = 0.9
 
@@ -234,15 +235,16 @@ async def route(body: dict) -> Reply:
     mode = getattr(sess, "mode", "capture") or "capture"
 
     m = ASK_RE.search(text)
-    if m and sid:
-        u = get_ledger(sid).unknowns.get(m.group(1))
+    if m:
+        u = get_ledger(sid).unknowns.get(m.group(1)) if sid else None
         if u and u.spoken_question:
             get_ledger(sid).mark_asked(u.id)
             return Reply(text=u.spoken_question)
-        return _skip(body)
+        suffix = (m.group(2) or "").strip()
+        return Reply(text=suffix) if suffix else _skip(body)
     m = INTERVENE_RE.search(text)
     if m:
-        t = await _intervention_text(sid, m.group(1))
+        t = await _intervention_text(sid, m.group(1)) or (m.group(2) or "").strip()
         return Reply(text=t) if t else _skip(body)
 
     lang = _reply_lang(sid, text)

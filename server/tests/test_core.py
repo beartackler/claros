@@ -106,6 +106,15 @@ def test_store_vec_numpy_fallback(tmp_path):
 
 # ---------------- ws ----------------
 
+def _recv(w, pred):
+    """Receive until pred(msg); package handlers (brain etc.) may interleave their own ws.out messages."""
+    for _ in range(50):
+        m = w.receive_json()
+        if pred(m):
+            return m
+    raise AssertionError("expected message not received")
+
+
 def test_ws_hello_clock_sync_and_out_forwarding():
     from fastapi.testclient import TestClient
 
@@ -122,15 +131,15 @@ def test_ws_hello_clock_sync_and_out_forwarding():
             w.send_json({"type": "hello", "session_id": sid, "mode": "capture", "lang": "de",
                          "user": {"id": "u1", "name": "Ana", "role": "expert"}})
             w.send_json({"type": "clock_sync", "client_t": 123.0})
-            msg = w.receive_json()
-            assert msg["type"] == "clock_sync" and msg["client_t"] == 123.0 and msg["server_t"] > 0
+            msg = _recv(w, lambda m: m.get("type") == "clock_sync")
+            assert msg["client_t"] == 123.0 and msg["server_t"] > 0
             w.send_json({"type": "activity", "t": 5, "kind": "typing", "tiles_changed": 3, "dims": [10, 10]})
             w.send_json({"type": "control", "t": 6, "action": "off_record_on"})
             # server -> client via bus
             w.send_json({"type": "clock_sync", "client_t": 1})  # barrier: ensures prior msgs processed
-            w.receive_json()
+            _recv(w, lambda m: m.get("type") == "clock_sync" and m.get("client_t") == 1)
             client.portal.call(bus.publish_wait, sid, "ws.out", {"type": "status", "level": "info", "text": "hi"})
-            assert w.receive_json() == {"type": "status", "level": "info", "text": "hi"}
+            assert _recv(w, lambda m: m.get("text") == "hi") == {"type": "status", "level": "info", "text": "hi"}
         assert sessions.get(sid).off_record is True
         kinds = [r["kind"] for r in store.iter_log(sid)]
         assert "ws.in.hello" in kinds and "ws.in.activity" in kinds and "ws.out" in kinds
@@ -139,7 +148,7 @@ def test_ws_hello_clock_sync_and_out_forwarding():
         # disconnected: messages queue and flush on re-attach with same id
         client.portal.call(bus.publish_wait, sid, "ws.out", {"type": "status", "level": "info", "text": "queued"})
         with client.websocket_connect(f"/ws/session/{sid}") as w2:
-            assert w2.receive_json()["text"] == "queued"
+            assert _recv(w2, lambda m: m.get("text") == "queued")
 
         h = client.get("/healthz").json()
         assert h["ok"] and set(h["packages"]) == {"perception", "brain", "knowledge", "context"}
