@@ -103,8 +103,12 @@ class _MemStore:
         lst.append({"id": len(lst) + 1, "session_id": session_id, "kind": kind, "t": t, "payload": payload})
         return len(lst)
 
+    def put_keyframe(self, id, session_id, path, t=None, meta=None):
+        self.kv[("_keyframes", id)] = {"id": id, "session_id": session_id, "path": str(path), "t": t,
+                                       "meta": meta or {}}
+
     def get_keyframe(self, id):
-        return None
+        return self.kv.get(("_keyframes", id))
 
     def index_text(self, ns, id, text):
         pass

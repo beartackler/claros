@@ -41,8 +41,51 @@ async def seed_fixtures_async(path: Optional[str] = None) -> list[str]:
     for fn in sorted(os.listdir(root)):
         if fn.startswith("workmap_") and fn.endswith(".json"):
             with open(os.path.join(root, fn), encoding="utf-8") as f:
-                out.append((await publish_expert_map(WorkMap.model_validate(json.load(f)))).workflow_id)
+                wm = WorkMap.model_validate(json.load(f))
+            register_fixture_keyframes(wm, root)
+            out.append((await publish_expert_map(wm)).workflow_id)
     return out
+
+
+_FRAME_RULES = [  # step-title keyword -> fixture frame (data/fixtures/frames/<lang>/)
+    (("submit",), "005_submitted.jpg"),
+    (("approv", "route", "escalat", "confirm"), "004_confirm_dialog.jpg"),
+    (("cost center", "cost centre", "account", "edit", "choose"), "002_edit_cost_center.jpg"),
+    (("open", "inbox", "start"), "001_open.jpg"),
+]
+
+
+def fixture_frame_for(title: str) -> str:
+    t = (title or "").lower()
+    for keys, fn in _FRAME_RULES:
+        if any(k in t for k in keys):
+            return fn
+    return "003_saved.jpg"
+
+
+def register_fixture_keyframes(wm: Any, root: str, lang: Optional[str] = None) -> int:
+    """Seeded maps reference keyframe ids (kf_a_001…) with no captured frames: point each at a fixture JPEG
+    so GET /api/keyframes/{id}.jpg serves it. Frame chosen by the step title; guardrail-only ids by order."""
+    lang = lang or os.getenv("CLAROS_FIXTURE_LANG", "en")
+    fdir = os.path.join(root, "frames", lang)
+    if not os.path.isdir(fdir):
+        return 0
+    frames = sorted(f for f in os.listdir(fdir) if f.endswith(".jpg"))
+    seen: dict[str, str] = {}
+    for st in wm.steps:
+        for k in (st.moment.keyframe_ids if st.moment else []):
+            seen.setdefault(k, fixture_frame_for(st.title))
+    extra = [k for g in wm.guardrails for ev in g.evidence for k in ev.keyframe_ids]
+    for i, k in enumerate(extra):
+        seen.setdefault(k, frames[i % len(frames)] if frames else "003_saved.jpg")
+    n = 0
+    for k, fn in seen.items():
+        path = os.path.join(fdir, fn)
+        if os.path.isfile(path):
+            _deps.st_call("put_keyframe", k, (wm.session_ids or ["fixture"])[0], path, None,
+                          {"fixture": True, "workflow_id": wm.workflow_id})
+            n += 1
+    return n
 
 
 @router.post("/api/knowledge/seed")

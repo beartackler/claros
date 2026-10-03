@@ -74,10 +74,13 @@ async def lookup_ep(req: LookupReq) -> dict[str, Any]:
 
 @router.get("/api/workflows")
 async def list_ep() -> list[dict[str, Any]]:
-    return [{"workflow_id": m.workflow_id, "name": m.name, "version": m.version, "apps": m.apps,
+    """Latest version of each workflow, most recently updated first (updated_at = epoch ms)."""
+    upd = {w.get("workflow_id"): w.get("updated_at") for w in (d.st_call("list_workflows", default=[]) or [])}
+    items = [{"workflow_id": m.workflow_id, "updated_at": upd.get(m.workflow_id) or 0, "name": m.name, "version": m.version, "apps": m.apps,
              "experts": [e.model_dump() for e in m.experts], "coverage": compute_coverage(m).model_dump(),
              "onet": m.onet.model_dump() if m.onet else None, "steps": len(m.steps),
              "guardrails": len(m.guardrails)} for m in list_maps()]
+    return sorted(items, key=lambda x: -(x["updated_at"] or 0))
 
 
 @router.get("/api/workflows/{workflow_id}")
@@ -122,7 +125,7 @@ async def create_request(workflow_hint: str, requested_by: User | dict, moment: 
     if onet is None:
         onet = await d.onet_match(workflow_hint)
     req = CaptureRequest(id=d.new_id("req"), workflow_hint=workflow_hint, requested_by=by, moment=mom, onet=onet,
-                         created_at=d.now_ms() / 1000)
+                         created_at=d.now_ms())  # epoch ms
     data = {**req.model_dump(mode="json"),
             "workflow_id": workflow_id or f"wf_{_slug(workflow_hint)}_{d.new_id('x')[-6:]}"}
     d.st_call("kv_put", "requests", req.id, data)
@@ -144,20 +147,25 @@ async def create_request_ep(body: dict = Body(...)) -> dict:
                                 workflow_id=body.get("workflow_id"))
 
 
+DEFAULT_EXPERT = {"id": "expert", "name": "Expert", "role": "expert"}
+
+
 @router.post("/api/requests/{rid}/accept")
 async def accept_request_ep(rid: str, body: Optional[dict] = Body(None)) -> dict:
     r = set_request_status(rid, "accepted")
     if r is None:
         raise HTTPException(404, "request not found")
     out: dict[str, Any] = {"request": r, "session_id": None, "mode": "capture", "workflow_id": r.get("workflow_id")}
-    user = (body or {}).get("user")
+    user = (body or {}).get("user") or DEFAULT_EXPERT
     try:
         from claros.session import sessions  # type: ignore
-        s = sessions.create(mode="capture", user=User.model_validate(user) if user else None,
+        s = sessions.create(mode="capture", user=User.model_validate(user),
                             lang=(body or {}).get("lang", "en"), workflow_id=r.get("workflow_id"))
-        s.extra["request_id"] = rid
+        s.extra.update(request_id=rid, workflow_hint=r.get("workflow_hint"), moment=r.get("moment"),
+                       requested_by=r.get("requested_by"))
         sessions.save(s)
         out["session_id"] = s.id
+        out["session"] = s.model_dump(mode="json")
     except Exception:  # noqa: BLE001
         d.log.debug("session create on accept failed", exc_info=True)
     return out
@@ -181,10 +189,10 @@ async def on_map_updated(session_id: str, payload: Any) -> None:
 # ---------------- mastery ----------------
 
 @router.get("/api/learners/{learner_id}/mastery")
-async def mastery_ep(learner_id: str, workflow_id: str) -> dict:
+async def mastery_ep(learner_id: str, workflow_id: str) -> list[dict]:
     from .tutor import BKT, load_bkt, load_mastery
     m = {k: v.model_dump() for k, v in load_mastery(learner_id, workflow_id).items()}
     for node, b in load_bkt(learner_id, workflow_id).items():
         m.setdefault(node, {"step_id": node, "level": "unseen", "attempts": 0})
         m[node].update(p_known=b.get("p", BKT["p_init"]), mastered=bool(b.get("mastered")))
-    return m
+    return list(m.values())  # MasteryNode[] (+ p_known/mastered); [] when empty

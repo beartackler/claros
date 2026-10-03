@@ -18,7 +18,7 @@ class Session(BaseModel):
     workflow_id: Optional[str] = None
     clock_offset: float = 0.0  # server_t - client_t (ms); add to client t to get server time
     off_record: bool = False
-    created_at: float = Field(default_factory=time.time)
+    created_at: float = Field(default_factory=lambda: time.time() * 1000.0)  # epoch ms
     ended: bool = False
     connected: bool = False
     extra: dict[str, Any] = Field(default_factory=dict)

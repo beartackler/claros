@@ -153,25 +153,34 @@ class Store:
         d["version"] = version
         self.execute(
             "INSERT OR REPLACE INTO workflows(workflow_id,version,value,created) VALUES (?,?,?,?)",
-            (wid, version, json.dumps(d, default=_default), time.time()),
+            (wid, version, json.dumps(d, default=_default), time.time() * 1000.0),
         )
         return version
 
+    @staticmethod
+    def _wf_row(r: sqlite3.Row) -> dict:
+        d = json.loads(r["value"])
+        c = float(r["created"])
+        d["updated_at"] = c * 1000.0 if c < 1e11 else c  # epoch ms (legacy rows stored seconds)
+        return d
+
     def get_workflow(self, workflow_id: str, version: Optional[int] = None) -> Optional[dict]:
+        """WorkMap JSON + `updated_at` (epoch ms of that version)."""
         if version is None:
-            r = self.execute("SELECT value FROM workflows WHERE workflow_id=? ORDER BY version DESC LIMIT 1",
+            r = self.execute("SELECT value, created FROM workflows WHERE workflow_id=? ORDER BY version DESC LIMIT 1",
                              (workflow_id,)).fetchone()
         else:
-            r = self.execute("SELECT value FROM workflows WHERE workflow_id=? AND version=?",
+            r = self.execute("SELECT value, created FROM workflows WHERE workflow_id=? AND version=?",
                              (workflow_id, version)).fetchone()
-        return json.loads(r["value"]) if r else None
+        return self._wf_row(r) if r else None
 
     def list_workflows(self) -> list[dict]:
+        """Latest version per workflow, most recently updated first; each has `updated_at` (epoch ms)."""
         rows = self.execute(
-            "SELECT w.value FROM workflows w JOIN (SELECT workflow_id, MAX(version) v FROM workflows "
-            "GROUP BY workflow_id) m ON w.workflow_id=m.workflow_id AND w.version=m.v ORDER BY w.created DESC"
+            "SELECT w.value, w.created FROM workflows w JOIN (SELECT workflow_id, MAX(version) v FROM workflows "
+            "GROUP BY workflow_id) m ON w.workflow_id=m.workflow_id AND w.version=m.v"
         ).fetchall()
-        return [json.loads(r["value"]) for r in rows]
+        return sorted((self._wf_row(r) for r in rows), key=lambda d: -d["updated_at"])
 
     # ---- keyframes (redacted JPEG on disk) ----
     def put_keyframe(self, id: str, session_id: str, path: str, t: Optional[float] = None,

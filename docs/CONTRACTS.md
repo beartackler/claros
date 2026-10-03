@@ -76,6 +76,13 @@ Response language = session lang (switch if `language_detection` fires).
 `go_on_record {}` · `open_map {workflow_id}` · `request_expert {workflow_hint}`.
 
 ## REST (server)
+**Timestamps:** every wall-clock field on the wire (`created_at`, `updated_at`, session `created_at`, `server_t`)
+is **epoch milliseconds** (float). Session-clock `t` fields are also ms.
+- `GET /api/workflows` → items include `updated_at` (ms), sorted most recent first.
+- `GET /api/learners/{id}/mastery?workflow_id=` → `MasteryNode[]` (`[]` when empty).
+- `POST /api/requests/{id}/accept` (body optional `{user, lang}`; default user = expert "Expert") → `{request, session_id,
+  session, workflow_id, mode}`; the new capture session's `extra` carries `request_id, workflow_hint, moment, requested_by`.
+- Seeded fixture keyframe ids (`kf_a_001`…) are served from `data/fixtures/frames/<CLAROS_FIXTURE_LANG|en>/`.
 - `POST /api/sessions {mode, user, lang, workflow_id?}` → `{session_id}`
 - `POST /api/sessions/{id}/end` → triggers map build (capture) / report (learn)
 - `GET /api/workflows` · `GET /api/workflows/{id}` (merged WorkMap) · `GET /api/workflows/{id}/coverage`

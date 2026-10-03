@@ -143,6 +143,7 @@ async def session_log(sid: str, kinds: Optional[str] = None, after_id: int = 0) 
 @app.get("/api/workflows")
 async def list_workflows() -> list[dict]:
     return [{"workflow_id": w["workflow_id"], "id": w.get("id"), "name": w.get("name"), "version": w.get("version"),
+             "updated_at": w.get("updated_at"),
              "apps": w.get("apps", []), "coverage": w.get("coverage"), "experts": w.get("experts", []),
              "onet": w.get("onet")} for w in store.list_workflows()]
 
@@ -163,11 +164,27 @@ async def workflow_coverage(wid: str) -> dict:
     return w.get("coverage") or {"status": "missing"}
 
 
+FIXTURE_FRAMES = REPO_ROOT / "data" / "fixtures" / "frames"
+
+
+def _fixture_frame(kid: str) -> Optional[Path]:
+    """Unregistered seeded ids like kf_a_003 -> data/fixtures/frames/<lang>/<nth frame> (demo fallback)."""
+    import re
+    m = re.fullmatch(r"kf_[a-z0-9]+_(\d+)", kid)
+    d = FIXTURE_FRAMES / os.getenv("CLAROS_FIXTURE_LANG", "en")
+    if not m or not d.is_dir():
+        return None
+    frames = sorted(d.glob("*.jpg"))
+    return frames[(int(m.group(1)) - 1) % len(frames)] if frames else None
+
+
 @app.get("/api/keyframes/{kid}.jpg")
 async def keyframe(kid: str) -> FileResponse:
     """Serves REDACTED keyframes only (perception writes them; raw frames never hit disk)."""
     kf = store.get_keyframe(kid)
     path = Path(kf["path"]) if kf else KEYFRAME_DIR / f"{kid}.jpg"
+    if not kf and not path.is_file():
+        path = _fixture_frame(kid) or path
     if not path.is_absolute():
         path = REPO_ROOT / path
     path = path.resolve()
@@ -191,7 +208,7 @@ async def list_requests() -> list[dict]:
 @app.post("/api/requests")
 async def create_request(body: RequestCreate) -> dict:
     req = CaptureRequest(id=f"r_{uuid.uuid4().hex[:10]}", workflow_hint=body.workflow_hint,
-                         requested_by=body.requested_by, moment=body.moment, created_at=time.time())
+                         requested_by=body.requested_by, moment=body.moment, created_at=time.time() * 1000.0)
     d = req.model_dump(mode="json")
     store.kv_put("requests", req.id, d)
     bus.publish(body.moment.session_id if body.moment else "_", "request.created", d)
@@ -205,5 +222,9 @@ async def accept_request(rid: str) -> dict:
         raise HTTPException(404, "request not found")
     d["status"] = "accepted"
     store.kv_put("requests", rid, d)
-    bus.publish("_", "request.accepted", d)
-    return d
+    s = sessions.create(mode="capture", user=User(id="expert", name="Expert", role="expert"))
+    s.extra.update(request_id=rid, workflow_hint=d.get("workflow_hint"), moment=d.get("moment"),
+                   requested_by=d.get("requested_by"))
+    sessions.save(s)
+    bus.publish(s.id, "request.accepted", d)
+    return {"request": d, "session_id": s.id, "mode": "capture", "session": s.model_dump(mode="json")}

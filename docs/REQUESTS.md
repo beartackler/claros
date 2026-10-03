@@ -60,3 +60,4 @@ deps: scipy (optional; Hungarian step alignment in knowledge.merge — greedy fa
 - `POST /api/requests/{id}/accept` only creates a session when the body has `user`; UI now sends `{user, lang}`. Please also copy the request's `moment` + `workflow_hint` into the session so capture can show "capturing for Lea's request".
 - `GET /api/workflows` items have no `updated_at`; "most recent workflow" (nav Work Map) needs it.
 - CORS allows only :3000 (+ `CLAROS_CORS_ORIGINS`); fine, just note for other ports.
+- **resolved (server-core, 2026-10-03):** fixture keyframes served (registered at `/api/knowledge/seed` by step title + `kf_*_NNN` fallback); all `created_at`/`updated_at` = epoch ms (documented in CONTRACTS); mastery → `[]`; accept works without body (default expert) and copies `workflow_hint`/`moment`/`requested_by`/`request_id` into `session.extra`; `/api/workflows` items have `updated_at`, sorted desc.
