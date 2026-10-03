@@ -165,11 +165,20 @@ Rules:
 - Decisions: kind "judgment" when the expert chose among options for a reason; reason_quote_ids = SAY ids
   that explain why; counterfactual = what would change the decision.
 - Guardrails: limits, never-do, stop-and-ask rules the expert stated or the ledger resolved. quote_ids = SAY ids.
-  predicate = json-logic over canonical vars (e.g. {">":[{"var":"line.amount"},5000]}) when expressible,
-  using only ops: and, or, !, ==, !=, >, >=, <, <=, in, var. For dates use "<x>_month" / "<x>_year" derived vars.
-  If not expressible: predicate null, fuzzy true. action in block_and_explain|warn|stop_and_ask|hold; owner = who to ask.
-- canonical_vars: {"entity.field": [every on-screen label alias seen, in any language]}.
-- open_unknowns: anything still unclear (type why|limit|stop_and_ask|never|deliberate|coverage).
+  predicate = json-logic that a program evaluates on a FUTURE screen, so it may only use canonical vars that are
+  visible fields/columns in the STATE lines (each must be a key of canonical_vars with its on-screen labels), compared
+  with literal values exactly as they appear on screen. Never invent derived or boolean vars (no "is_equipment",
+  "is_uk_subsidiary", "double_bills"). Express the situation the rule must catch through what is visible, e.g. the
+  value the expert corrected away from: {"and":[{">":[{"var":"line.amount"},5000]},{"in":["Tools and Small Equipment",
+  {"var":"line.expense_account"}]}]} ("in" with a string = substring match), or {"in":["Ltd",{"var":"invoice.company"}]}.
+  Ops: and, or, !, ==, !=, >, >=, <, <=, in, var. For dates use "<x>_month" / "<x>_year" derived vars of a *_date var.
+  If the rule cannot be decided from visible fields: predicate null, fuzzy true.
+  action in block_and_explain|warn|stop_and_ask|hold; owner = who to ask.
+- canonical_vars: {"entity.field": [every on-screen label alias seen, in any language]} — grid columns too
+  (e.g. "line.amount": ["Amount (EUR)", "Amount (GBP)"], "line.expense_account": ["Expense Head"]).
+- open_unknowns: anything still unclear about the expert's reasons (type why|limit|stop_and_ask|never|deliberate|coverage),
+  each with a short spoken_question (≤15 words). Ignore events that only reflect OCR noise, truncated text ("...") or
+  formatting, and never ask how a value was entered (typed/pasted).
 - quotes: leave empty (we build them from SAY ids). Return ONLY JSON."""
 
 
@@ -301,7 +310,7 @@ async def translate_quotes(quotes: list[Quote], langs: list[str] = LANGS) -> Non
         {"role": "system", "content": "Translate each quote faithfully (keep tone, numbers, names) into every "
                                       f"language of {langs} except its own. Return JSON "
                                       '{"<id>": {"<lang>": "<text>"}}.'},
-        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}], model_role="fast", json_schema={
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}], model_role="smart", json_schema={
         "type": "object"})
     if isinstance(out, dict):
         for q in todo:
@@ -362,6 +371,8 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     wm = _with_repairs(wm, r)
     # force identity fields
     if not workflow_id:
+        workflow_id = await _same_expert_workflow(wm, expert.id)
+    if not workflow_id:
         slug = re.sub(r"[^a-z0-9]+", "_", (wm.name or "workflow").lower()).strip("_")[:40] or "workflow"
         workflow_id = f"wf_{slug}_{d.new_id('x')[-6:]}"
     wm.workflow_id = workflow_id
@@ -410,23 +421,25 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
                                text=u["text"], t=u["t"], session_id=session_id, source="live"))
     await translate_quotes(wm.quotes)
 
-    # predicates: vars must be canonical; otherwise fuzzy
-    known_vars = set(wm.canonical_vars)
-    derived = {k[:-5] + suf for k in known_vars if k.endswith("_date") for suf in ("_month", "_year")}
+    # predicates: every var must map to a label that was actually on screen, else the guardrail is fuzzy
+    # (a predicate over "item.is_equipment" can never be evaluated on a learner's screen and would never fire)
+    observable = observable_vars(wm, r)
+    derived = {k[:-5] + suf for k in observable if k.endswith("_date") for suf in ("_month", "_year")}
     for g in wm.guardrails:
         if g.predicate:
             vs = predicate_vars(g.predicate)
             probe = {v: 1 for v in vs}
-            bad = [v for v in vs if v not in known_vars | derived and not v.startswith("doc.")]
-            if bad:
-                for v in bad:  # keep predicate; register canonical var so it can be mapped later
-                    wm.canonical_vars.setdefault(v, [v.split(".")[-1].replace("_", " ")])
+            bad = [v for v in vs if v not in observable | derived and not v.startswith("doc.")]
             try:
                 eval_predicate(g.predicate, probe)
             except Exception:  # noqa: BLE001
-                g.predicate, g.fuzzy = None, True
-        if not g.predicate:
-            g.fuzzy = True
+                bad = bad or ["<invalid>"]
+            if not bad and tautological(g.predicate, wm):
+                bad = ["<var compared with a var read from the same on-screen label>"]
+            if bad:
+                d.log.info("guardrail %s predicate uses unobservable vars %s → fuzzy", g.id, bad)
+                g.predicate = None
+        g.fuzzy = not g.predicate
 
     # evidence gaps → open Unknowns (coverage)
     gaps = []
@@ -438,6 +451,10 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
         if not any(moment_ok(m) for m in g.evidence):
             gaps.append(new_unknown("coverage", f"Is this really your rule: “{g.text}”?", hypothesis=g.text,
                                     entity=g.id, priority=0.7))
+    for u in wm.open_unknowns:
+        if not u.spoken_question:
+            u.spoken_question = (f"Is this right: {u.hypothesis}?" if u.hypothesis else
+                                 f"Can you explain {u.entity or 'this step'}?")
     ledger_open = [u for u in r.unknowns if u.status in OPEN_STATUSES and u.scope in ("company", "personal_judgment")]
     seen = {u.id for u in wm.open_unknowns}
     wm.open_unknowns = [u for u in wm.open_unknowns if u.status in OPEN_STATUSES] + \
@@ -458,6 +475,62 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     if persist:
         wm = await publish_expert_map(wm, session_id)
     return wm
+
+
+async def _same_expert_workflow(wm: WorkMap, expert_id: str, threshold: float = 0.8) -> Optional[str]:
+    """An expert re-recording a workflow they already mapped updates that map instead of creating a near-duplicate
+    (which would split learner lookups). Other experts' maps are only merged via an explicit workflow_id/request."""
+    from .common import list_maps, map_doc_text
+    mine = [m for m in list_maps() if any(e.id == expert_id for e in m.experts) and len(m.experts) == 1]
+    if not mine:
+        return None
+    try:
+        vecs = await d.embed([map_doc_text(wm)] + [map_doc_text(m) for m in mine], "retrieval.passage")
+        sims = [d.cosine(vecs[0], v) for v in vecs[1:]]
+    except Exception:  # noqa: BLE001
+        return None
+    i = max(range(len(mine)), key=lambda k: sims[k])
+    d.log.info("same-expert workflow match %s sim=%.3f", mine[i].workflow_id, sims[i])
+    return mine[i].workflow_id if sims[i] >= threshold else None
+
+
+def tautological(pred: Any, wm: WorkMap) -> bool:
+    """{"==":[{"var":"line.amount"},{"var":"invoice.paid_december_amount"}]} where both vars alias the same label
+    ('Amount (EUR)') is always true on screen — it would fire on every invoice."""
+    from .common import norm_label
+    if isinstance(pred, list):
+        return any(tautological(x, wm) for x in pred)
+    if not isinstance(pred, dict) or len(pred) != 1:
+        return False
+    op, args = next(iter(pred.items()))
+    if isinstance(args, list) and len(args) == 2 and all(isinstance(a, dict) and "var" in a for a in args):
+        names = [a["var"][0] if isinstance(a["var"], list) else a["var"] for a in args]
+        al = [{norm_label(x) for x in wm.canonical_vars.get(n, [])} for n in names]
+        if names[0] == names[1] or (al[0] & al[1]):
+            return True
+    return tautological(args, wm) if isinstance(args, (list, dict)) else False
+
+
+def observable_vars(wm: WorkMap, r: Replay) -> set[str]:
+    """Canonical vars with at least one alias that was a field/column label on a captured screen. Adds observed
+    grid-column labels the LLM forgot (alias match on the var's last segment, e.g. line.amount ← 'Amount (EUR)')."""
+    from .common import norm_label
+    seen: dict[str, str] = {}
+    for s_ in r.states:
+        for f in s_.fields:
+            base = re.sub(r"\s*\[\d+\]$", "", f.label or "")
+            seen.setdefault(norm_label(base), base)
+    out: set[str] = set()
+    for k, aliases in list(wm.canonical_vars.items()):
+        ok = [a for a in aliases if norm_label(re.sub(r"\s*\*$", "", a)) in seen or norm_label(a) in seen]
+        if not ok:
+            tail = norm_label(k.split(".")[-1].replace("_", " "))
+            ok = [lab for nl, lab in seen.items() if tail and (nl == tail or nl.startswith(tail + " "))]
+            if ok:
+                wm.canonical_vars[k] = list(dict.fromkeys(aliases + ok))
+        if ok:
+            out.add(k)
+    return out
 
 
 def _with_repairs(wm: WorkMap, r: Replay) -> WorkMap:

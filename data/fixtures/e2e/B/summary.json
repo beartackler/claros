@@ -1,0 +1,168 @@
+{
+  "session_id": "s_a4b18369e47a",
+  "frames": [],
+  "turns": [
+    {
+      "t": 1791070040433.597,
+      "sent": "Okay, let's do it.",
+      "text": "Got it. What if it were 4,999? Would “Equipment purchases over 5,000 are always capex: code them to Plants and Machineries with the Production cost center, never to small tools.” still apply?",
+      "tool": null,
+      "ttft_ms": 1003,
+      "total_ms": 1003,
+      "kind": "user"
+    },
+    {
+      "t": 1791070041738.521,
+      "sent": "No — below 5,000 it stays an expense, small tools is fine then.",
+      "text": "Got it. Looks like: The 5,000 capex threshold applies to the invoice line amount, not the invoice total — is that your rule?",
+      "tool": null,
+      "ttft_ms": 2153,
+      "total_ms": 2153,
+      "kind": "user"
+    },
+    {
+      "t": 1791070044192.972,
+      "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "text": "Got it. Is the hold tied to December or to this supplier's billing pattern?",
+      "tool": null,
+      "ttft_ms": 3082,
+      "total_ms": 3082,
+      "kind": "user"
+    },
+    {
+      "t": 1791070047576.569,
+      "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "text": "Got it. Sounds like the rule is about the amount matching a paid invoice, not the December timing — is that right?",
+      "tool": null,
+      "ttft_ms": 912,
+      "total_ms": 1234,
+      "kind": "user"
+    },
+    {
+      "t": 1791070049112.0122,
+      "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "text": "Got it. I open the supplier purchase invoice and review the line item. If the equipment value exceeds the capitalization threshold, I recode the expense head from small tools to the plants and machineries account, since purchases over 5,000 are always capex. I set the cost center to Production for capitalized equipment and save the draft. I recognize a repeat billing pattern when a familiar supplier invoice amount appears again, especially around December. Rather than booking it, I place the suspected duplicate on hold with an On Hold tag, because it repeats a previously paid amount with only a suffix added to the old invoice number, and it stays held until the supplier confirms. For UK subsidiary invoices, I escalate to Pending Second Approval instead of submitting directly, since the controller must give second approval before booking. Is this correct?",
+      "tool": null,
+      "ttft_ms": 4281,
+      "total_ms": 30367,
+      "kind": "user"
+    },
+    {
+      "t": 1791070079780.083,
+      "sent": "Yes, that's right.",
+      "text": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account. I would: block and explain — Equipment purchases over 5,000 are always capex: code them to Plants and Machineries with the Production cost center, never to small tools. (85% sure). Right?",
+      "tool": null,
+      "ttft_ms": 206,
+      "total_ms": 207,
+      "kind": "user"
+    },
+    {
+      "t": 1791070080287.9429,
+      "sent": "Yes, correct.",
+      "text": "Got it. Case 2: Company = Ltd account. I would: stop and ask — Anything from the UK subsidiary needs a second approval from the controller before it is booked. (85% sure). Right?",
+      "tool": null,
+      "ttft_ms": 124,
+      "total_ms": 124,
+      "kind": "user"
+    },
+    {
+      "t": 1791070080712.821,
+      "sent": "Yes, correct.",
+      "text": "Got it. Case 3: Amount (EUR) = 4,800, Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
+      "tool": null,
+      "ttft_ms": 132,
+      "total_ms": 132,
+      "kind": "user"
+    },
+    {
+      "t": 1791070081145.876,
+      "sent": "Yes, correct.",
+      "text": "Got it. That's everything. The map is published for learners.",
+      "tool": null,
+      "ttft_ms": 119,
+      "total_ms": 119,
+      "kind": "user"
+    }
+  ],
+  "map_build_s": 42.6,
+  "built": {
+    "type": "status",
+    "level": "info",
+    "text": "Work map built: 6 steps, 3 guardrails, 4 open questions.",
+    "_at": 1791070039055.4668
+  },
+  "debrief": [
+    {
+      "say": "Okay, let's do it.",
+      "reply": "Got it. What if it were 4,999? Would “Equipment purchases over 5,000 are always capex: code them to Plants and Machineries with the Production cost center, never to small tools.” still apply?",
+      "tool": null,
+      "ttft_ms": 1003,
+      "total_ms": 1003
+    },
+    {
+      "say": "No — below 5,000 it stays an expense, small tools is fine then.",
+      "reply": "Got it. Looks like: The 5,000 capex threshold applies to the invoice line amount, not the invoice total — is that your rule?",
+      "tool": null,
+      "ttft_ms": 2153,
+      "total_ms": 2153
+    },
+    {
+      "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "reply": "Got it. Is the hold tied to December or to this supplier's billing pattern?",
+      "tool": null,
+      "ttft_ms": 3082,
+      "total_ms": 3082
+    },
+    {
+      "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "reply": "Got it. Sounds like the rule is about the amount matching a paid invoice, not the December timing — is that right?",
+      "tool": null,
+      "ttft_ms": 912,
+      "total_ms": 1234
+    },
+    {
+      "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "reply": "Got it. I open the supplier purchase invoice and review the line item. If the equipment value exceeds the capitalization threshold, I recode the expense head from small tools to the plants and machineries account, since purchases over 5,000 are always capex. I set the cost center to Production for capitalized equipment and save the draft. I recognize a repeat billing pattern when a familiar supplier invoice amount appears again, especially around December. Rather than booking it, I place the suspected duplicate on hold with an On Hold tag, because it repeats a previously paid amount with only a suffix added to the old invoice number, and it stays held until the supplier confirms. For UK subsidiary invoices, I escalate to Pending Second Approval instead of submitting directly, since the controller must give second approval before booking. Is this correct?",
+      "tool": null,
+      "ttft_ms": 4281,
+      "total_ms": 30367
+    },
+    {
+      "say": "Yes, that's right.",
+      "reply": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account. I would: block and explain — Equipment purchases over 5,000 are always capex: code them to Plants and Machineries with the Production cost center, never to small tools. (85% sure). Right?",
+      "tool": null,
+      "ttft_ms": 206,
+      "total_ms": 207
+    },
+    {
+      "say": "Yes, correct.",
+      "reply": "Got it. Case 2: Company = Ltd account. I would: stop and ask — Anything from the UK subsidiary needs a second approval from the controller before it is booked. (85% sure). Right?",
+      "tool": null,
+      "ttft_ms": 124,
+      "total_ms": 124
+    },
+    {
+      "say": "Yes, correct.",
+      "reply": "Got it. Case 3: Amount (EUR) = 4,800, Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
+      "tool": null,
+      "ttft_ms": 132,
+      "total_ms": 132
+    },
+    {
+      "say": "Yes, correct.",
+      "reply": "Got it. That's everything. The map is published for learners.",
+      "tool": null,
+      "ttft_ms": 119,
+      "total_ms": 119
+    }
+  ],
+  "coverage": {
+    "status": "partial",
+    "steps_with_evidence": 1.0,
+    "judgments_complete": 1.0,
+    "guardrails_complete": 1.0,
+    "open_unknowns": 2,
+    "conflicts": 0
+  },
+  "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e"
+}

@@ -81,6 +81,53 @@ def pick_answer(text: str, phase: str) -> str:
     return ANSWERS[best]
 
 
+DEBRIEF_KB = [
+    (r"4[,.]?999|below|under 5|less than 5", "No — below 5,000 it stays an expense, small tools is fine then."),
+    (r"maint|repair|overhaul|service", "Maintenance or repairs stay an expense even above 5,000; only new equipment "
+                                       "is capitalised."),
+    (r"duplicate|december|velt|double|hold|same amount|re-?bill",
+     "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else."),
+    (r"uk|subsidiar|ltd|gbp|pound|second approval|controller|pennick",
+     "Every invoice of the UK company goes to Frank, the controller, for second approval."),
+    (r"capex|capital|asset|plant|machin|equipment|5[,.]?000|cost cent|production|expense head|tools",
+     "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center."),
+]
+
+
+def truth(variant: str) -> Optional[bool]:
+    """Ground truth for exam cases: should a guardrail stop the learner? None = can't tell."""
+    v = variant.lower()
+    if re.search(r"maint|repair|overhaul", v):
+        return False
+    if re.search(r"uk|subsidiar|gbp|ltd", v):
+        return True
+    if re.search(r"december|double|duplicate|same amount|already paid", v):
+        return True
+    nums = [float(x.replace(",", "").replace(".", "")) for x in re.findall(r"\d[\d.,]{2,}", v)]
+    big = [n for n in nums if 1000 <= n < 10_000_000]
+    if big and re.search(r"tool|equip|compress|machin|small|amount", v):
+        return max(big) > 5000
+    return None
+
+
+def debrief_reply(text: str) -> str:
+    low = text.lower()
+    m = re.search(r"case \d+:(.*?)i would:(.*?)(\(\d+% sure\))", low, re.S)
+    if m:
+        want = truth(m.group(1))
+        stops = bool(re.search(r"block|stop|hold|capital|capex|approval|plants|ask", m.group(2)))
+        if want is None or want == stops:
+            return "Yes, correct."
+        return ("No, that one must be stopped — it's a guardrail case." if want else
+                "No, that's fine to book normally, no guardrail applies there.")
+    if re.search(r"is (that|this) right\??\s*$|did i get (it|that) right|confirm", low) and len(low.split()) > 40:
+        return "Yes, that's right."
+    for pat, ans in DEBRIEF_KB:
+        if re.search(pat, low):
+            return ans
+    return "Yes, that's how I do it."
+
+
 # ---------------- recording ----------------
 
 async def dump(phase: str, c: ClarosClient, extra: Optional[dict] = None, sessions: Optional[list[str]] = None) -> dict:
@@ -282,21 +329,15 @@ async def phase_b() -> None:
                    "workflow_id": wid})
     await asyncio.sleep(1)
     turns = []
-    script = [
-        "Okay, let's do it.",
-        "Equipment means machines and tools we keep for years; anything over 5,000 euros net is capitalised.",
-        "If it is maintenance or a repair, it stays an expense, even above 5,000.",
-        "The controller, Frank, approves UK invoices.",
-        "Yes, that's right.",
-        "Yes, correct.",
-        "Yes.",
-        "That's right.",
-    ]
-    for line in script:
+    line = "Okay, let's do it."
+    for _ in range(16):
         tr = await c.llm_turn(line)
         turns.append({"say": line, "reply": tr.text, "tool": tr.tool, "ttft_ms": tr.ttft_ms, "total_ms": tr.total_ms})
         log(f"  DEBRIEF {line!r}\n     → {tr.text!r} tool={tr.tool} ({tr.ttft_ms}ms)")
-        await asyncio.sleep(0.5)
+        if re.search(r"published|that's everything|nothing left", tr.text or "", re.I):
+            break
+        line = debrief_reply(tr.text or "")
+        await asyncio.sleep(0.3)
     await asyncio.sleep(2)
     wm = await api("GET", f"/api/workflows/{wid}") if wid else None
     cov = await api("GET", f"/api/workflows/{wid}/coverage") if wid else None

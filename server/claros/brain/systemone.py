@@ -7,7 +7,7 @@ Open System One schema:
 
 For `choice` questions, `criteria` is a dict {label: description} (labels = options);
 for `score`, `criteria` is a list of anchors (low→high) and `score` ∈ 0..1.
-Backends (in order): Ollama (OLLAMA_URL) → Fastino GLiDE → LLM (claros.llm fast) → rules.
+Backends (in order): Ollama (OLLAMA_URL) → Clef on Workers AI → Fastino GLiDE → LLM (claros.llm fast) → rules.
 Confidence is always recomputed as top1 - top2 over `probabilities`.
 """
 from __future__ import annotations
@@ -96,6 +96,8 @@ class SystemOne:
         out = []
         if os.getenv("OLLAMA_URL") and os.getenv("CLAROS_DECIDER_OLLAMA", "1") != "0":
             out.append("ollama")
+        if os.getenv("CLOUDFLARE_ACCOUNT_ID") and os.getenv("CLOUDFLARE_API_TOKEN"):
+            out.append("workers")
         if os.getenv("FASTINO_API_KEY"):
             out.append("fastino")
         out += ["llm", "rules"]
@@ -124,6 +126,18 @@ class SystemOne:
         r.raise_for_status()
         self.last_backend = f"systemone:{model}"
         return r.json().get("answers", {})
+
+    async def _workers(self, state: Any, questions: dict, timeout: float) -> dict:
+        """Clef on Cloudflare Workers AI (same System One body; response wrapped in {result})."""
+        model = os.getenv("CLAROS_WORKERS_MODEL", "clef-flash")
+        url = (f"https://api.cloudflare.com/client/v4/accounts/{os.environ['CLOUDFLARE_ACCOUNT_ID']}"
+               f"/ai/run/@cf/cloudflare/{model}")
+        r = await self._post(url, {"model": model, "state": state, "questions": questions},
+                             {"Authorization": f"Bearer {os.environ['CLOUDFLARE_API_TOKEN']}"}, timeout)
+        r.raise_for_status()
+        data = r.json()
+        self.last_backend = f"systemone:workers/{model}"
+        return (data.get("result") or data).get("answers", {})
 
     async def _fastino(self, state: Any, questions: dict, timeout: float) -> dict:
         key = os.getenv("FASTINO_API_KEY", "")
@@ -172,7 +186,7 @@ class SystemOne:
         deadline = t0 + timeout
         order = backends or self.backends()
         if not fallback:
-            order = [b for b in order if b in ("ollama", "fastino")]
+            order = [b for b in order if b in ("ollama", "workers", "fastino")]
         for b in order:
             rem = deadline - time.monotonic()
             if b == "rules":
@@ -181,7 +195,8 @@ class SystemOne:
             if rem <= 0.01 or self._is_down(b):
                 continue
             try:
-                fn = {"ollama": self._ollama, "fastino": self._fastino, "llm": self._llm}[b]
+                fn = {"ollama": self._ollama, "workers": self._workers, "fastino": self._fastino,
+                      "llm": self._llm}[b]
                 ans = await asyncio.wait_for(fn(state, questions, rem), rem)
                 if not isinstance(ans, dict) or not ans:
                     raise ValueError("empty answers")

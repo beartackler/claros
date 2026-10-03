@@ -18,7 +18,7 @@ from claros.models import ContextNote, ExtractedRule, Moment, ScreenEvent, Unkno
 
 from . import deps, lang as L, systemone
 
-EXPIRE_MS = 45_000
+EXPIRE_MS = 60_000
 DEDUPE_COS = 0.88
 RECENCY_TAU_MS = 60_000
 GUARDRAIL_TYPES = {"limit", "stop_and_ask", "never"}
@@ -330,14 +330,33 @@ class Ledger:
 
     def make_question(self, u: Unknown, e: Optional[ScreenEvent]) -> str:
         lang = self.lang()
-        f = (e.field or e.canonical) if e else None
-        v = (e.new if e and e.new not in (None, "") else (e.old if e else None)) or (e.summary if e else "")
+        f = _ui_text((e.field or e.canonical) if e else None)
+        v = _ui_text((e.new if e and e.new not in (None, "") else (e.old if e else None)) or (e.summary if e else ""))
         if u.hypothesis and u.hypothesis_confidence >= 0.7:
             q = L.fill("confirm", lang, h=u.hypothesis)
         else:
             key = u.type if u.type in L.Q_TEMPLATES else "why"
             q = L.fill(key, lang, f=f or "this", v=v or "this", e=u.entity or "this")
         return L.clamp_words(q, 15)
+
+    def refresh_question(self, u: Unknown) -> None:
+        """Right before speaking: re-read the asked value from the CURRENT screen (vision often fixes an OCR
+        glyph the event captured, e.g. '… - OPF' → '… - OPP')."""
+        m = self.meta.get(u.id, {})
+        e = m.get("event")
+        if e is None or not e.field or not e.new or (u.hypothesis and u.hypothesis_confidence >= 0.7):
+            return
+        try:
+            from claros.perception import current_state
+            from claros.perception.diff import _same_text
+            st = current_state(self.session_id)
+        except Exception:  # noqa: BLE001
+            return
+        if st is None:
+            return
+        cur = next((f.value for f in st.fields if f.label == e.field and f.value), None)
+        if cur and cur != e.new and _same_text(e.new, cur):
+            u.spoken_question = self.make_question(u, e.model_copy(update={"new": cur}))
 
     def _ctx(self, e: ScreenEvent) -> dict:
         return {"app": e.app, "entity_type": e.entity_type, "field": e.field, "value": e.new,
@@ -538,6 +557,16 @@ class Ledger:
                 u.status = "deferred"
 
 
+def _ui_text(v: Optional[str]) -> Optional[str]:
+    """Screen text fit to speak: no tag close glyphs ('On Hold ×'), truncation dots or required-field stars."""
+    if not v:
+        return v
+    t = re.sub(r"\s*[×✕]\s*$", "", str(v)).strip()
+    t = re.sub(r"\s*(\.\.\.|…)$", "", t)
+    t = re.sub(r"\s*\*$", "", t)
+    return t.strip() or v
+
+
 def _as_note(r: Any, scope: str) -> Optional[ContextNote]:
     if r is None:
         return None
@@ -578,7 +607,7 @@ def _tokens(s: str) -> set[str]:
     return {w for w in re.findall(r"\w+", s.lower()) if len(w) > 2}
 
 
-async def cluster_top(hyps: list[str], cos: float = 0.85) -> tuple[str, float]:
+async def cluster_top(hyps: list[str], cos: float = 0.8) -> tuple[str, float]:
     """Greedy clustering; returns (representative of largest cluster, its share)."""
     vecs = await deps.embed(hyps)
 

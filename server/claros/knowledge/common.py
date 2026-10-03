@@ -217,7 +217,10 @@ def norm_label(s: str) -> str:
 
 
 def _norm_value(f: Any) -> Any:
-    if f.normalized is not None:
+    if isinstance(f.normalized, dict):  # perception money/percent: {"value": 7200.0, "currency": "EUR"}
+        if isinstance(f.normalized.get("value"), (int, float)):
+            return f.normalized["value"]
+    elif f.normalized is not None:
         return f.normalized
     n = parse_number(f.value)
     if parse_date(f.value):

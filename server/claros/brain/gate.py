@@ -24,7 +24,7 @@ class GateConfig:
     silence_ms: float = 1500
     budget_n: int = 5
     budget_window_ms: float = 600_000
-    min_gap_ms: float = 90_000
+    min_gap_ms: float = 45_000  # was 90 s: with 45-60 s unknown expiry most mid-task asks died waiting (e2e)
     snooze_ms: float = 300_000
     grace_per_word_ms: float = 240
     grace_cap_ms: float = 8000
@@ -277,6 +277,10 @@ class Gate:
             return entry  # don't flood the inspector with identical waits
         s.last_decide_t = now
         if ch == "ask_now":
+            try:
+                lg.refresh_question(u)
+            except Exception:  # noqa: BLE001
+                pass
             lg.mark_asked(u.id)
             s.asks.append(now)
             await deps.send(sid, {"type": "ask", "unknown_id": u.id, "text": u.spoken_question})

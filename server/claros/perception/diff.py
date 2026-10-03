@@ -72,8 +72,8 @@ def _same_text(a: str, b: str) -> bool:
         return True
     ta, tb = a.endswith(_TRUNC), b.endswith(_TRUNC)
     a2, b2 = a.rstrip(".…").rstrip(), b.rstrip(".…").rstrip()
-    if (ta and b2.startswith(a2) and len(a2) >= 4) or (tb and a2.startswith(b2) and len(b2) >= 4):
-        return True
+    if (ta or tb) and min(len(a2), len(b2)) >= 4 and (a2.startswith(b2) or b2.startswith(a2)):
+        return True  # "EQ-GENERAL: Wo..." vs "EQ-GENERAL", "Administration - O..." vs "Administration - Ol"
     if min(len(a2), len(b2)) >= 12 and not any(ch.isdigit() for ch in a2 + b2):
         return _lev(a2.lower(), b2.lower()) <= 1
     return False

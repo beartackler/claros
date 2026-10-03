@@ -434,9 +434,16 @@ class StateTracker:
         known = {label_key(x) for x in _template_labels(vs)} if vs else None
         # 1) heuristic pairs from OCR (current values). Once a vision template knows this screen, only pairs whose
         #    label is a real field/column of it survive (dense UIs pair menu items, tabs and buttons otherwise).
+        grid_cols = {label_key(c) for tb in (vs.tables if vs else []) for c in tb.columns}
+        vkinds = {label_key(vf.label): (vf.kind or "") for vf in (vs.fields if vs else [])}
         for p in heur.pairs:
             k = label_key(p.label)
             if known is not None and k not in known:
+                continue
+            if known is not None and (k in grid_cols or vkinds.get(k) == "checkbox"
+                                      or label_key(p.value or "") in known):
+                # grid columns: aligned cell lookup below; checkbox values aren't text; a "value" that is another
+                # field's label is a label-above-label mis-pair
                 continue
             visible[k] = Field_(label=p.label, value=p.value, bbox=p.value_bbox,
                                 normalized=normalize(p.value, ui_lang))
@@ -471,6 +478,10 @@ class StateTracker:
                     kinds[k] = vf.kind
                 if k in visible:
                     continue
+                if (vf.kind or "") == "checkbox":  # state is a tick, not OCR text: vision value on its own frame
+                    if tpl.seq == seq:
+                        visible[k] = Field_(label=vf.label, value=vf.value, bbox=None)
+                    continue
                 lab_now = _find_label(lines, vf.label)
                 lb = tpl.label_boxes.get(k)
                 if vf.bbox and lab_now is not None and lb is not None:
@@ -483,6 +494,11 @@ class StateTracker:
                 elif tpl.seq == seq:
                     visible[k] = Field_(label=vf.label, value=vf.value, bbox=vf.bbox,
                                         normalized=normalize(vf.value, ui_lang))
+        if tpl is None and self.templates:
+            # vision works in this session but hasn't read this screen yet: OCR pairs on an unknown dense layout are
+            # mostly menu/label mis-pairs → keep them for context but not edit-eligible (bbox None) until it has
+            for k in list(visible):
+                visible[k] = visible[k].model_copy(update={"bbox": None})
         # accumulate per entity (fields seen so far, even if scrolled off)
         model = self.entity_models.setdefault(key, {})
         for k, f in visible.items():
@@ -558,6 +574,15 @@ class StateTracker:
         self.state = st
         return st
 
+    def compose_frame(self, seq: int, t: float, lines: list[OcrLine], dims: tuple[int, int],
+                      keyframe_id: Optional[str] = None) -> ScreenState:
+        """State of an OLDER frame under the current templates (diff baseline when vision lands late)."""
+        keep = self.current_key
+        try:
+            return self._compose(seq, t, lines, dims, analyze(lines, dims), keyframe_id)
+        finally:
+            self.current_key = keep
+
     def summary(self) -> str:
         return summarize(self.state)
 
@@ -576,14 +601,28 @@ def _template_labels(vs: Optional["VisionState"]) -> list[str]:
 
 
 def _cell_below(lines: list[OcrLine], header: str, row: int) -> Optional[OcrLine]:
-    """OCR line in grid row `row` (0-based) under the column header text."""
+    """OCR line in grid row `row` (0-based) of the column headed `header`. The column spans from the end of the
+    previous header text to the start of the next one (cells are left- or right-aligned under their header)."""
     h = _find_label(lines, header)
     if h is None:
         return None
-    hx0, hx1 = h.bbox[0] - 12, h.bbox[0] + h.bbox[2] + 12
-    below = [ln for ln in lines if ln is not h and ln.bbox[1] > h.bbox[1] + h.bbox[3] * 0.6
-             and ln.bbox[1] - h.bbox[1] < h.bbox[3] * 3 * (row + 1) + 40
-             and (hx0 <= ln.bbox[0] <= hx1 or hx0 <= ln.bbox[0] + ln.bbox[2] <= hx1 + 30)]
+    hy = h.bbox[1] + h.bbox[3] / 2
+    hdr = sorted((ln for ln in lines if abs(ln.bbox[1] + ln.bbox[3] / 2 - hy) < h.bbox[3] * 0.5),
+                 key=lambda ln: ln.bbox[0])
+    i = next((k for k, ln in enumerate(hdr) if ln is h), None)
+    if i is None:
+        return None
+    left = hdr[i - 1].bbox[0] + hdr[i - 1].bbox[2] if i > 0 else h.bbox[0] - 2 * h.bbox[3]
+    right = hdr[i + 1].bbox[0] if i + 1 < len(hdr) else h.bbox[0] + h.bbox[2] + 6 * h.bbox[3]
+
+    def inside(ln: OcrLine) -> bool:
+        a, b = ln.bbox[0], ln.bbox[0] + ln.bbox[2]
+        ov = min(b, right) - max(a, left)
+        return ov >= 0.6 * max(1, ln.bbox[2])
+
+    top = h.bbox[1] + h.bbox[3] * 0.8
+    below = [ln for ln in lines if ln not in hdr and ln.bbox[1] > top
+             and ln.bbox[1] - h.bbox[1] < h.bbox[3] * 2.5 * (row + 1) + 30 and inside(ln)]
     below.sort(key=lambda ln: ln.bbox[1])
     rows: list[OcrLine] = []
     for ln in below:  # one line per visual row

@@ -24,7 +24,8 @@ from claros.models import (
 
 from . import _deps as d
 from .common import (
-    OPEN_STATUSES, checks_pass, eval_predicate, guardrail_by_id, load_map, ordered_steps, save_map, step_by_id,
+    OPEN_STATUSES, checks_pass, eval_predicate, guardrail_by_id, load_map, ordered_steps, predicate_vars, save_map,
+    step_by_id,
 )
 
 CONFIG = {"max_questions": 6, "max_seconds": 300, "teachback_words": 140, "exam_cases": 3}
@@ -194,10 +195,15 @@ def boundary_probes(wm: WorkMap, lang: str = "en", max_n: int = 2) -> list[Unkno
     return out
 
 
-def _question(u: Unknown, lang: str) -> str:
+def _question(u: Unknown, lang: str, wm: Optional[WorkMap] = None) -> str:
     if u.hypothesis and u.hypothesis_confidence >= 0.6 and u.type != "conflict":
         return t("confirm_q", lang, h=u.hypothesis)
-    return u.spoken_question or (t("confirm_q", lang, h=u.hypothesis) if u.hypothesis else "Why?")
+    if u.spoken_question:
+        return u.spoken_question
+    if u.hypothesis:
+        return t("confirm_q", lang, h=u.hypothesis)
+    st = step_by_id(wm, u.entity or "") if wm else None  # never a bare "Why?" with no context
+    return f"Why do you do “{st.title if st else (u.entity or 'this step')}” that way?"
 
 
 def budget_spent(st: DebriefState, now: Optional[float] = None) -> bool:
@@ -291,7 +297,11 @@ async def teach_back(wm: WorkMap, lang: str) -> str:
         known = {s.id for s in wm.steps}
         out = MARKER.sub(lambda m: m.group(0) if m.group(1) in known else "", out)
         if _word_count(out) > CONFIG["teachback_words"]:
-            out = _truncate(out, CONFIG["teachback_words"])
+            # cut at the last full sentence inside the budget (never mid-sentence) and still ask for confirmation
+            end = t("teach_end", lang)
+            cut = _truncate(out, CONFIG["teachback_words"] - len(end.split()))
+            m = list(re.finditer(r"[.!?…](?=\s|$)", cut))
+            out = (cut[:m[-1].end()] if m else cut) + " " + end
         return out.strip()
     return _template_teachback(wm, lang)
 
@@ -552,7 +562,7 @@ async def next_debrief_utterance(session: Any) -> str:
             st.current = u.id
             st.asked += 1
             await _ledger(st.session_id, wm, ename)
-            return _question(u, lang)
+            return _question(u, lang, wm)
         st.phase = "teach_back"
     if st.phase == "teach_back":
         st.script = await teach_back(wm, lang)
@@ -614,7 +624,16 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
                 if rule:
                     u.extracted_rule = ExtractedRule(**{k: (str(rule[k]) if rule.get(k) is not None else None)
                                                         for k in ("condition", "threshold", "action", "escalate_to")})
-                    if rule.get("guardrail_text") and not guardrail_by_id(wm, u.entity or ""):
+                    pred = rule.get("predicate") if isinstance(rule.get("predicate"), dict) else None
+                    if pred and not all(v in wm.canonical_vars or v.startswith("doc.") for v in predicate_vars(pred)):
+                        rule["predicate"] = None  # unobservable vars would never evaluate on a learner screen
+                    dup = _similar_guardrail(wm, rule.get("guardrail_text") or "", text) \
+                        if rule.get("guardrail_text") else None
+                    if dup is not None:  # same rule restated (e.g. "the controller, Frank, approves UK invoices")
+                        dup.quote_ids = list(dict.fromkeys(dup.quote_ids + [q.id]))
+                        if rule.get("escalate_to") and not dup.owner:
+                            dup.owner = rule["escalate_to"]
+                    elif rule.get("guardrail_text") and not guardrail_by_id(wm, u.entity or ""):
                         g = Guardrail(id=d.new_id("g"), text=rule["guardrail_text"], quote_ids=[q.id],
                                       predicate=rule.get("predicate") if isinstance(rule.get("predicate"), dict)
                                       else None, evidence=[ev], experts=[eid],
@@ -662,6 +681,25 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
 
     st.phase = "done"
     return t("done", lang)
+
+
+def _toks(s: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", (s or "").lower()) if len(w) > 2}
+
+
+def _similar_guardrail(wm: WorkMap, text: str, answer: str = "") -> Optional[Guardrail]:
+    """Existing guardrail this debrief rule restates (its text or its quotes overlap the new rule/answer)."""
+    a = _toks(text) | _toks(answer)
+    if not a:
+        return None
+    qtext = {q.id: q.text for q in wm.quotes}
+    best, sc = None, 0.0
+    for g in wm.guardrails:
+        b = _toks(g.text) | {w for qid in g.quote_ids for w in _toks(qtext.get(qid, ""))}
+        j = len(a & b) / max(1, min(len(a), len(b)))
+        if j > sc:
+            best, sc = g, j
+    return best if sc >= 0.34 else None
 
 
 def _link_answer(wm: WorkMap, u: Unknown, q: Quote, ev: Moment) -> None:

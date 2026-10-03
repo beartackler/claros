@@ -249,7 +249,13 @@ class SessionPipeline:
                     async with self.lock:
                         st = self.tracker.apply_vision(job.seq, vs, job.lines)
                         if st is not None:
-                            self._emit(self.published, st)
+                            prev = self.published
+                            if job.seq < st.seq and prev is not None and prev.entity_id == st.entity_id:
+                                # vision read an older frame of this screen: re-baseline the diff on that frame
+                                # so a change made during the vision latency (e.g. a tag added right after
+                                # opening) is still an edit event, not hidden behind unreliable OCR pairs
+                                prev = self.tracker.compose_frame(job.seq, job.t, job.lines, job.dims)
+                            self._emit(prev, st)
             except Exception as e:  # noqa: BLE001
                 log.warning("vision call failed (%s); heuristics only for 30s", e)
                 self.vision_disabled_until = time.monotonic() + 30

@@ -150,7 +150,7 @@ def test_ledger_opens_and_closes_unknowns(offline):
     assert why.status == "answered" and why.resolution_source == "expert"
     assert why.extracted_rule is not None and why.extracted_rule.threshold == "0400"
     # expiry → deferred
-    offline.clock.t += 46_000
+    offline.clock.t += 61_000  # EXPIRE_MS = 60 s
     lg.expire()
     assert lim.status == "deferred"
     assert lg.snapshot()["saved_for_later"] == 1
