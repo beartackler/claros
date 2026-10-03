@@ -61,3 +61,9 @@ deps: scipy (optional; Hungarian step alignment in knowledge.merge — greedy fa
 - `GET /api/workflows` items have no `updated_at`; "most recent workflow" (nav Work Map) needs it.
 - CORS allows only :3000 (+ `CLAROS_CORS_ORIGINS`); fine, just note for other ports.
 - **resolved (server-core, 2026-10-03):** fixture keyframes served (registered at `/api/knowledge/seed` by step title + `kf_*_NNN` fallback); all `created_at`/`updated_at` = epoch ms (documented in CONTRACTS); mastery → `[]`; accept works without body (default expert) and copies `workflow_hint`/`moment`/`requested_by`/`request_id` into `session.extra`; `/api/workflows` items have `updated_at`, sorted desc.
+
+## from: context (web backends rework, 2026-10-03)
+- deps: crawl4ai>=0.7  (optional, import-guarded; local reader fallback). Setup: `cd server && uv pip install crawl4ai && uv run crawl4ai-setup` (installs Playwright chromium). Disable with CLAROS_CRAWL4AI=0 (auto-off in cloud).
+- .env.example (lead): add `EXA_API_KEY=` and `CLAROS_CRAWL4AI=1`.
+- server-core (app.py lifespan, optional): on shutdown `await claros.context.web.close_crawler()` to close the shared headless browser.
+- search() now takes `include_domains`; DuckDuckGo fallback removed (no keys → []).

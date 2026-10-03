@@ -154,7 +154,7 @@ class SessionPipeline:
     # ---------------- emit ----------------
     def _emit(self, prev: Optional[ScreenState], st: ScreenState,
               tiles: Optional[list[list[int]]] = None) -> list[ScreenEvent]:
-        key = self.tracker._current_key(self.tracker.prev_heur) if self.tracker.prev_heur else ""
+        key = self.tracker.current_key
         evs = self.differ.diff(prev, st, tiles, self.tracker.kinds.get(key, {}))
         self.published = st
         self.publish(self.sid, "screen.state", st)

@@ -37,6 +37,56 @@ def _tiles(v: Any) -> list[list[int]]:
     return []
 
 
+_TRUNC = ("...", "…", "..")
+
+
+def _clean(v: str) -> str:
+    return v.strip().rstrip("×xX✕").strip()
+
+
+def _num_of(n: Any) -> Optional[float]:
+    if isinstance(n, (int, float)) and not isinstance(n, bool):
+        return float(n)
+    if isinstance(n, dict) and isinstance(n.get("value"), (int, float)):
+        return float(n["value"])
+    return None
+
+
+def _lev(a: str, b: str, cap: int = 3) -> int:
+    if abs(len(a) - len(b)) > cap:
+        return cap + 1
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _same_text(a: str, b: str) -> bool:
+    """Equal modulo OCR noise / UI truncation: 'Administration - O...' ≈ 'Administration - Ol',
+    'Plants and Machineries - OPF' ≈ '… - OPP' (one glyph on a long string)."""
+    a, b = _clean(a), _clean(b)
+    if a == b:
+        return True
+    ta, tb = a.endswith(_TRUNC), b.endswith(_TRUNC)
+    a2, b2 = a.rstrip(".…").rstrip(), b.rstrip(".…").rstrip()
+    if (ta and b2.startswith(a2) and len(a2) >= 4) or (tb and a2.startswith(b2) and len(b2) >= 4):
+        return True
+    if min(len(a2), len(b2)) >= 12 and not any(ch.isdigit() for ch in a2 + b2):
+        return _lev(a2.lower(), b2.lower()) <= 1
+    return False
+
+
+def same_value(p: Any, f: Any) -> bool:
+    """Two observations of one field that differ only by formatting/OCR (no user edit)."""
+    np_, nf = _num_of(getattr(p, "normalized", None)), _num_of(getattr(f, "normalized", None))
+    if np_ is not None and nf is not None:
+        return abs(np_ - nf) < 1e-9
+    return _same_text(p.value or "", f.value or "")
+
+
 class Differ:
     def __init__(self, session_id: str = "") -> None:
         self.session_id = session_id
@@ -90,7 +140,7 @@ class Differ:
             p = prev_f.get(k)
             if p is None or f.bbox is None:      # newly seen or scrolled off: not an edit
                 continue
-            if (p.value or "") != (f.value or ""):
+            if (p.value or "") != (f.value or "") and not same_value(p, f):
                 changes.append((k, p, f))
         win = self._window(cur.t)
         typing = [a for a in win if a.kind == "typing"]
@@ -120,7 +170,11 @@ class Differ:
         for k, p, f in changes:
             hist = self.history.setdefault((ekey, k), [(prev.t, p.value)])
             kind = "select" if kinds.get(k) in ("select", "link") else "edit"
-            if len(hist) >= 2 and (hist[-2][1] or "") == (f.value or "") and cur.t - hist[-1][0] <= UNDO_WINDOW_MS:
+            # a tag/label/status field set to "On Hold", "Approved", … is that action, whatever the app calls it
+            sk = lexicon.status_of(_clean(f.value or ""))
+            if sk in lexicon.STATUS_EVENT and lexicon.status_of(_clean(p.value or "")) != sk:
+                kind = lexicon.STATUS_EVENT[sk]
+            if len(hist) >= 2 and _same_text(hist[-2][1] or "", f.value or "") and cur.t - hist[-1][0] <= UNDO_WINDOW_MS:
                 kind = "undo"
             hist.append((cur.t, f.value))
             del hist[:-6]

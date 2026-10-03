@@ -31,6 +31,9 @@ ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ISOQUANT_API_KEY, JINA_API_KEY, FASTINO
 BRIGHTDATA_API_KEY, OPENROUTER_API_KEY (fallback), GEMINI_API_KEY (fallback),
 CLAROS_PUBLIC_URL (tunnel URL for ElevenLabs → brain), CLAROS_DB=./data/claros.db,
 OLLAMA_URL=http://localhost:11434, ERPNEXT_URL=http://localhost:8080, ERPNEXT_API_KEY/SECRET.
+EXA_API_KEY (context web search/read, primary), CLAROS_CRAWL4AI=1|0 (in-process Crawl4AI reader; default on
+locally, off when a cloud env like RENDER/K_SERVICE/FLY_APP_NAME is set), optional BRIGHTDATA_SERP_ZONE=serp_api1 /
+BRIGHTDATA_UNLOCKER_ZONE=web_unlocker1 (used only if the zone exists in the account).
 Every component must run in a degraded mode when its key is missing (log + fallback), never crash.
 
 ## Session modes

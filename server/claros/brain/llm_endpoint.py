@@ -309,6 +309,12 @@ async def route(body: dict) -> Reply:
         if r is not None:
             return r
 
+    if intent in ("answer", "correction", "confirm") and mode == "capture" and lg and \
+            not (pending or lg.last_asked(180_000)):
+        # nothing was asked: "that's wrong" / "same amount as December" is the expert talking about the screen,
+        # not to Claros — stay silent instead of "Got it, corrected."
+        deps.store_log(sid or "-", "intent.override", {"text": text, "from": intent, "to": "narration"})
+        intent = "narration"
     if intent == "narration":
         return _skip(body)
     if intent in ("answer", "correction", "confirm"):

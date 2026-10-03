@@ -23,10 +23,13 @@ STATUS = {
     "pending": "pending ausstehend en attente pendiente в ожидании",
 }
 
-STATUS_EVENT = {"submitted": "submit", "approved": "approve", "rejected": "reject", "on_hold": "hold"}
+STATUS_EVENT = {"submitted": "submit", "approved": "approve", "rejected": "reject", "on_hold": "hold",
+                "pending": "escalate"}
 
-TOAST_SAVE = re.compile(
-    r"(?i)\b(saved|gespeichert|enregistr[ée]e?s?|guardad[oa]s?|сохранен[оаы]?|сохранён)\b|"
+TOAST_SAVE = re.compile(  # not "Saved Filters" / "Saved Reports" buttons
+    r"(?i)(?<!not )(?<!nicht )(?<!non )(?<!no )(?<!не )"
+    r"\b(saved|gespeichert|enregistr[ée]e?s?|guardad[oa]s?|сохранен[оаы]?|сохранён)\b"
+    r"(?!\s+(?:filters?|reports?|views?|searches|items?|filter|replies)\b)|"
     r"\b(changes saved|änderungen gespeichert|modifications enregistrées|cambios guardados|изменения сохранены)\b")
 TOAST_SUBMIT = re.compile(
     r"(?i)\b(submitted|gebucht|übermittelt|soumis|validé|enviado|contabilizado|проведен|проведён|отправлен)\b")
@@ -60,6 +63,29 @@ def status_of(text: str) -> Optional[str]:
     for key, words in _SINGLE.items():
         if t in words:
             return key
+    ws = t.split()
+    if 2 <= len(ws) <= 3 and ws[0] in _SINGLE.get("pending", set()) | {"awaiting", "warten", "attente"}:
+        return "pending"
+    return None
+
+
+def status_suffix(text: str) -> Optional[tuple[str, str]]:
+    """(key, shown text) when a status badge is glued to the end of a longer OCR line, e.g.
+    "Supplier GmbHNot Saved" → ("not_saved", "Not Saved"), "Acme Ltd Pending Second Approval" → pending."""
+    t = text.strip()
+    low = t.lower()
+    for key, phrases in _PHRASES.items():
+        for ph in phrases:
+            if low.endswith(ph) and len(low) > len(ph) + 2:
+                return key, t[-len(ph):]
+    words = t.split()
+    for n in (3, 2, 1):
+        if len(words) <= n:
+            continue
+        tail = " ".join(words[-n:])
+        k = status_of(tail)
+        if k and words[-n][:1].isupper():
+            return k, tail
     return None
 
 

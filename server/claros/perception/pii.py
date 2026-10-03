@@ -25,7 +25,8 @@ log = logging.getLogger("claros.perception.pii")
 Span = tuple[int, int, str]  # start, end, label
 
 EMAIL = re.compile(r"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+", re.U)
-PHONE = re.compile(r"(?<![\w/.,])(?:\+|00)?\d[\d \-(). ]{7,}\d(?![\w/])")
+# not glued to a preceding word/hyphen: "ACC-PINV-2026-00027" is a record number, not a phone
+PHONE = re.compile(r"(?<![\w/.,\-])(?:\+|00)?\d[\d \-(). ]{7,}\d(?![\w/\-])")
 IBAN = re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}\b")
 CARD = re.compile(r"(?<!\d)(?:\d[ \-]?){13,19}(?!\d)")
 INN_SNILS = re.compile(r"(?i)(?:ИНН|СНИЛС|INN|SNILS|Steuer-?ID|NIF|NIE|DNI|SSN|NIR|Sozialversicherungs\w*)"

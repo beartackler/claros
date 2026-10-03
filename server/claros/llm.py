@@ -31,7 +31,10 @@ import numpy as np
 log = logging.getLogger("claros.llm")
 
 Role = Literal["vision", "fast", "smart"]
-TIMEOUTS: dict[str, float] = {"vision": 8.0, "fast": 4.0, "smart": 20.0}
+# vision runs off the hot path (latest-wins queue) and real app screens are dense: a full-form JSON from
+# GLM-5.3-Flash takes ~4-7 s with low reasoning, >10 s with default reasoning. smart = map build (big JSON).
+TIMEOUTS: dict[str, float] = {"vision": float(os.getenv("CLAROS_VISION_TIMEOUT", "25")), "fast": 4.0,
+                              "smart": float(os.getenv("CLAROS_SMART_TIMEOUT", "120"))}
 
 
 class LLMUnavailable(RuntimeError):
@@ -46,6 +49,10 @@ class Provider:
     models: dict[str, str]
     extra: dict[str, Any] = field(default_factory=dict)  # merged into request body
     headers: dict[str, str] = field(default_factory=dict)
+    role_extra: dict[str, dict[str, Any]] = field(default_factory=dict)  # per-role body extras
+    # "schema": response_format json_schema; "object": json_object + schema in the system prompt.
+    # GLM with strict json_schema returns only the required keys (empty fields/tables) — use "object".
+    json_mode: str = "schema"
 
     @property
     def key(self) -> Optional[str]:
@@ -59,7 +66,12 @@ def _providers() -> list[Provider]:
     return [
         Provider("isoquant", os.getenv("ISOQUANT_BASE_URL", "https://api.isoquant.ai/v1"), "ISOQUANT_API_KEY",
                  {"vision": "glm-5.3-flash", "fast": "glm-5.3-flash", "smart": "glm-5.3-flash"},
-                 extra=json.loads(os.getenv("CLAROS_ISOQUANT_EXTRA", "{}"))),
+                 extra=json.loads(os.getenv("CLAROS_ISOQUANT_EXTRA", "{}")),
+                 # default reasoning burns ~900 tokens (≈10 s) per call; low keeps vision ~5 s, fast ~1 s
+                 role_extra=json.loads(os.getenv("CLAROS_ISOQUANT_ROLE_EXTRA", json.dumps({
+                     "vision": {"reasoning_effort": "low"}, "fast": {"reasoning_effort": "low"},
+                     "smart": {"reasoning_effort": "low"}}))),
+                 json_mode=os.getenv("CLAROS_ISOQUANT_JSON_MODE", "object")),
         Provider("openrouter", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY",
                  {"vision": "qwen/qwen3-vl-30b-a3b-instruct", "fast": "z-ai/glm-5.3-flash",
                   "smart": "z-ai/glm-5.3-flash"},
@@ -119,6 +131,20 @@ def _schema_of(js: Any) -> tuple[dict, Optional[type]]:
     return dict(js), None
 
 
+def _with_schema_hint(messages: list[dict], schema: dict) -> list[dict]:
+    """json_object mode: put the schema in the system prompt (compact) so the model emits every key."""
+    if not schema or schema == {"type": "object"} or set(schema) <= {"type"}:
+        return messages
+    hint = ("\n\nReturn ONLY one JSON object conforming to this JSON Schema (fill every key you can; "
+            "use [] / null when empty): " + json.dumps(schema, separators=(",", ":"), ensure_ascii=False))
+    msgs = [dict(m) for m in messages]
+    for m in msgs:
+        if m.get("role") == "system" and isinstance(m.get("content"), str):
+            m["content"] += hint
+            return msgs
+    return [{"role": "system", "content": hint.strip()}] + msgs
+
+
 def _parse_json(text: str) -> Any:
     text = text.strip()
     m = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
@@ -158,7 +184,8 @@ async def chat(messages: list[dict], *, model_role: Role = "fast", json_schema: 
     for p in _providers():
         if not p.key:
             continue
-        body: dict[str, Any] = {"model": p.model(model_role), "messages": msgs, **p.extra}
+        body: dict[str, Any] = {"model": p.model(model_role), "messages": msgs, **p.extra,
+                                **p.role_extra.get(model_role, {})}
         if temperature is not None:
             body["temperature"] = temperature
         if max_tokens is not None:
@@ -166,8 +193,12 @@ async def chat(messages: list[dict], *, model_role: Role = "fast", json_schema: 
         if tools:
             body["tools"] = tools
         if schema is not None:
-            body["response_format"] = {"type": "json_schema", "json_schema": {
-                "name": (model_cls.__name__ if model_cls else schema.get("title", "result")), "schema": schema}}
+            if p.json_mode == "object":
+                body["response_format"] = {"type": "json_object"}
+                body["messages"] = _with_schema_hint(msgs, schema)
+            else:
+                body["response_format"] = {"type": "json_schema", "json_schema": {
+                    "name": (model_cls.__name__ if model_cls else schema.get("title", "result")), "schema": schema}}
         t0 = time.perf_counter()
         try:
             r = await _http().post(f"{p.base_url}/chat/completions", json=body, timeout=to,
@@ -200,7 +231,8 @@ async def _stream(msgs: list[dict], role: str, to: float, temperature: Optional[
     for p in _providers():
         if not p.key:
             continue
-        body: dict[str, Any] = {"model": p.model(role), "messages": msgs, "stream": True, **p.extra}
+        body: dict[str, Any] = {"model": p.model(role), "messages": msgs, "stream": True, **p.extra,
+                                **p.role_extra.get(role, {})}
         if temperature is not None:
             body["temperature"] = temperature
         if max_tokens is not None:
