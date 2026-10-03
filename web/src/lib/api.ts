@@ -30,7 +30,8 @@ async function req<T>(path: string, init?: RequestInit, timeoutMs = 2500): Promi
     const res = await fetch(`${API_BASE}${path}`, {
       ...init,
       signal: ctrl.signal,
-      headers: { "content-type": "application/json", ...(init?.headers || {}) },
+      // only send content-type with a body: keeps GETs "simple" (no CORS preflight)
+      headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...(init?.headers || {}) },
     });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return (await res.json()) as T;
@@ -55,6 +56,9 @@ export const exportUrls = (workflowId: string) => ({
   mcp: `${API_BASE}/mcp`,
 });
 
+/** Server timestamps may be epoch seconds; UI uses ms. */
+export const toMs = (t?: number | null) => (t == null ? undefined : t < 1e12 ? t * 1000 : t);
+
 function toSummary(w: Partial<WorkMap> & Partial<WorkflowSummary>): WorkflowSummary {
   return {
     workflow_id: w.workflow_id || w.id || "unknown",
@@ -63,7 +67,7 @@ function toSummary(w: Partial<WorkMap> & Partial<WorkflowSummary>): WorkflowSumm
     coverage: w.coverage || { status: "missing", steps_with_evidence: 0, judgments_complete: 0, guardrails_complete: 0, open_unknowns: 0, conflicts: 0 },
     experts: w.experts || [],
     onet_code: w.onet?.occupation_code || w.onet_code,
-    updated_at: w.updated_at || Date.now(),
+    updated_at: toMs(w.updated_at ?? (w as { created_at?: number }).created_at) ?? 0,
   };
 }
 
@@ -144,11 +148,16 @@ export function createRequest(body: {
   );
 }
 
-export function acceptRequest(id: string): Promise<Result<{ session_id: string }>> {
+export function acceptRequest(id: string, user: User, lang: string): Promise<Result<{ session_id: string }>> {
   return withFallback(
     async () => {
-      const r = await req<{ session_id?: string; id?: string }>(`/api/requests/${encodeURIComponent(id)}/accept`, { method: "POST" });
-      return { session_id: r.session_id || r.id || `sess_${id}` };
+      const r = await req<{ session_id?: string | null; workflow_id?: string | null }>(`/api/requests/${encodeURIComponent(id)}/accept`, {
+        method: "POST",
+        body: JSON.stringify({ user, lang }),
+      });
+      if (r.session_id) return { session_id: r.session_id };
+      const s = await req<{ session_id: string }>("/api/sessions", { method: "POST", body: JSON.stringify({ mode: "capture", user, lang, workflow_id: r.workflow_id ?? null }) });
+      return { session_id: s.session_id };
     },
     () => ({ session_id: `sess_cap_${id}` }),
   );
@@ -164,6 +173,21 @@ export function createSession(body: {
     () => req<{ session_id: string }>("/api/sessions", { method: "POST", body: JSON.stringify(body) }),
     () => ({ session_id: `sess_${body.mode}_${Date.now().toString(36)}` }),
   );
+}
+
+export type SessionInfo = { id: string; mode: string; workflow_id?: string | null; lang?: string };
+export function getSession(id: string): Promise<Result<SessionInfo>> {
+  return withFallback(
+    () => req<SessionInfo>(`/api/sessions/${encodeURIComponent(id)}`),
+    () => ({ id, mode: "debrief", workflow_id: MOCK_MAP.workflow_id }),
+  );
+}
+
+/** Most recent workflow id (first item of GET /api/workflows). */
+export async function latestWorkflowId(): Promise<string> {
+  const r = await listWorkflows();
+  const sorted = [...r.data].sort((a, b) => b.updated_at - a.updated_at);
+  return sorted[0]?.workflow_id ?? MOCK_MAP.workflow_id;
 }
 
 export function endSession(id: string): Promise<Result<unknown>> {

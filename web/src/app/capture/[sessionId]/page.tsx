@@ -18,9 +18,10 @@ import {
 import { Shell } from "@/components/claros/Shell";
 import { LANGS, LANG_NAMES, useUi, type DictKey, type UiLang } from "@/components/claros/i18n";
 import { ClarosDot, ClarosSays, EmptyState, Meter, Panel, SectionTitle } from "@/components/claros/primitives";
-import { PipLauncher, sendControl, useJoinSession, useLive, useLiveStore, useMicCheck } from "@/components/claros/live";
+import { sendControl, useJoinSession, useLive, useLiveStore, useMicCheck } from "@/components/claros/live";
+import { ClarosCompanion } from "@/voice/ClarosCompanion";
 import { endSession } from "@/lib/api";
-import { MOCK_EVENTS, MOCK_UNKNOWNS, SABINE } from "@/lib/mock";
+import { EXPERT, MOCK_EVENTS, MOCK_UNKNOWNS } from "@/lib/mock";
 import type { ScreenEvent, Unknown } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 
@@ -39,8 +40,8 @@ function Capture() {
   const { lang } = useUi();
   const [speakLang, setSpeakLang] = useState<UiLang>(lang);
   const [live, setLive] = useState(false);
-  useJoinSession(live ? sessionId : null, "capture", SABINE, speakLang);
-  const { capture, voice } = useLive(live ? sessionId : null, "capture", speakLang, SABINE.name);
+  useJoinSession(live ? sessionId : null, "capture", EXPERT, speakLang);
+  const { capture, voice } = useLive(live ? sessionId : null, "capture", speakLang, EXPERT.name);
 
   return live ? (
     <LiveNotebook sessionId={sessionId} capture={capture} voice={voice} />
@@ -201,7 +202,13 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
   const caption = useLiveStore((s) => s.caption);
   const offRecord = useLiveStore((s) => s.offRecord);
   const agentMode = useLiveStore((s) => s.agentMode);
+  const phase = useLiveStore((s) => s.phase);
   const demo = wsStatus !== "open" && liveEvents.length === 0;
+
+  // Server moves the session to debrief (voice "I'm done", end_task, or POST end) → follow it.
+  useEffect(() => {
+    if (phase === "debrief") router.push(`/debrief/${encodeURIComponent(sessionId)}`);
+  }, [phase, router, sessionId]);
   const drip = useDemoDrip(demo && !offRecord);
 
   // Collect unknowns seen via ledger.top (live) or mock ledger (demo).
@@ -240,7 +247,7 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
   };
 
   const finish = async () => {
-    voice.end();
+    // keep the voice session alive: the same conversation continues into the debrief
     capture.stop();
     await endSession(sessionId);
     router.push(`/debrief/${sessionId}`);
@@ -370,7 +377,6 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
             )}
           </Panel>
 
-          <PipLauncher label={t("capture.orb")} sub={t("capture.orb.sub")} />
 
           <button
             type="button"
@@ -386,6 +392,7 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
           </button>
         </aside>
       </div>
+      <ClarosCompanion voice={voice} />
     </div>
   );
 }

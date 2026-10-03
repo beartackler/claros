@@ -5,17 +5,18 @@ import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import type { CaptureRequest } from "@/lib/contracts";
 import { acceptRequest } from "@/lib/api";
+import { EXPERT } from "@/lib/mock";
 import { timeAgo, useUi } from "./i18n";
 import { Panel, ScreenThumb } from "./primitives";
 
 export function RequestRow({ r, big }: { r: CaptureRequest; big?: boolean }) {
-  const { t } = useUi();
+  const { t, lang } = useUi();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [accepted, setAccepted] = useState(r.status !== "open");
   const accept = async () => {
     setBusy(true);
-    const res = await acceptRequest(r.id);
+    const res = await acceptRequest(r.id, EXPERT, lang);
     setAccepted(true);
     router.push(`/capture/${res.data.session_id}?request=${r.id}`);
   };

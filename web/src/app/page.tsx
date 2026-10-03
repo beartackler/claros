@@ -18,7 +18,7 @@ import {
   useResource,
 } from "@/components/claros/primitives";
 import { createSession, listRequests, listWorkflows } from "@/lib/api";
-import { SABINE, type WorkflowSummary } from "@/lib/mock";
+import { EXPERT, type WorkflowSummary } from "@/lib/mock";
 import { RequestRow } from "@/components/claros/RequestRow";
 
 export default function HomePage() {
@@ -115,11 +115,11 @@ function ExpertHome() {
   const wf = useResource(listWorkflows, []);
   const [starting, setStarting] = useState(false);
   const open = (reqs.data ?? []).filter((r) => r.status === "open");
-  const mine = (wf.data ?? []).filter((w) => w.experts.some((e) => e.id === SABINE.id) || w.experts.length > 0);
+  const mine = (wf.data ?? []).filter((w) => w.experts.some((e) => e.id === EXPERT.id));
 
   const teach = async () => {
     setStarting(true);
-    const r = await createSession({ mode: "capture", user: SABINE, lang });
+    const r = await createSession({ mode: "capture", user: EXPERT, lang });
     router.push(`/capture/${r.data.session_id}`);
   };
 

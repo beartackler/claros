@@ -51,3 +51,12 @@ Agent `agent_3201m41wcwyzeysrv7f0ksxdk24r` (agents/AGENT_ID) → put in `.env` a
 deps: scipy (optional; Hungarian step alignment in knowledge.merge — greedy fallback without it)
 - .gitignore: `data/` is ignored, so `data/fixtures/frames/**` (synthetic en/de/ru test frames) won't be committed. Please add `!data/fixtures/` (fixtures can also be regenerated with `python -m claros.perception.synth data/fixtures/frames`).
 - web-capture (brain, new ws.out msgs): `phase {"phase":"debrief","workflow_id"}` after a capture ends (voice "I'm done", control end_task, or POST end) — switch UI to debrief (also sent: `status {level:"info", text:"debrief_ready"}`). Brain also sends `ask {unknown_id:"phase-debrief", text}` for the spoken transition line (handle like any ask). In debrief, brain sends `highlight_step {step_id}` paced with the teach-back speech (markers are never spoken).
+
+## web-ui → server (found while verifying live pages)
+- `GET /api/keyframes/{id}.jpg` returns 404 for every seeded fixture keyframe (`kf_a_001`… in wf_ap_invoice, `kf_m_*`). Please serve
+  `data/fixtures/frames/**` for seeded maps (UI falls back to a drawn placeholder meanwhile).
+- `CaptureRequest.created_at` / session `created_at` are epoch **seconds**; contracts imply ms (session clock). UI now accepts both — pick one and document it.
+- `GET /api/learners/{id}/mastery` returns `{}` when empty; contract says a list of `MasteryNode`. Please return `[]`.
+- `POST /api/requests/{id}/accept` only creates a session when the body has `user`; UI now sends `{user, lang}`. Please also copy the request's `moment` + `workflow_hint` into the session so capture can show "capturing for Lea's request".
+- `GET /api/workflows` items have no `updated_at`; "most recent workflow" (nav Work Map) needs it.
+- CORS allows only :3000 (+ `CLAROS_CORS_ORIGINS`); fine, just note for other ports.

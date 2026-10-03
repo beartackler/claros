@@ -9,8 +9,8 @@ import { useUi } from "@/components/claros/i18n";
 import { ClarosSays, ErrorState, Loading, Panel, ScreenThumb, SourceNote, useResource } from "@/components/claros/primitives";
 import { sortedSteps } from "@/components/claros/mapUtils";
 import { useJoinSession, useLive, useLiveStore } from "@/components/claros/live";
-import { getWorkflow } from "@/lib/api";
-import { MOCK_MAP, MOCK_UNKNOWNS, SABINE } from "@/lib/mock";
+import { getSession, getWorkflow, latestWorkflowId } from "@/lib/api";
+import { EXPERT, MOCK_UNKNOWNS } from "@/lib/mock";
 import type { ExamCase, Unknown, WorkMap } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 
@@ -27,9 +27,14 @@ export default function DebriefPage() {
 function Debrief() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const { t, lang } = useUi();
-  useJoinSession(sessionId, "debrief", SABINE, lang, MOCK_MAP.workflow_id);
-  const { voice } = useLive(sessionId, "debrief", lang, SABINE.name);
-  const res = useResource(() => getWorkflow(MOCK_MAP.workflow_id), []);
+  // Debrief the workflow this session belongs to; fall back to the most recent workflow.
+  const res = useResource(async () => {
+    const sess = await getSession(sessionId);
+    const wid = sess.source === "live" && sess.data.workflow_id ? sess.data.workflow_id : await latestWorkflowId();
+    return getWorkflow(wid);
+  }, [sessionId]);
+  useJoinSession(res.data ? sessionId : null, "debrief", EXPERT, lang, res.data?.workflow_id);
+  const { voice } = useLive(sessionId, "debrief", lang, EXPERT.name);
   const [stage, setStage] = useState<Stage>("questions");
 
   if (res.loading) return <Loading rows={3} />;
@@ -47,7 +52,7 @@ function Debrief() {
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-6">
-          {stage === "questions" && <Questions map={map} voice={voice} onDone={() => setStage("teachback")} />}
+          {stage === "questions" && <Questions map={map} demo={res.source === "mock"} voice={voice} onDone={() => setStage("teachback")} />}
           {stage === "teachback" && <TeachBack map={map} voice={voice} onDone={() => setStage("exam")} />}
           {(stage === "exam" || stage === "published") && <Exam map={map} published={stage === "published"} onPublish={() => setStage("published")} />}
         </div>
@@ -88,12 +93,12 @@ function Stepper({ stage }: { stage: Stage }) {
 
 type Voice = ReturnType<typeof useLive>["voice"];
 
-function Questions({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone: () => void }) {
+function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; voice: Voice; onDone: () => void }) {
   const { t } = useUi();
   const liveLedger = useLiveStore((s) => s.ledger);
   const queue: Unknown[] = useMemo(
-    () => [...MOCK_UNKNOWNS.filter((u) => u.status === "deferred"), ...map.open_unknowns].filter((u, i, a) => a.findIndex((x) => x.id === u.id) === i),
-    [map.open_unknowns],
+    () => [...(demo ? MOCK_UNKNOWNS.filter((u) => u.status === "deferred") : []), ...map.open_unknowns].filter((u, i, a) => a.findIndex((x) => x.id === u.id) === i),
+    [map.open_unknowns, demo],
   );
   const [i, setI] = useState(0);
   const [typing, setTyping] = useState(false);
@@ -188,8 +193,8 @@ function Questions({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone:
 /* ---------------- teach-back ---------------- */
 
 const CORRECTIONS = [
-  { before: "All marketing invoices go to cost center 0400.", after: "Only Brandwerk marketing invoices go to 0400; Sales-raised POs keep 4711." },
-  { before: "Hold every invoice without a PO.", after: "Hold invoices without a PO unless under 500 EUR (team rule pending)." },
+  { before: "All equipment goes to the capital equipment account.", after: "Only equipment lines over 5,000 go to capital equipment; smaller items are expensed." },
+  { before: "Hold every December invoice.", after: "Hold December invoices only from suppliers known to double-bill (Nordwind)." },
 ];
 
 function TeachBack({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone: () => void }) {

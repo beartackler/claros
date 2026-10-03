@@ -8,13 +8,21 @@ import { expertById, firstName, quotesFor } from "./mapUtils";
 
 export function ConflictBanner({ map, step }: { map: WorkMap; step: Step }) {
   const { t } = useUi();
+  // Experts without an explicit variant hold the step's main decision (merge keeps one side as the decision).
+  const positions = [
+    ...step.experts
+      .filter((id) => !step.variants.some((v) => v.expert_id === id))
+      .slice(0, step.decision ? 1 : 0)
+      .map((id) => ({ expert_id: id, description: step.decision!.description, reason_quote_ids: step.decision!.reason_quote_ids })),
+    ...step.variants,
+  ];
   return (
     <div className="rounded-[6px] border-2 border-[var(--ink)] bg-[var(--partial)] p-4 shadow-[var(--hard)]" role="note">
       <p className="flex items-center gap-2 text-lg font-black tracking-[-0.02em]">
         <Users className="size-5" aria-hidden /> {t("learn.conflict.title")}
       </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {step.variants.map((v, i) => {
+        {positions.map((v, i) => {
           const ex = expertById(map, v.expert_id);
           return (
             <div key={v.expert_id} className="rounded-[4px] border-2 border-[var(--ink)] bg-white p-3">

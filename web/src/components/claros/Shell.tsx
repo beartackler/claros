@@ -25,7 +25,7 @@ const NAV = [
   { href: "/", key: "nav.home" as const },
   { href: "/learn", key: "nav.learn" as const },
   { href: "/inbox", key: "nav.inbox" as const },
-  { href: "/map/wf_ap_purchase_invoice", key: "nav.map" as const, match: "/map" },
+  { href: "/map", key: "nav.map" as const, match: "/map" },
 ];
 
 function TopBar() {

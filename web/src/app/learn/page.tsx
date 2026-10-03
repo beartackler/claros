@@ -43,7 +43,7 @@ import {
 import { useJoinSession, useLive, useLiveStore } from "@/components/claros/live";
 import { ConflictBanner } from "@/components/claros/ConflictBanner";
 import { createRequest, createSession, getWorkflow, lookupWorkflow, type Source } from "@/lib/api";
-import { LEA, MOCK_DISTRACTORS } from "@/lib/mock";
+import { EXPERT, LEA, MOCK_DISTRACTORS } from "@/lib/mock";
 import type { Coverage, LookupResponse, MasteryNode, Step, WorkMap } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 
@@ -377,7 +377,7 @@ function Missing({ lookup, intent, sessionId, keyframe }: { lookup: LookupRespon
               <CheckCircle2 className="mt-0.5 size-6 shrink-0" aria-hidden />
               <div>
                 <p className="text-lg font-extrabold">{t("learn.missing.asked")}</p>
-                <p className="text-sm">{t("learn.missing.asked.sub", { name: "Sabine" })}</p>
+                <p className="text-sm">{t("learn.missing.asked.sub", { name: firstName(EXPERT.name) })}</p>
                 <Link href="/inbox" className="mt-2 inline-block text-sm font-bold underline decoration-2 underline-offset-4">
                   {t("nav.inbox")} →
                 </Link>

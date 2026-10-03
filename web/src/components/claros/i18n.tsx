@@ -551,6 +551,7 @@ export function useUi() {
 export const useT = () => useUi().t;
 
 export function timeAgo(t: (k: DictKey, v?: Record<string, string | number>) => string, ts: number) {
+  if (ts < 1e12) ts *= 1000; // server sends epoch seconds
   const d = Math.max(0, Date.now() - ts) / 60_000;
   if (d < 1) return t("time.justNow");
   if (d < 60) return t("time.min", { n: Math.round(d) });
