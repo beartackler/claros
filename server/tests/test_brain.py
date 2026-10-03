@@ -422,3 +422,66 @@ def test_hypothesis_spread_keeps_open_why(offline, monkeypatch):
     lg = ledger_mod.get_ledger("h2")
     u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
     assert u.hypothesis_confidence < 0.7 and u.spoken_question.startswith("Why")
+
+
+# ---------------- integration: debrief / learn / phase ----------------
+
+def _fake_knowledge(monkeypatch, table):
+    monkeypatch.setattr(deps, "knowledge_attr", lambda path: table.get(path))
+
+
+def test_debrief_routing_and_markers(offline, client, monkeypatch):
+    monkeypatch.setattr(llm_endpoint, "SPEECH_S_PER_WORD", 0)
+    llm_endpoint._debrief_started.clear()
+    calls = []
+
+    async def nxt(sess):
+        calls.append(("next", sess.id))
+        return "[[step:s1]] First you open the invoice. [[step:s2]] Then you check the cost center. Right?"
+
+    async def ans(sess, text, intent=None):
+        calls.append(("answer", text, intent))
+        return "Got it. [[step:s3]] Over 5,000 goes to the CFO."
+
+    _fake_knowledge(monkeypatch, {"debrief.next_debrief_utterance": nxt, "debrief.handle_debrief_answer": ans})
+    offline.get_session("d1").mode = "debrief"
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("hi", sid="d1")))
+    txt = _content(ch)
+    assert "[[" not in txt and txt.startswith("First you open the invoice.") and "Then you check" in txt
+    hl = [m[2]["step_id"] for m in offline.sent if m[1] == "ws.out" and m[2].get("type") == "highlight_step"]
+    assert hl == ["s1", "s2"]
+    ch = _sse(client.post("/llm/v1/chat/completions",
+                          json=_body("Because the vendor is in our group of companies", sid="d1")))
+    assert _content(ch) == "Got it. Over 5,000 goes to the CFO."
+    assert calls[-1][0] == "answer" and calls[-1][2] in ("answer", "narration", "correction", "confirm") \
+        and calls[-1][2] != "narration"
+
+
+def test_learn_ask_prewritten_and_tutor(offline, client, monkeypatch):
+    async def handle_intent(sess, intent, text):
+        return f"tutor:{intent}"
+
+    _fake_knowledge(monkeypatch, {"tutor.handle_intent": handle_intent,
+                                  "_deps.get_prewritten": lambda k, sid: "What do you do next?" if k == "pred-s2" else None})
+    offline.get_session("l1").mode = "learn"
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦ask:pred-s2|fallback⟧", sid="l1")))
+    assert _content(ch) == "What do you do next?"
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦ask:hint-s9|Try the cost center.⟧", sid="l1")))
+    assert _content(ch) == "Try the cost center."
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("что дальше?", sid="l1")))
+    assert _content(ch) == "tutor:what_next"
+
+
+def test_capture_end_moves_to_debrief(offline, client):
+    llm_endpoint._phase_sent.clear()
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("I'm done", sid="c9")))
+    assert _content(ch) == "Thanks! Let's do a quick debrief."
+    out = [m[2] for m in offline.sent if m[1] == "ws.out"]
+    assert {"type": "phase", "phase": "debrief", "workflow_id": None} in out
+    assert any(m.get("text") == "debrief_ready" for m in out)
+    # ws control path (no voice): phase + spoken line via ⟦ask:phase-debrief⟧
+    offline.sent.clear()
+    run(llm_endpoint.announce_debrief("c10"))
+    ask = next(m[2] for m in offline.sent if m[2].get("type") == "ask")
+    ch = _sse(client.post("/llm/v1/chat/completions", json=_body(f"⟦ask:{ask['unknown_id']}⟧", sid="c10")))
+    assert _content(ch) == "Thanks! Let's do a quick debrief."

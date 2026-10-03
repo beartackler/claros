@@ -49,3 +49,5 @@ Agent `agent_3201m41wcwyzeysrv7f0ksxdk24r` (agents/AGENT_ID) → put in `.env` a
   /api/workflows/{id} (merged map + consensus + guardrail_specs), /coverage, /api/requests*, /api/learners/{id}/mastery,
   POST /api/knowledge/seed (loads data/fixtures/workmap_ap*.json → merged wf_ap_invoice).
 deps: scipy (optional; Hungarian step alignment in knowledge.merge — greedy fallback without it)
+- .gitignore: `data/` is ignored, so `data/fixtures/frames/**` (synthetic en/de/ru test frames) won't be committed. Please add `!data/fixtures/` (fixtures can also be regenerated with `python -m claros.perception.synth data/fixtures/frames`).
+- web-capture (brain, new ws.out msgs): `phase {"phase":"debrief","workflow_id"}` after a capture ends (voice "I'm done", control end_task, or POST end) — switch UI to debrief (also sent: `status {level:"info", text:"debrief_ready"}`). Brain also sends `ask {unknown_id:"phase-debrief", text}` for the spoken transition line (handle like any ask). In debrief, brain sends `highlight_step {step_id}` paced with the teach-back speech (markers are never spoken).

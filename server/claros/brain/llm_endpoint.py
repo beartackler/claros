@@ -94,6 +94,41 @@ class Reply:
                  buffer_lang: Optional[str] = None) -> None:
         self.text, self.stream, self.tool, self.tool_args = text, stream, tool, tool_args or {}
         self.silent, self.buffer_lang = silent, buffer_lang
+        self.sid: Optional[str] = None
+
+
+# Teach-back markers [[step:id]] are never spoken: stripped, and a ws.out highlight_step is sent
+# when the stream reaches the marker (paced at ~speech rate so the highlight roughly follows the voice).
+STEP_MARKER = re.compile(r"\[\[\s*step\s*:\s*([\w\-]+)\s*\]\]")
+SPEECH_S_PER_WORD = 0.32
+MAX_SEGMENT_DELAY_S = 6.0
+
+# brain-local pre-written texts (phase transitions etc.): prewritten[sid][id] = text
+prewritten: dict[str, dict[str, str]] = {}
+
+
+def split_steps(text: str) -> list[tuple[Optional[str], str]]:
+    parts: list[tuple[Optional[str], str]] = []
+    pos, cur = 0, None
+    for m in STEP_MARKER.finditer(text):
+        seg = text[pos:m.start()]
+        if seg.strip() or cur:
+            parts.append((cur, seg))
+        cur, pos = m.group(1), m.end()
+    parts.append((cur, text[pos:]))
+    return [(sid_, re.sub(r"\s+", " ", t_)) for sid_, t_ in parts if t_.strip() or sid_]
+
+
+async def _paced(text: str, sid: Optional[str]) -> AsyncIterator[str]:
+    segs = split_steps(text)
+    for i, (step_id, seg) in enumerate(segs):
+        if step_id and sid:
+            await deps.send(sid, {"type": "highlight_step", "step_id": step_id})
+        out = seg.strip()
+        if out:
+            yield (out + " ") if i < len(segs) - 1 else out
+            if i < len(segs) - 1 and SPEECH_S_PER_WORD > 0:
+                await asyncio.sleep(min(MAX_SEGMENT_DELAY_S, len(out.split()) * SPEECH_S_PER_WORD))
 
 
 def _chunk(cid: str, model: str, delta: dict, finish: Optional[str] = None) -> str:
@@ -146,18 +181,25 @@ async def sse(reply: Reply, model: str) -> AsyncIterator[str]:
         yield _chunk(cid, model, {}, "tool_calls")
     else:
         if reply.text:
-            yield _chunk(cid, model, {"content": reply.text})
+            if STEP_MARKER.search(reply.text):
+                async for piece in _paced(reply.text, reply.sid):
+                    yield _chunk(cid, model, {"content": piece})
+            else:
+                yield _chunk(cid, model, {"content": reply.text})
         if reply.stream is not None:
             src = _with_buffer(reply.stream, reply.buffer_lang) if reply.buffer_lang else reply.stream
             async for piece in src:
                 if piece:
-                    yield _chunk(cid, model, {"content": piece})
+                    yield _chunk(cid, model, {"content": STEP_MARKER.sub("", piece)})
         yield _chunk(cid, model, {}, "stop")
     yield "data: [DONE]\n\n"
 
 
 async def _collect(reply: Reply) -> str:
-    out = reply.text or ""
+    out = ""
+    if reply.text:
+        async for p in _paced(reply.text, reply.sid):
+            out += p
     if reply.stream is not None:
         async for p in reply.stream:
             out += p
@@ -240,6 +282,9 @@ async def route(body: dict) -> Reply:
         if u and u.spoken_question:
             get_ledger(sid).mark_asked(u.id)
             return Reply(text=u.spoken_question)
+        t = _prewritten_ask(sid, m.group(1))
+        if t:
+            return Reply(text=t)
         suffix = (m.group(2) or "").strip()
         return Reply(text=suffix) if suffix else _skip(body)
     m = INTERVENE_RE.search(text)
@@ -259,6 +304,10 @@ async def route(body: dict) -> Reply:
 
     if mode in ("learn", "request"):
         return await _learner(sid, sess, intent, text, lang, body)
+    if mode == "debrief" and intent not in ("off_record", "strike_that", "end_session", "question_to_claros"):
+        r = await _debrief(sess, intent, text, body)
+        if r is not None:
+            return r
 
     if intent == "narration":
         return _skip(body)
@@ -284,9 +333,75 @@ async def route(body: dict) -> Reply:
         return Reply(text=L.phrase("struck", lang))
     if intent == "end_session":
         await _control(sid, "end_task")
+        if mode == "capture":
+            return Reply(text=L.phrase("to_debrief", lang))
         return Reply(text=L.phrase("end", lang))
     # question_to_claros / fallback
     return _llm_stream(_hypothesis_messages(sid, text, lang, body), lang)
+
+
+def _prewritten_ask(sid: Optional[str], key: str) -> Optional[str]:
+    t = prewritten.get(sid or "", {}).get(key)
+    if t:
+        return t
+    for path in ("_deps.get_prewritten", "tutor.get_prewritten"):
+        gp = deps.knowledge_attr(path)
+        if gp:
+            try:
+                t = gp(key, sid)
+                if t:
+                    return t
+            except Exception:  # noqa: BLE001
+                pass
+    return None
+
+
+_debrief_started: set[str] = set()
+
+
+async def _debrief(sess: Any, intent: str, text: str, body: dict) -> Optional[Reply]:
+    """mode=debrief → knowledge.debrief (questions → teach-back → exam)."""
+    sid = getattr(sess, "id", None)
+    nxt = deps.knowledge_attr("debrief.next_debrief_utterance")
+    ans = deps.knowledge_attr("debrief.handle_debrief_answer")
+    if not nxt:
+        return None
+    try:
+        first = sid not in _debrief_started
+        _debrief_started.add(sid)
+        greeting = len(text.split()) <= 3 and intent in ("narration", "confirm") and first
+        if first and (not text or greeting or not ans):
+            return Reply(text=await nxt(sess))
+        if not ans:
+            return Reply(text=await nxt(sess))
+        it = "answer" if intent == "narration" else intent
+        try:
+            out = await ans(sess, text, it)
+        except TypeError:
+            out = await ans(sess, text)
+        return Reply(text=out) if out else _skip(body)
+    except Exception:  # noqa: BLE001
+        deps.log.exception("debrief routing failed")
+        return None
+
+
+async def announce_debrief(sid: str) -> None:
+    """After capture ends: tell the client to move to debrief and speak a short transition line."""
+    if sid in _phase_sent:
+        return
+    _phase_sent.add(sid)
+    sess = deps.get_session(sid)
+    if getattr(sess, "mode", "capture") != "capture":
+        return
+    lang = deps.session_lang(sid)
+    line = L.phrase("to_debrief", lang)
+    prewritten.setdefault(sid, {})["phase-debrief"] = line
+    await deps.send(sid, {"type": "phase", "phase": "debrief", "workflow_id": getattr(sess, "workflow_id", None)})
+    await deps.send(sid, {"type": "status", "level": "info", "text": "debrief_ready"})
+    await deps.send(sid, {"type": "ask", "unknown_id": "phase-debrief", "text": line})
+
+
+_phase_sent: set[str] = set()
 
 
 async def _control(sid: Optional[str], action: str) -> None:
@@ -295,6 +410,13 @@ async def _control(sid: Optional[str], action: str) -> None:
     apply_control(sid, action)
     await deps.send(sid, {"type": "control", "action": action})
     await deps.publish(sid, "brain.control", {"action": action})
+    if action == "end_task":
+        _phase_sent.add(sid)  # the spoken reply itself is the transition line
+        sess = deps.get_session(sid)
+        if getattr(sess, "mode", "capture") == "capture":
+            await deps.send(sid, {"type": "phase", "phase": "debrief",
+                                  "workflow_id": getattr(sess, "workflow_id", None)})
+            await deps.send(sid, {"type": "status", "level": "info", "text": "debrief_ready"})
 
 
 def apply_control(sid: str, action: str) -> None:
@@ -373,6 +495,7 @@ async def chat_completions(request: Request):
     except Exception:  # noqa: BLE001
         deps.log.exception("brain route failed")
         reply = _skip(body)
+    reply.sid = session_id_from(body)
     if body.get("stream", True):
         return StreamingResponse(sse(reply, model), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

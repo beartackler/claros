@@ -143,6 +143,8 @@ class SessionPipeline:
             st = self.tracker.update(seq, t, res.lines, res.dims, kid)
             self.last_seq = seq
             self._emit(prev, st, tiles)
+            if why == "no_template" and (self.pending or self.in_flight):
+                structural = False  # a template for this screen is already on its way
             if structural or reason in MUST_REASONS:
                 self._enqueue(VisionJob(seq, t, res.jpeg, list(res.lines), res.dims,
                                         must=reason in MUST_REASONS or why in ("first", "dialog", "entity", "title"),

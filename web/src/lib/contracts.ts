@@ -349,13 +349,15 @@ export interface ShowMomentMsg { type: "show_moment"; moment: Moment }
 export interface HighlightStepMsg { type: "highlight_step"; step_id: string }
 export interface MapUpdatedMsg { type: "map_updated"; workflow_id: string; version: number }
 export interface StatusMsg { type: "status"; level: "info" | "warn" | "error"; text: string }
+/** brain → client: session moved to a new phase (e.g. capture ended → debrief). Voice session stays alive. */
+export interface PhaseMsg { type: "phase"; phase: Mode }
 /** brain → client when the expert says it by voice */
 export interface ServerControlMsg { type: "control"; action: ControlAction }
 export interface ClockSyncIn { type: "clock_sync"; client_t: number; server_t: number }
 
 export type ServerMsg =
   | EventsMsg | LedgerMsg | AskMsg | InterveneMsg | ContextUpdateMsg
-  | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn | ServerControlMsg;
+  | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn | ServerControlMsg | PhaseMsg;
 
 export type ServerMsgType = ServerMsg["type"];
 export type ServerMsgOf<T extends ServerMsgType> = Extract<ServerMsg, { type: T }>;

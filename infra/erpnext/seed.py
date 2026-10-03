@@ -439,6 +439,7 @@ def seed_masters(erp: ERP):
             "is_sales_item": 0,
             "item_defaults": [
                 {"company": c["name"], "expense_account": acc(exp, c),
+                 "default_warehouse": f"Stores - {c['abbr']}",
                  "buying_cost_center": cc(ccn if ccn in COST_CENTERS[w] else "Main", c)}
                 for w, c in (("parent", PARENT), ("sub", SUB))]})
 

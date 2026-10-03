@@ -89,6 +89,7 @@ export function useClarosSession() {
     try {
       const id = await createSessionApi(req);
       useClaros.getState().reset();
+      useClaros.getState().set({ phase: req.mode });
       openSession({ session_id: id, mode: req.mode, user: req.user, lang: req.lang, workflow_id: req.workflow_id ?? null });
       setSessionId(id);
       return id;
@@ -99,6 +100,7 @@ export function useClarosSession() {
   }, []);
 
   const join = useCallback((hello: Omit<HelloMsg, "type">) => {
+    if (!useClaros.getState().phase) useClaros.getState().set({ phase: hello.mode });
     openSession(hello);
     setSessionId(hello.session_id);
   }, []);

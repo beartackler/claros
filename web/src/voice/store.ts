@@ -8,7 +8,7 @@
  */
 import { create } from "zustand";
 import type {
-  ActivityKind, ClientToolName, ClientToolParams, LedgerMsg, Moment, ScreenEvent, ServerMsg,
+  ActivityKind, ClientToolName, Mode, ClientToolParams, LedgerMsg, Moment, ScreenEvent, ServerMsg,
 } from "@/lib/contracts";
 
 export type OrbState =
@@ -34,6 +34,8 @@ export interface ClarosState {
   agentMode: "speaking" | "listening";
   userSpeaking: boolean;
   offRecord: boolean;
+  /** current session phase (from hello mode, updated by server `phase`); UI routes on this */
+  phase: Mode | null;
   /** set when the session ended (server control end_task or local end) */
   sessionEnded: boolean;
   activity: ActivityKind;
@@ -68,6 +70,7 @@ const initial = {
   agentMode: "listening" as const,
   userSpeaking: false,
   offRecord: false,
+  phase: null as Mode | null,
   sessionEnded: false,
   activity: "idle" as ActivityKind,
   activityT: 0,
@@ -127,6 +130,12 @@ export const useClaros = create<ClarosState>((set) => ({
           break;
         case "highlight_step":
           patch.highlightedStepId = m.step_id;
+          break;
+        case "phase":
+          patch.phase = m.phase;
+          break;
+        case "status":
+          if (m.text === "debrief_ready") patch.phase = "debrief";
           break;
         case "control":
           if (m.action === "off_record_on") patch.offRecord = true;

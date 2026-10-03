@@ -1,0 +1,471 @@
+{
+  "id": "wm_ap_marco",
+  "workflow_id": "wf_ap_invoice",
+  "version": 1,
+  "name": "Supplier invoice processing",
+  "apps": [
+    "ERPNext"
+  ],
+  "onet": {
+    "occupation_code": "43-3031.00",
+    "occupation_title": "Bookkeeping, Accounting, and Auditing Clerks",
+    "task_id": "4.A.3.b.6",
+    "task": "Check figures, postings, and documents for correct entry, mathematical accuracy, and proper codes.",
+    "dwas": [
+      "Verify accuracy of financial information.",
+      "Prepare financial documents."
+    ],
+    "technologies": [
+      "ERPNext",
+      "SAP",
+      "Microsoft Excel"
+    ],
+    "score": 0.82
+  },
+  "experts": [
+    {
+      "id": "u_marco",
+      "name": "Marco Ruiz",
+      "role": "expert"
+    }
+  ],
+  "session_ids": [
+    "sess_marco_1"
+  ],
+  "steps": [
+    {
+      "id": "m1",
+      "order": 1,
+      "after": [],
+      "title": "Open the draft purchase invoice",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice list",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_marco_1",
+        "keyframe_ids": [
+          "kf_m_001"
+        ],
+        "t": 20000.0,
+        "utterance_ids": [
+          "mutt1"
+        ]
+      },
+      "decision": null,
+      "guardrail_ids": [],
+      "context_note_ids": [],
+      "experts": [
+        "u_marco"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "m2",
+      "order": 2,
+      "after": [
+        "m1"
+      ],
+      "title": "Match invoice to purchase order and goods receipt",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_marco_1",
+        "keyframe_ids": [
+          "kf_m_002"
+        ],
+        "t": 40000.0,
+        "utterance_ids": [
+          "mutt2"
+        ]
+      },
+      "decision": {
+        "kind": "routine",
+        "description": "Match invoice lines to PO and goods receipt",
+        "from_value": null,
+        "to_value": null,
+        "reason_quote_ids": [
+          "mq1"
+        ],
+        "counterfactual": null
+      },
+      "guardrail_ids": [],
+      "context_note_ids": [],
+      "experts": [
+        "u_marco"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "m3",
+      "order": 3,
+      "after": [
+        "m2"
+      ],
+      "title": "Verify the supplier is known",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_marco_1",
+        "keyframe_ids": [
+          "kf_m_003"
+        ],
+        "t": 60000.0,
+        "utterance_ids": [
+          "mutt3"
+        ]
+      },
+      "decision": {
+        "kind": "judgment",
+        "description": "Stop and ping the controller if the supplier is unknown",
+        "from_value": null,
+        "to_value": "continue",
+        "reason_quote_ids": [
+          "mq2"
+        ],
+        "counterfactual": null
+      },
+      "guardrail_ids": [
+        "h2"
+      ],
+      "context_note_ids": [],
+      "experts": [
+        "u_marco"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "m4",
+      "order": 4,
+      "after": [
+        "m3"
+      ],
+      "title": "Set expense account and cost center on each line",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_marco_1",
+        "keyframe_ids": [
+          "kf_m_004"
+        ],
+        "t": 80000.0,
+        "utterance_ids": [
+          "mutt4"
+        ]
+      },
+      "decision": {
+        "kind": "judgment",
+        "description": "Equipment above 5,000 is booked to capex",
+        "from_value": "Expense account",
+        "to_value": "Capital Equipment",
+        "reason_quote_ids": [
+          "mq3"
+        ],
+        "counterfactual": null
+      },
+      "guardrail_ids": [
+        "h1"
+      ],
+      "context_note_ids": [],
+      "experts": [
+        "u_marco"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "m5",
+      "order": 5,
+      "after": [
+        "m4"
+      ],
+      "title": "Check for duplicate billing by the supplier",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_marco_1",
+        "keyframe_ids": [
+          "kf_m_005"
+        ],
+        "t": 100000.0,
+        "utterance_ids": [
+          "mutt5"
+        ]
+      },
+      "decision": {
+        "kind": "judgment",
+        "description": "December Nordwind invoices are submitted and a credit note is requested for the duplicate",
+        "from_value": "Hold",
+        "to_value": "Submit + request credit note",
+        "reason_quote_ids": [
+          "mq4"
+        ],
+        "counterfactual": "If no early-payment discount applies"
+      },
+      "guardrail_ids": [],
+      "context_note_ids": [],
+      "experts": [
+        "u_marco"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "m6",
+      "order": 6,
+      "after": [
+        "m5"
+      ],
+      "title": "Send the invoice for approval",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_marco_1",
+        "keyframe_ids": [
+          "kf_m_006"
+        ],
+        "t": 120000.0,
+        "utterance_ids": [
+          "mutt6"
+        ]
+      },
+      "decision": null,
+      "guardrail_ids": [],
+      "context_note_ids": [],
+      "experts": [
+        "u_marco"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "m7",
+      "order": 7,
+      "after": [
+        "m6"
+      ],
+      "title": "Submit the invoice",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_marco_1",
+        "keyframe_ids": [
+          "kf_m_007"
+        ],
+        "t": 140000.0,
+        "utterance_ids": [
+          "mutt7"
+        ]
+      },
+      "decision": null,
+      "guardrail_ids": [],
+      "context_note_ids": [],
+      "experts": [
+        "u_marco"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    }
+  ],
+  "guardrails": [
+    {
+      "id": "h1",
+      "text": "Equipment above 5,000 goes to capex.",
+      "quote_ids": [
+        "mq3"
+      ],
+      "predicate": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "line.item_group"
+              },
+              [
+                "Equipment",
+                "Ausrüstung",
+                "Équipement",
+                "Equipo",
+                "Оборудование"
+              ]
+            ]
+          },
+          {
+            ">": [
+              {
+                "var": "line.amount"
+              },
+              5000
+            ]
+          },
+          {
+            "!": {
+              "in": [
+                "Capital",
+                {
+                  "var": "line.expense_account"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "fuzzy": false,
+      "action": "block_and_explain",
+      "owner": null,
+      "evidence": [
+        {
+          "session_id": "sess_marco_1",
+          "keyframe_ids": [
+            "kf_m_004"
+          ],
+          "t": 80000.0,
+          "utterance_ids": [
+            "mutt4"
+          ]
+        }
+      ],
+      "experts": [
+        "u_marco"
+      ],
+      "approved": true
+    },
+    {
+      "id": "h2",
+      "text": "Unknown supplier: don't process, ask the controller.",
+      "quote_ids": [
+        "mq2"
+      ],
+      "predicate": null,
+      "fuzzy": true,
+      "action": "stop_and_ask",
+      "owner": "Controller",
+      "evidence": [
+        {
+          "session_id": "sess_marco_1",
+          "keyframe_ids": [
+            "kf_m_003"
+          ],
+          "t": 60000.0,
+          "utterance_ids": [
+            "mutt3"
+          ]
+        }
+      ],
+      "experts": [
+        "u_marco"
+      ],
+      "approved": true
+    }
+  ],
+  "quotes": [
+    {
+      "id": "mq1",
+      "speaker": "Marco Ruiz",
+      "speaker_id": "u_marco",
+      "lang": "en",
+      "text": "First thing, I match against the purchase order and goods receipt.",
+      "translations": {
+        "de": "Als Erstes gleiche ich mit Bestellung und Wareneingang ab."
+      },
+      "t": 20000.0,
+      "session_id": "sess_marco_1",
+      "source": "live",
+      "audio_clip": null
+    },
+    {
+      "id": "mq2",
+      "speaker": "Marco Ruiz",
+      "speaker_id": "u_marco",
+      "lang": "en",
+      "text": "Unknown supplier? Don't touch it, ping the controller.",
+      "translations": {
+        "de": "Unbekannter Lieferant? Nicht anfassen, Controller fragen."
+      },
+      "t": 40000.0,
+      "session_id": "sess_marco_1",
+      "source": "live",
+      "audio_clip": null
+    },
+    {
+      "id": "mq3",
+      "speaker": "Marco Ruiz",
+      "speaker_id": "u_marco",
+      "lang": "en",
+      "text": "Equipment above five thousand is an asset, it goes to capex.",
+      "translations": {
+        "de": "Ausrüstung über fünftausend ist ein Anlagegut, das geht auf Capex."
+      },
+      "t": 60000.0,
+      "session_id": "sess_marco_1",
+      "source": "live",
+      "audio_clip": null
+    },
+    {
+      "id": "mq4",
+      "speaker": "Marco Ruiz",
+      "speaker_id": "u_marco",
+      "lang": "en",
+      "text": "With Nordwind in December I don't hold it — I submit and immediately request a credit note for the duplicate, otherwise we lose the early-payment discount.",
+      "translations": {
+        "de": "Bei Nordwind im Dezember halte ich nicht an – ich buche und fordere sofort eine Gutschrift für das Duplikat an, sonst verlieren wir das Skonto."
+      },
+      "t": 80000.0,
+      "session_id": "sess_marco_1",
+      "source": "live",
+      "audio_clip": null
+    }
+  ],
+  "context_notes": [],
+  "canonical_vars": {
+    "invoice.supplier": [
+      "Supplier"
+    ],
+    "line.amount": [
+      "Amount",
+      "Line amount"
+    ]
+  },
+  "open_unknowns": [],
+  "exam": [],
+  "coverage": {
+    "status": "ready",
+    "steps_with_evidence": 1.0,
+    "judgments_complete": 1.0,
+    "guardrails_complete": 1.0,
+    "open_unknowns": 0,
+    "conflicts": 0
+  },
+  "approved_by": [
+    "u_marco"
+  ]
+}

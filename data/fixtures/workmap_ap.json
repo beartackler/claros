@@ -1,0 +1,656 @@
+{
+  "id": "wm_ap_anna",
+  "workflow_id": "wf_ap_invoice",
+  "version": 1,
+  "name": "Process a supplier invoice (accounts payable)",
+  "apps": [
+    "ERPNext"
+  ],
+  "onet": {
+    "occupation_code": "43-3031.00",
+    "occupation_title": "Bookkeeping, Accounting, and Auditing Clerks",
+    "task_id": "4.A.3.b.6",
+    "task": "Check figures, postings, and documents for correct entry, mathematical accuracy, and proper codes.",
+    "dwas": [
+      "Verify accuracy of financial information.",
+      "Prepare financial documents."
+    ],
+    "technologies": [
+      "ERPNext",
+      "SAP",
+      "Microsoft Excel"
+    ],
+    "score": 0.82
+  },
+  "experts": [
+    {
+      "id": "u_anna",
+      "name": "Anna Keller",
+      "role": "expert"
+    }
+  ],
+  "session_ids": [
+    "sess_anna_1"
+  ],
+  "steps": [
+    {
+      "id": "s1",
+      "order": 1,
+      "after": [],
+      "title": "Open the next draft purchase invoice from the inbox",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice list",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_anna_1",
+        "keyframe_ids": [
+          "kf_a_001"
+        ],
+        "t": 20000.0,
+        "utterance_ids": [
+          "autt1"
+        ]
+      },
+      "decision": null,
+      "guardrail_ids": [],
+      "context_note_ids": [],
+      "experts": [
+        "u_anna"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "s2",
+      "order": 2,
+      "after": [
+        "s1"
+      ],
+      "title": "Check the supplier is a known, approved supplier",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_anna_1",
+        "keyframe_ids": [
+          "kf_a_002"
+        ],
+        "t": 40000.0,
+        "utterance_ids": [
+          "autt2"
+        ]
+      },
+      "decision": {
+        "kind": "judgment",
+        "description": "Continue only if the supplier is known; otherwise stop and ask the controller",
+        "from_value": null,
+        "to_value": "continue",
+        "reason_quote_ids": [
+          "aq1"
+        ],
+        "counterfactual": "Supplier not in master data or first invoice"
+      },
+      "guardrail_ids": [
+        "g4"
+      ],
+      "context_note_ids": [],
+      "experts": [
+        "u_anna"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "s3",
+      "order": 3,
+      "after": [
+        "s2"
+      ],
+      "title": "Match the invoice to its purchase order and receipt",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_anna_1",
+        "keyframe_ids": [
+          "kf_a_003"
+        ],
+        "t": 60000.0,
+        "utterance_ids": [
+          "autt3"
+        ]
+      },
+      "decision": {
+        "kind": "routine",
+        "description": "Match invoice lines to PO and purchase receipt",
+        "from_value": null,
+        "to_value": null,
+        "reason_quote_ids": [
+          "aq5"
+        ],
+        "counterfactual": null
+      },
+      "guardrail_ids": [],
+      "context_note_ids": [],
+      "experts": [
+        "u_anna"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "s4",
+      "order": 4,
+      "after": [
+        "s3"
+      ],
+      "title": "Choose expense account and cost center per line",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_anna_1",
+        "keyframe_ids": [
+          "kf_a_004"
+        ],
+        "t": 80000.0,
+        "utterance_ids": [
+          "autt4"
+        ]
+      },
+      "decision": {
+        "kind": "judgment",
+        "description": "Equipment lines over 5,000 go to the capital equipment (asset) account, not expense",
+        "from_value": "Expense account",
+        "to_value": "Capital Equipment",
+        "reason_quote_ids": [
+          "aq2"
+        ],
+        "counterfactual": "Line amount ≤ 5,000 or item group is not equipment"
+      },
+      "guardrail_ids": [
+        "g1"
+      ],
+      "context_note_ids": [
+        "cn1"
+      ],
+      "experts": [
+        "u_anna"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "s5",
+      "order": 5,
+      "after": [
+        "s4"
+      ],
+      "title": "Check the supplier for duplicate billing",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_anna_1",
+        "keyframe_ids": [
+          "kf_a_005"
+        ],
+        "t": 100000.0,
+        "utterance_ids": [
+          "autt5"
+        ]
+      },
+      "decision": {
+        "kind": "judgment",
+        "description": "December invoices from a supplier known to double-bill are put on hold until the statement is checked",
+        "from_value": "Submit",
+        "to_value": "Hold",
+        "reason_quote_ids": [
+          "aq3"
+        ],
+        "counterfactual": "Not December, or supplier has no double-billing history"
+      },
+      "guardrail_ids": [
+        "g2"
+      ],
+      "context_note_ids": [
+        "cn2"
+      ],
+      "experts": [
+        "u_anna"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "s6",
+      "order": 6,
+      "after": [
+        "s5"
+      ],
+      "title": "Route the invoice for approval",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_anna_1",
+        "keyframe_ids": [
+          "kf_a_006"
+        ],
+        "t": 120000.0,
+        "utterance_ids": [
+          "autt6"
+        ]
+      },
+      "decision": null,
+      "guardrail_ids": [
+        "g3"
+      ],
+      "context_note_ids": [],
+      "experts": [
+        "u_anna"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "s7",
+      "order": 7,
+      "after": [
+        "s6"
+      ],
+      "title": "Submit the invoice",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "sess_anna_1",
+        "keyframe_ids": [
+          "kf_a_007"
+        ],
+        "t": 140000.0,
+        "utterance_ids": [
+          "autt7"
+        ]
+      },
+      "decision": null,
+      "guardrail_ids": [],
+      "context_note_ids": [],
+      "experts": [
+        "u_anna"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    }
+  ],
+  "guardrails": [
+    {
+      "id": "g1",
+      "text": "Equipment over 5,000 is capex: book to the capital equipment account, never to expense.",
+      "quote_ids": [
+        "aq2"
+      ],
+      "predicate": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "line.item_group"
+              },
+              [
+                "Equipment",
+                "Ausrüstung",
+                "Équipement",
+                "Equipo",
+                "Оборудование"
+              ]
+            ]
+          },
+          {
+            ">": [
+              {
+                "var": "line.amount"
+              },
+              5000
+            ]
+          },
+          {
+            "!": {
+              "in": [
+                "Capital",
+                {
+                  "var": "line.expense_account"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "fuzzy": false,
+      "action": "block_and_explain",
+      "owner": null,
+      "evidence": [
+        {
+          "session_id": "sess_anna_1",
+          "keyframe_ids": [
+            "kf_a_004"
+          ],
+          "t": 80000.0,
+          "utterance_ids": [
+            "autt4"
+          ]
+        }
+      ],
+      "experts": [
+        "u_anna"
+      ],
+      "approved": true
+    },
+    {
+      "id": "g2",
+      "text": "December invoices from a supplier that double-bills (Nordwind) go on hold until the statement is checked.",
+      "quote_ids": [
+        "aq3"
+      ],
+      "predicate": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "invoice.supplier"
+              },
+              [
+                "Nordwind Logistik GmbH"
+              ]
+            ]
+          },
+          {
+            "==": [
+              {
+                "var": "invoice.posting_month"
+              },
+              12
+            ]
+          }
+        ]
+      },
+      "fuzzy": false,
+      "action": "hold",
+      "owner": null,
+      "evidence": [
+        {
+          "session_id": "sess_anna_1",
+          "keyframe_ids": [
+            "kf_a_005"
+          ],
+          "t": 100000.0,
+          "utterance_ids": [
+            "autt5"
+          ]
+        }
+      ],
+      "experts": [
+        "u_anna"
+      ],
+      "approved": true
+    },
+    {
+      "id": "g3",
+      "text": "Invoices for a subsidiary need a second approval from the subsidiary's controller before submit.",
+      "quote_ids": [
+        "aq4"
+      ],
+      "predicate": {
+        "in": [
+          {
+            "var": "invoice.company"
+          },
+          [
+            "Claros Demo Austria GmbH",
+            "Claros Demo France SAS"
+          ]
+        ]
+      },
+      "fuzzy": false,
+      "action": "block_and_explain",
+      "owner": "Subsidiary controller",
+      "evidence": [
+        {
+          "session_id": "sess_anna_1",
+          "keyframe_ids": [
+            "kf_a_006"
+          ],
+          "t": 120000.0,
+          "utterance_ids": [
+            "autt6"
+          ]
+        }
+      ],
+      "experts": [
+        "u_anna"
+      ],
+      "approved": true
+    },
+    {
+      "id": "g4",
+      "text": "Unknown or new supplier: stop and ask the controller before doing anything else.",
+      "quote_ids": [
+        "aq1"
+      ],
+      "predicate": null,
+      "fuzzy": true,
+      "action": "stop_and_ask",
+      "owner": "Controller",
+      "evidence": [
+        {
+          "session_id": "sess_anna_1",
+          "keyframe_ids": [
+            "kf_a_002"
+          ],
+          "t": 40000.0,
+          "utterance_ids": [
+            "autt2"
+          ]
+        }
+      ],
+      "experts": [
+        "u_anna"
+      ],
+      "approved": true
+    }
+  ],
+  "quotes": [
+    {
+      "id": "aq1",
+      "speaker": "Anna Keller",
+      "speaker_id": "u_anna",
+      "lang": "en",
+      "text": "If I don't recognise the supplier, I stop. New suppliers go to the controller first, always.",
+      "translations": {
+        "de": "Wenn ich den Lieferanten nicht kenne, höre ich auf. Neue Lieferanten gehen immer zuerst an den Controller.",
+        "ru": "Если я не знаю поставщика, я останавливаюсь. Новые поставщики всегда сначала идут к контролёру."
+      },
+      "t": 20000.0,
+      "session_id": "sess_anna_1",
+      "source": "live",
+      "audio_clip": null
+    },
+    {
+      "id": "aq2",
+      "speaker": "Anna Keller",
+      "speaker_id": "u_anna",
+      "lang": "de",
+      "text": "Alles, was Ausrüstung ist und über 5.000 liegt, ist Capex – das bucht man nicht auf Aufwand.",
+      "translations": {
+        "en": "Anything that is equipment and over 5,000 is capex – you don't book it as an expense.",
+        "ru": "Всё, что является оборудованием и стоит больше 5000, — это капзатраты, их не проводят как расходы."
+      },
+      "t": 40000.0,
+      "session_id": "sess_anna_1",
+      "source": "live",
+      "audio_clip": null
+    },
+    {
+      "id": "aq3",
+      "speaker": "Anna Keller",
+      "speaker_id": "u_anna",
+      "lang": "en",
+      "text": "Nordwind bills us twice every December, so in December I put their invoices on hold until I've checked the statement.",
+      "translations": {
+        "de": "Nordwind stellt uns jeden Dezember doppelt in Rechnung, deshalb setze ich ihre Rechnungen im Dezember auf Halt, bis ich den Kontoauszug geprüft habe.",
+        "ru": "Nordwind каждый декабрь выставляет нам счёт дважды, поэтому в декабре я ставлю их счета на удержание, пока не сверю выписку."
+      },
+      "t": 60000.0,
+      "session_id": "sess_anna_1",
+      "source": "live",
+      "audio_clip": null
+    },
+    {
+      "id": "aq4",
+      "speaker": "Anna Keller",
+      "speaker_id": "u_anna",
+      "lang": "en",
+      "text": "Invoices for a subsidiary need a second approval from that subsidiary's controller.",
+      "translations": {
+        "de": "Rechnungen für eine Tochtergesellschaft brauchen eine zweite Freigabe vom Controller der Tochter.",
+        "ru": "Счета для дочерней компании требуют второго согласования контролёра этой компании."
+      },
+      "t": 80000.0,
+      "session_id": "sess_anna_1",
+      "source": "debrief",
+      "audio_clip": null
+    },
+    {
+      "id": "aq5",
+      "speaker": "Anna Keller",
+      "speaker_id": "u_anna",
+      "lang": "en",
+      "text": "I match it to the PO and the receipt so we only pay for what actually arrived.",
+      "translations": {
+        "de": "Ich gleiche sie mit Bestellung und Wareneingang ab, damit wir nur zahlen, was wirklich angekommen ist.",
+        "ru": "Я сверяю со заказом и поступлением, чтобы платить только за то, что реально пришло."
+      },
+      "t": 100000.0,
+      "session_id": "sess_anna_1",
+      "source": "live",
+      "audio_clip": null
+    }
+  ],
+  "context_notes": [
+    {
+      "id": "cn1",
+      "text": "Capital expenditures are capitalised as fixed assets and depreciated rather than expensed.",
+      "scope": "universal",
+      "source": "llm"
+    },
+    {
+      "id": "cn2",
+      "text": "In ERPNext, 'Hold Invoice' on a Purchase Invoice blocks payment until a release date.",
+      "scope": "app",
+      "source": "https://docs.erpnext.com/docs/user/manual/en/purchase-invoice"
+    }
+  ],
+  "canonical_vars": {
+    "invoice.supplier": [
+      "Supplier",
+      "Lieferant",
+      "Fournisseur",
+      "Proveedor",
+      "Поставщик"
+    ],
+    "invoice.company": [
+      "Company",
+      "Unternehmen",
+      "Firma",
+      "Société",
+      "Empresa",
+      "Компания",
+      "Организация"
+    ],
+    "invoice.grand_total": [
+      "Grand Total",
+      "Gesamtbetrag",
+      "Summe",
+      "Total général",
+      "Total",
+      "Итого"
+    ],
+    "invoice.posting_date": [
+      "Posting Date",
+      "Buchungsdatum",
+      "Date de comptabilisation",
+      "Fecha de contabilización",
+      "Дата проводки"
+    ],
+    "line.item_group": [
+      "Item Group",
+      "Artikelgruppe",
+      "Groupe d'articles",
+      "Grupo de artículos",
+      "Группа номенклатуры"
+    ],
+    "line.amount": [
+      "Amount",
+      "Betrag",
+      "Montant",
+      "Importe",
+      "Сумма"
+    ],
+    "line.expense_account": [
+      "Expense Account",
+      "Aufwandskonto",
+      "Compte de charges",
+      "Cuenta de gastos",
+      "Счёт расходов"
+    ],
+    "line.cost_center": [
+      "Cost Center",
+      "Kostenstelle",
+      "Centre de coûts",
+      "Centro de costos",
+      "Центр затрат"
+    ]
+  },
+  "open_unknowns": [],
+  "exam": [
+    {
+      "variant": "Equipment line 5,200 from a known supplier, March",
+      "predicted": "Book to Capital Equipment (g1)",
+      "confidence": 0.9,
+      "expert_verdict": "correct",
+      "correction": null
+    }
+  ],
+  "coverage": {
+    "status": "ready",
+    "steps_with_evidence": 1.0,
+    "judgments_complete": 1.0,
+    "guardrails_complete": 1.0,
+    "open_unknowns": 0,
+    "conflicts": 0
+  },
+  "approved_by": [
+    "u_anna"
+  ]
+}

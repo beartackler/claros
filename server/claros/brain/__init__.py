@@ -15,7 +15,7 @@ from fastapi import APIRouter
 from . import deps
 from .gate import gate
 from .ledger import get_ledger, ledgers
-from .llm_endpoint import apply_control, interventions, router as _llm_router
+from .llm_endpoint import announce_debrief, apply_control, interventions, router as _llm_router
 
 router = APIRouter()
 router.include_router(_llm_router)
@@ -57,6 +57,8 @@ def register(bus: Any) -> None:
             apply_control(sid, a)
             if a in ("off_record_on", "off_record_off", "strike_that", "end_task"):
                 await get_ledger(sid).emit()
+            if a == "end_task":
+                await announce_debrief(sid)
 
     async def on_hello(sid: str, p: Any) -> None:
         s = deps.get_session(sid)
@@ -69,6 +71,8 @@ def register(bus: Any) -> None:
         gate._ensure_ticker()
 
     async def on_ended(sid: str, p: Any) -> None:
+        if (p or {}).get("mode", "capture") == "capture" if isinstance(p, dict) else True:
+            await announce_debrief(sid)
         get_ledger(sid).end_task()
         await get_ledger(sid).emit()
         gate.states.pop(sid, None)
