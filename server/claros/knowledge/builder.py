@@ -167,20 +167,25 @@ Rules:
 - Guardrails: limits, never-do, stop-and-ask rules the expert stated or the ledger resolved. quote_ids = SAY ids.
   predicate = json-logic that a program evaluates on a FUTURE screen, so it may only use canonical vars that are
   visible fields/columns in the STATE lines (each must be a key of canonical_vars with its on-screen labels), compared
-  with literal values exactly as they appear on screen. Never invent derived or boolean vars (no "is_equipment",
-  "is_uk_subsidiary", "double_bills"). Express the situation the rule must catch through what is visible, e.g. the
-  value the expert corrected AWAY from (the mistake, never the corrected value): {"and":[{">":[{"var":"line.amount"},5000]},{"in":["Tools and Small Equipment",
-  {"var":"line.expense_account"}]}]} ("in" with a string = substring match), or {"in":["Ltd",{"var":"invoice.company"}]}.
+  with literal values exactly as they appear on screen. Never invent derived or boolean vars (no "is_high_value",
+  "is_contractor", "is_repeat_customer"). The predicate must be TRUE exactly when a learner breaks the rule on a new
+  record: every CASE condition the expert stated (a category AND a threshold AND a party — all of them, not only the
+  one that differed in this session) plus the wrong CHOICE, i.e. the value the expert corrected AWAY from (never the
+  corrected value). Literals come from what the expert said and the screen of THIS session, never from these examples.
+  Shapes (illustrative domain, not this one): {"and":[{"in":["Hardware",{"var":"claim.category"}]},{">":[{"var":
+  "claim.amount"},2500]},{"in":["Auto-approve",{"var":"claim.route"}]}]} ("in" with a string = substring match), or
+  {"in":["Contractor",{"var":"employee.type"}]}.
   Ops: and, or, !, ==, !=, >, >=, <, <=, in, var. For dates use "<x>_month" / "<x>_year" derived vars of a *_date var.
   Session memory vars (booleans the runtime computes from OTHER records seen earlier in the same session — list
   rows or previously opened records — usable when the map has supplier/party and amount vars):
   prior.same_supplier, prior.same_amount, prior.same_supplier_amount, prior.same_supplier_amount_in_month (same
   supplier + same amount + date in the same calendar month), prior.count. Use them for repeat / duplicate / "same as
-  one already paid" rules, e.g. {"and":[{"var":"prior.same_supplier_amount"},{"==":[{"var":"invoice.posting_month"},12]}]}.
+  one already paid" rules, e.g. {"and":[{"var":"prior.same_supplier_amount"},{"==":[{"var":"<entity>.<x>_month"},<m>]}]}
+  when the expert tied it to a month.
   If the rule cannot be decided from visible fields (or these memory vars): predicate null, fuzzy true.
   action in block_and_explain|warn|stop_and_ask|hold; owner = who to ask.
 - canonical_vars: {"entity.field": [every on-screen label alias seen, in any language]} — grid columns too
-  (e.g. "line.amount": ["Amount (EUR)", "Amount (GBP)"], "line.expense_account": ["Expense Head"]).
+  (e.g. "claim.amount": ["Amount (EUR)", "Betrag (EUR)"], "claim.route": ["Route", "Weiterleitung"]).
 - open_unknowns: anything still unclear about the expert's reasons (type why|limit|stop_and_ask|never|deliberate|coverage),
   each with a short spoken_question (≤15 words). Ignore events that only reflect OCR noise, truncated text ("...") or
   formatting, and never ask how a value was entered (typed/pasted).

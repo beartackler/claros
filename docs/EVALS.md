@@ -332,6 +332,43 @@ records whether lookup picked it. The ERPNext E2E harness (`infra/e2e`) was reus
 remains. `make test`: 210 → 223 passed.
 
 
+## Phase 6 — learner nudges on cases the expert never showed (2026-10-04)
+
+`infra/evals/nudge_eval.py` replays the FIRST record screen of every tutor-eval learner case (real app, real
+perception, cases built around each rule boundary) through the nudge engine. Truth = the expert rules' CASE conditions
+from `tutor_eval.py` (facts only). "Wrong grade" = Claros would tell a learner they are wrong when they are right (or
+the reverse). The baseline marks the expert's demonstrated value right on every record (what a demo-skewed tutor does).
+
+| App (map v as in tutor eval) | nudges | graded | right when graded | wrong grades | baseline "expert's value" |
+|---|---|---|---|---|---|
+| ERPNext | 90 | 73 % | 95.5 % (CI 87–98) | 3 | 22 % |
+| Zammad | 164 | 3.7 % | 100 % (n=6) | 0 | 63 % |
+
+- Ungraded nudges say "can't tell from this screen — here's how Anna decides" and let the action + guardrails decide.
+- The 3 ERPNext wrong grades: maintenance services over 5,000 graded as capex, because the LEARNED rule is
+  `amount > 5000 AND expense ledger` without "equipment". The guardrail false-alarms on the same records. The decision
+  model cross-check (`nudges.cross_check`) almost never committed on field-only context (0 agreements), so it did not
+  veto them.
+- Zammad coverage is low because the refund facts live in the customer's message. The replay has no OCR text (it isn't
+  logged); the live tutor sees it.
+
+### The map builder prompt was skewed toward this test bed (found + fixed)
+The builder's SYSTEM prompt contained this test bed's answers as examples: `"Tools and Small Equipment"`, `5000`,
+`"Ltd"` for the UK subsidiary, a December duplicate predicate, and `is_uk_subsidiary` / `double_bills` as names not to
+invent. The vision prompt used `'Purchase Invoice form'` as its view example. Both are now neutral (claims / employees
+domain; `'<Record kind> form'`). `infra/evals/rebuild_eval.py` rebuilds the ERPNext map 3× per prompt from the SAME
+expert capture session and grades the unseen nudges against each:
+
+| Prompt | capex rule | UK rule | nudges graded | right when graded |
+|---|---|---|---|---|
+| old (test-bed examples) | = the example, 3/3 | = the example `"Ltd"`, 3/3 | 71 % | 90.6 % |
+| new (neutral) | from the session; once just `"Tools"` | `"Ltd"` 2/3; once the full company name | 49 % | 95.5 % |
+
+Before this fix, the eval partly measured the prompt's examples. Neutral examples lower coverage and keep correctness.
+Builds still vary run to run, and one of three overfit a literal (a full company name). No build has the "equipment"
+condition, because item group is not a visible field in the expert's session (a perception/visibility limit, not a
+prompt one). Perception numbers above predate the neutral vision prompt and should be re-run.
+
 ## Honest limitations
 
 - **n is small.** One expert script per app, 3 records per capture, 87 tutor cases. Bucket CIs are wide (shown).
