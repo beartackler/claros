@@ -94,3 +94,31 @@ deps: scipy (optional; Hungarian step alignment in knowledge.merge — greedy fa
   ratios from the map. Please exclude conflicted steps' decisions/guardrails server-side too.
 - Unknowns have no `lang`/`translations`; RU UI shows English questions with an "Original · EN" badge. Please translate
   `spoken_question` like quotes (translations map).
+
+## from server-lead (2026-10-04): expert voice clips, auth, v2.2 messages
+**Expert voice clips (tutor replays the expert's own voice; no clones).** Server side is done
+(`server/claros/knowledge/clips.py`); the web needs to record and upload:
+1. Consent: add a "Let Claros keep short clips of my voice so learners can hear me explain" toggle to the capture start
+   flow (default off). Send it in `hello`: `{type:"hello", ..., consent: {voice_clips: true|false}}`.
+2. Recording: when consent is on and the session is NOT off the record, run a `MediaRecorder` on the mic stream
+   (`audio/webm;codecs=opus`, else `audio/mp4`). Cut one clip per final user utterance (the same ElevenLabs final
+   transcript you already send as `utterance`), keyed by that utterance's `event_id`; ≤30 s, ≤1.5 MB. Drop the buffer
+   while off the record.
+3. Upload: `POST /api/sessions/{session_id}/clips` JSON `{event_id, t_start, t_end, mime: "audio/webm"|"audio/ogg"|"audio/mp4", audio_b64}`
+   (send it after the `utterance` message). Reply `{stored: true, url: "/api/clips/<file>", pending_pii_check}` or
+   `{stored: false, reason}` (no consent / off the record / too long / transcript contains personal data). The server
+   never keeps a clip whose transcript has PII.
+4. Playback: the map builder sets `Quote.audio_clip = "/api/clips/<file>"` (QuoteBlock already plays it via `clipUrl`).
+   `intervene.quote_original` now carries `audio_clip` too: in the tutor reference card, show a play button that plays
+   the expert's original words (with the translated `quote` as caption when the learner's language differs).
+
+**ElevenLabs auth is ON** (`enable_auth`): conversations start only with a server-minted token. Keep using
+`GET /api/el/token` → `conversationToken` (WebRTC) or `/api/el/signed-url` → `signedUrl`; a bare `agentId` start now
+fails ("This agent requires conversations to be authorized"). Verified 2026-10-04 against Render.
+
+**v2.2 messages the web may render** (see CONTRACTS.md "v2.2 additions"): `ask.why`/`say.why`
+(`{when, signals:{silence_ms, screen_settled_ms, typing, boundary?}, what, scope}` → "Why Claros asked now"),
+`signals` (`{typing, speaking, screen, gate}` ≤2/s → live indicator), `looked_up` (`{unknown_summary, answer, source}` →
+"Answered myself from <source>, didn't ask you"). Agent export: `GET /api/export/{workflow_id}.skill.md` (valid Agent
+Skill frontmatter; offer it as "Download agent skill" on the Work Map). MCP at `/mcp` (Streamable HTTP) / `/mcp/sse`;
+the agent-kit and `/check` REST endpoints were dropped by the lead.

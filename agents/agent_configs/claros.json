@@ -173,6 +173,9 @@
         "privacy": {
             "record_voice": true,
             "retention_days": 7
+        },
+        "auth": {
+            "enable_auth": true
         }
     }
 }

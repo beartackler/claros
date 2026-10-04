@@ -15,6 +15,11 @@ Env (optional):
   CLAROS_TTS_MODEL  -> override TTS model (default eleven_v4_turbo)
   CLAROS_LOOKUP_URL -> stable https base URL of the server; registers webhook tool `claros_lookup`
                        (same as `--lookup-url URL`). Quick tunnels (trycloudflare/ngrok/localhost) are refused.
+
+MCP: the server serves Streamable HTTP at /mcp (SSE at /mcp/sse). Registering it as an ElevenLabs MCP server
+(`elevenlabs agents mcp-servers create`, transport STREAMABLE_HTTP) failed on 2026-10-04 with
+`convai_mcp_servers_disabled` (feature not on this account), so `claros_lookup` remains the tutor's guardrail lookup.
+Auth: platform_settings.auth.enable_auth=true — sessions start only with GET /api/el/token or /api/el/signed-url.
 """
 import json
 import os
@@ -294,6 +299,9 @@ def build():
                 },
             },
             "privacy": {"record_voice": True, "retention_days": 7},
+            # only conversations started with a server-minted token / signed URL (GET /api/el/token, signed-url);
+            # the API key never reaches the browser
+            "auth": {"enable_auth": True},
         },
     }
 

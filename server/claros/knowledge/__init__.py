@@ -20,9 +20,10 @@ _registered = False
 
 
 def _include() -> None:
-    from . import export, lookup
+    from . import clips, export, lookup
     router.include_router(lookup.router)
     router.include_router(export.router)
+    router.include_router(clips.router)
 
 
 _include()
@@ -99,11 +100,12 @@ def register(bus: Any) -> None:
     if _registered:
         return
     _registered = True
-    from . import builder, debrief, lookup, nudges, tutor
+    from . import builder, clips, debrief, lookup, nudges, tutor
 
     bus.subscribe("session.ended", builder.on_session_ended)
     bus.subscribe("ws.in.hello", tutor.on_hello)
     bus.subscribe("ws.in.hello", debrief.on_hello)
+    bus.subscribe("ws.in.hello", clips.on_hello)  # consent: {voice_clips}
     bus.subscribe("ws.in.activity", tutor.on_activity)
     bus.subscribe("ws.in.nudge_response", nudges.on_response)
     bus.subscribe("screen.state", tutor.on_screen_state)

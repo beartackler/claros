@@ -42,13 +42,21 @@ ENV_KEYS = ["ELEVENLABS_API_KEY", "ELEVENLABS_AGENT_ID", "ISOQUANT_API_KEY", "JI
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(a: FastAPI):
     ws.install(bus)
     seed_task = None
     if os.getenv("CLAROS_AUTOSEED") == "1":  # ephemeral cloud disk: seed fixture maps once (idempotent)
         import asyncio
         seed_task = asyncio.create_task(_autoseed())
-    yield
+    from contextlib import AsyncExitStack
+    async with AsyncExitStack() as stack:
+        # packages may register extra lifespans (e.g. the MCP streamable-HTTP session manager)
+        for lf in list(getattr(a.state, "lifespans", None) or []):
+            try:
+                await stack.enter_async_context(lf(a))
+            except Exception as e:  # noqa: BLE001
+                log.warning("extra lifespan failed: %s", e)
+        yield
     if seed_task is not None and not seed_task.done():
         seed_task.cancel()
     if llm.HTTP is not None:
