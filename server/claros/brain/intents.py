@@ -92,8 +92,10 @@ _LEARNER_RULES: list[tuple[str, list[str]]] = [
                     r"preg[úu]ntale al experto", r"спроси эксперт", r"спросить эксперт"]),
     ("just_watch", [r"just watch", r"stay quiet", r"be quiet", r"nur zuschauen", r"sei still",
                     r"regarde seulement", r"tais-toi", r"solo mira", r"c[áa]llate", r"просто смотри", r"помолчи"]),
-    ("stop", [r"^stop\b", r"\bstop (it|now|the session)", r"\bhör auf\b", r"\bstopp\b", r"\barr[êe]te\b",
-              r"^para\b", r"^det[ée]nte", r"\bхватит\b", r"\bстоп\b", r"остановись"]),
+    ("stop", [r"^stop\b", r"\bstop (it|now|the session)", r"\bwrap (it )?up\b", r"\b(i'?m|we'?re) (all )?(done|finished)\b",
+              r"\bthat'?s (all|it) for (now|today)\b", r"\bend (the )?session\b", r"\bhör auf\b", r"\bstopp\b",
+              r"\bfertig\b", r"\barr[êe]te\b", r"\bj'ai fini\b", r"^para\b", r"^det[ée]nte", r"\bterminamos\b",
+              r"\bхватит\b", r"\bстоп\b", r"остановись", r"\bзаканчиваем\b", r"\bя закончил"]),
 ]
 
 _COMPILED: dict[str, list[tuple[str, list[re.Pattern]]]] = {

@@ -24,7 +24,7 @@ from .common import (
 from .merge import sig_score
 from . import nudges
 
-CONFIG = {"idle_hint_s": 20.0, "fuzzy_threshold": 0.75, "novel_min_conf": 0.5, "idle_poll_s": 2.0,
+CONFIG = {"idle_hint_s": 8.0, "fuzzy_threshold": 0.75, "novel_min_conf": 0.5, "idle_poll_s": 2.0,
           "i18n_wait_s": 20.0, "pick_llm_timeout_s": 5.0, "seen_max": 200}
 BOUNDARY = ("save", "submit", "approve")  # a save/submit of a still-violating record → one escalated reminder
 
@@ -846,11 +846,29 @@ async def on_screen_events(session_id: str, payload: Any) -> None:
         step, _ = await match_step(wm, st.last_state, st.current, evs)
         if step and step.id != st.current:
             await _enter_step(st, wm, step)
-    await check_guardrails(st, wm, fuzzy=True, boundary=boundary)
+    hits = await check_guardrails(st, wm, fuzzy=True, boundary=boundary)
     try:
         await nudges.on_events(st, wm, evs, boundary)  # acting in the app answers the open card
     except Exception:  # noqa: BLE001
         d.log.debug("implicit nudge answer failed", exc_info=True)
+    if boundary and not hits:
+        await _after_save(st, wm)
+
+
+_closed_out: dict[tuple[str, str], float] = {}
+
+
+async def _after_save(st: TutorState, wm: WorkMap) -> None:
+    """The learner saved a record: say whether it's done the expert's way, then close out (next one, or wrap up).
+    Once per record per minute; a guardrail intervention (hits) takes precedence and skips this."""
+    key = (st.session_id, _ent(st))
+    now = d.now_ms()
+    if now - _closed_out.get(key, 0) < 60_000:
+        return
+    _closed_out[key] = now
+    verdict = await answer_question(st, wm, "I just saved this. Did I do it the way the expert does?", "check")
+    tail = tr("close_out", st.lang)
+    await _ask(st, f"closeout-{_ent(st)}-{int(now)}", f"{verdict} {tail}" if verdict else tail)
 
 
 async def on_activity(session_id: str, payload: Any) -> None:
@@ -876,12 +894,14 @@ async def check_idle(session_id: str, now: Optional[float] = None) -> bool:
         return False
     wm = _wm(st)
     step = step_by_id(wm, st.current) if wm else None
-    if not step or not step.decision or step.decision.kind != "judgment" or step.id in st.hint_offered:
+    if not step or step.id in st.hint_offered:
         return False
     if ((now or d.now_ms()) - st.last_activity) / 1000 < CONFIG["idle_hint_s"]:
         return False
     st.hint_offered.add(step.id)
-    await _ask(st, f"hint-{step.id}", tr("hint_offer", st.lang))
+    # stuck on a step: explain how the expert does it, on THEIR record (not "want a hint?")
+    line = await answer_question(st, wm, "I've paused here. What would the expert do on this step?", "walk")
+    await _ask(st, f"hint-{step.id}", line or tr("hint_offer", st.lang))
     return True
 
 
@@ -1108,6 +1128,14 @@ async def handle_intent(session: Any, intent: str, text: str = "") -> str:
         st.stopped = True
         if st.idle_task:
             st.idle_task.cancel()
+
+        async def _end_later() -> None:  # let "ok, wrapping up" be spoken first, then end → summary screen
+            await asyncio.sleep(4)
+            await d.send(st.session_id, {"type": "control", "action": "end_task"})
+        try:
+            asyncio.get_running_loop().create_task(_end_later())
+        except RuntimeError:
+            pass
         return tr("ok_stop", lang)
     if intent == "ask_expert":
         return await _ask_expert(st, text)

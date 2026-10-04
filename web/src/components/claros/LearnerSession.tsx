@@ -55,7 +55,7 @@ function Learn({ below }: { below?: React.ReactNode }) {
       return r.data.session_id;
     }));
   useEffect(() => {
-    useLiveStore.getState().set({ transcript: [], caption: "", highlightedStepId: null, moment: null, openMapId: null });
+    useLiveStore.getState().set({ transcript: [], caption: "", highlightedStepId: null, moment: null, openMapId: null, sessionEnded: false });
   }, []);
   useJoinSession(sessionId, "learn", LEA, lang);
   const { capture, voice } = useLive(sessionId, "learn", lang, LEA.name);
@@ -174,6 +174,13 @@ function Learn({ below }: { below?: React.ReactNode }) {
     setSummary(s);
     setPhase("summary");
   };
+
+  // "wrap up" / "I'm done" by voice: the server ends the session → the same summary as the End button
+  const serverEnded = useLiveStore((s) => s.sessionEnded);
+  useEffect(() => {
+    if (serverEnded && phase === "live") end();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverEnded, phase]);
 
   /* ---------- demo script (?demo=1): a scripted session, no permissions ---------- */
   useDemoScript(demo && !nudgeParam && phase === "live", openLatest, map);
