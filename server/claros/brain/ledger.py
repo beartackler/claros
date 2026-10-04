@@ -272,7 +272,8 @@ class Ledger:
                 key = e.canonical or e.field
                 if key and e.kind in ("edit", "select"):
                     self.field_history.setdefault(key, []).append(e.new or "")
-                if cls != "routine":
+                # changes the app made (autofill, or a neighbouring cell misread) are never a why-question
+                if cls != "routine" and getattr(e, "source", None) != "system":
                     u = await self._open_for(e, cls)
                     if u:
                         opened.append(u)

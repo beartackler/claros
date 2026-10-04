@@ -147,7 +147,6 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
   const { t } = useUi();
   const db = useLiveStore((s) => s.debrief);
   const transcript = useLiveStore((s) => s.transcript);
-  const caption = useLiveStore((s) => s.caption);
   // offline demo only: page through mock questions locally
   const mockQueue: Unknown[] = useMemo(() => (demo ? MOCK_UNKNOWNS.filter((u) => u.status === "deferred") : []), [demo]);
   const [mi, setMi] = useState(0);
@@ -218,7 +217,7 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
                   {t("db.listening")}
                 </p>
                 <p className={cn("mt-3 min-h-[3.5rem] text-2xl leading-snug", said ? "font-semibold text-ink" : "text-ink-2")}>
-                  {said ? `“${said}”` : caption && caption !== q ? caption : t("db.listening.sub")}
+                  {said ? `“${said}”` : t("db.listening.sub")}
                 </p>
               </>
             ) : (

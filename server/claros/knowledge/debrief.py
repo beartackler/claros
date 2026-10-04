@@ -533,11 +533,24 @@ async def prepare(wm: WorkMap, st: "DebriefState", lang: str) -> None:
     """Once per debrief: add probes + gap questions to the map, word every unworded question in one LLM call."""
     st.prepared = True
     covered = _covered_fields(wm)
-    for u in wm.open_unknowns:  # capture leftovers the expert already explained, or that were undone: don't re-ask
-        if u.status in OPEN_STATUSES and (u.meta or {}).get("origin") != "debrief" and u.type in ("why", "deliberate"):
-            q = (u.spoken_question or "").lower()
-            if any(f in q for f in covered) or "undid" in q or "revert" in q:
-                u.status = "dropped"
+    rule_words = [_content(g.text) for g in wm.guardrails if g.quote_ids]
+    field_words = {_tail(v).replace("_", " ") for v in wm.canonical_vars}
+    seen_fields: set[tuple] = set()
+    for u in wm.open_unknowns:  # capture leftovers the expert already explained, undid, or that repeat: don't ask
+        if not (u.status in OPEN_STATUSES and (u.meta or {}).get("origin") != "debrief" and u.type in ("why", "deliberate")):
+            continue
+        q = (u.spoken_question or "").lower()
+        if any(f in q for f in covered) or "undid" in q or "revert" in q:
+            u.status = "dropped"
+            continue
+        if any(len(_content(q) & rw) >= 2 for rw in rule_words):  # "reclassified small tools → plant and machinery"
+            u.status = "dropped"
+            continue
+        key = (u.type, frozenset(f for f in field_words if len(f) >= 4 and f in q))
+        if key[1] and key in seen_fields:  # three phrasings of "why did the supplier change?"
+            u.status = "dropped"
+            continue
+        seen_fields.add(key)
     for u in wm.open_unknowns:  # this IS the second run: what an earlier debrief left over gets asked now
         if (u.meta or {}).get("needs_second_run"):
             u.status = "open"
@@ -690,6 +703,14 @@ async def send_state(session_id: str, wm: Optional[WorkMap] = None, **extra: Any
 
 
 SKIP_TOKEN = "__skip__"  # the debrief screen's Skip button (no speech needed)
+FILLER = re.compile(r"^\W*((mm+|hm+|uh+|um+|eh+|er+|ah+|okay|ok|so|well|ну|э+|ммм?)\W*){1,3}$", re.I)
+_STOP = {"the", "a", "an", "to", "of", "on", "in", "for", "and", "or", "that", "this", "it", "is", "was", "you",
+         "why", "what", "did", "do", "does", "your", "with", "from", "invoice", "invoices", "purchase", "one"}
+
+
+def _content(text: str) -> set[str]:
+    # crude stem (first 5 letters): "machinery" ~ "machineries", "tools" ~ "tool", "capitalised" ~ "capitalized"
+    return {w[:5] for w in re.findall(r"[a-zA-ZÀ-ÿА-яё0-9]{3,}", (text or "").lower()) if w not in _STOP}
 
 
 # ---------------- teach-back ----------------
@@ -1419,6 +1440,8 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
     sid = _sid(session)
 
     if st.phase == "questions":
+        if text != SKIP_TOKEN and FILLER.match(text or ""):
+            return ""  # "eh", "ok", "mm": thinking out loud, not the answer — keep waiting on this question
         u = next((x for x in wm.open_unknowns if x.id == st.current), None)
         st.current = None
         if u is not None:

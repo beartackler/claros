@@ -28,7 +28,7 @@ class GateConfig:
     snooze_ms: float = 300_000
     grace_per_word_ms: float = 240
     grace_cap_ms: float = 8000
-    boundary_bonus_ms: float = 6000
+    boundary_bonus_ms: float = 15000  # apps redraw for seconds after Save; the pause after it must still count
     decide_timeout_s: float = 0.3
     c_fa: float = 3.0   # cost of a false alarm (interrupting at a bad moment / low-value question)
     c_miss: float = 1.0  # cost of missing a question → τ = 0.75 for expert capture

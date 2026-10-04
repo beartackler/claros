@@ -147,6 +147,17 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
   const convRef = useRef(conv);
   convRef.current = conv;
   const connected = () => statusRef.current === "connected";
+  // The call is app-wide (ConversationProvider) but these callbacks only fire on CHANGES: a page that mounts
+  // mid-call (capture → debrief) must read the live status, or it thinks it's disconnected and never speaks
+  // its queue (live: every debrief question stayed on screen only).
+  const liveStatus = conv.status;
+  const liveSpeaking = conv.isSpeaking;
+  useEffect(() => {
+    const was = statusRef.current;
+    statusRef.current = liveStatus;
+    agentModeRef.current = liveSpeaking ? "speaking" : "listening";
+    if (liveStatus === "connected" && was !== "connected") setTimeout(() => pumpRef.current(), SAY_QUIET_MS);
+  }, [liveStatus, liveSpeaking]);
 
   // ---- off the record (honest): OFF by voice or tap; BACK ON only by tapping Resume ----
   // Off: Claros says so, mic muted, frames stop (capture checks the store). The muted mic can't hear

@@ -83,6 +83,8 @@ def replay(session_id: str) -> Replay:
             elif "event" in kind:
                 for x in _as_list(p):
                     ev = ScreenEvent.model_validate(x)
+                    if ev.kind in ("edit", "select", "undo") and ev.source == "system":
+                        continue  # not the expert's action: autofill or a misread neighbouring cell
                     r.events.append(ev)
                     if ev.keyframe_id:
                         r.keyframes.setdefault(ev.keyframe_id, ev.t)

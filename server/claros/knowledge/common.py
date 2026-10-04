@@ -46,8 +46,33 @@ def map_doc_text(wm: WorkMap) -> str:
     return " \n".join(p for p in parts if p)
 
 
+_GWORD = re.compile(r"[^\W\d_]{4,}", re.U)
+
+
+def attach_orphan_guardrails(wm: WorkMap) -> None:
+    """Every guardrail hangs on a step (the Work Map and the tutor reach rules through steps; a rule on no step
+    is invisible — live: all 3 guardrails of a published map were orphans). Best word overlap with the step's
+    title/decision, else the first judgment step, else the last step before a save."""
+    if not wm.steps:
+        return
+    linked = {g for s in wm.steps for g in s.guardrail_ids}
+    words = lambda t: {w.lower()[:5] for w in _GWORD.findall(t or "")}  # noqa: E731
+    for g in wm.guardrails:
+        if g.id in linked:
+            continue
+        gw = words(g.text)
+        def score(s: Any) -> int:
+            return len(gw & words(f"{s.title} {getattr(s.decision, 'description', '') if s.decision else ''}"))
+        best = max(wm.steps, key=score)
+        if score(best) < 2:
+            best = next((s for s in wm.steps if s.decision is not None and s.decision.kind == "judgment"), None) \
+                or wm.steps[max(0, len(wm.steps) - 2)]
+        best.guardrail_ids.append(g.id)
+
+
 async def save_map(wm: WorkMap, session_id: Optional[str] = None, *, recompute: bool = True) -> WorkMap:
     """Store as a new workflow version, index for lookup, publish map.updated."""
+    attach_orphan_guardrails(wm)
     if recompute:
         wm.coverage = compute_coverage(wm)
     ver = d.st_call("put_workflow", wm)
