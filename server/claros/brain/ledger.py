@@ -292,7 +292,10 @@ class Ledger:
         if any(u.type in GUARDRAIL_TYPES and u.scope in EXPERT_SCOPES and u.status in ("open", "asked", "answered")
                for u in self.unknowns.values()):
             return None
-        if now - self.started_ms < 60_000 and e.kind != "submit":
+        self.boundaries = getattr(self, "boundaries", 0) + 1
+        # a backstop, not an opener: let questions about what the expert actually did come first
+        # (live: the generic one jumped ahead of "you changed the expense head — why?" on the first save)
+        if (now - self.started_ms < 60_000 or self.boundaries < 2) and e.kind != "submit":
             return None
         lang = self.lang()
         u = Unknown(id=f"u_{uuid.uuid4().hex[:10]}", type="stop_and_ask", scope="company",
@@ -302,7 +305,7 @@ class Ledger:
                     moment=Moment(session_id=self.session_id, keyframe_ids=[e.keyframe_id] if e.keyframe_id else [],
                                   t=e.t))
         self.unknowns[u.id] = u
-        self.meta[u.id] = {"class": "guardrail", "salience": 0.9, "dupes": 0, "synthetic": True, "tag": "mandatory", "aspect": ("task", "stop_and_ask")}
+        self.meta[u.id] = {"class": "guardrail", "salience": 0.5, "dupes": 0, "synthetic": True, "tag": "mandatory", "aspect": ("task", "stop_and_ask")}
         return u
 
     def _shape(self, e: ScreenEvent, cls: str) -> tuple[str, Optional[str], float, Optional[float]]:
