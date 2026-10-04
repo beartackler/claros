@@ -8,6 +8,7 @@ GET /api/workflows · /api/workflows/{id} · /api/workflows/{id}/coverage · /ap
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, HTTPException
@@ -21,26 +22,135 @@ from .common import compute_coverage, list_maps, load_map, map_doc_text
 router = APIRouter()
 
 MATCH_THRESHOLD = 0.35
+REQUEST_MATCH = 0.55  # merging two people's requests / closing a request needs more than "a map is about invoices"
 W = {"fts": 0.3, "emb": 0.4, "onet": 0.15, "app": 0.15, "screen": 0.25}
+
+
+def _labels_of_state(ss: Optional[ScreenState]) -> set[str]:
+    from .common import norm_label
+    if ss is None:
+        return set()
+    on = {norm_label(re.sub(r"\s*\*$", "", f.label or "")) for f in ss.fields}
+    for tb in ss.tables or []:
+        on |= {norm_label(re.sub(r"\s*\*$", "", str(c))) for c in tb.get("columns") or []}
+    on.discard("")
+    return on
+
+
+def _map_labels(m: WorkMap) -> set[str]:
+    from .common import norm_label
+    out = {norm_label(re.sub(r"\s*\*$", "", a)) for al in m.canonical_vars.values() for a in al}
+    out.discard("")
+    return out
 
 
 def screen_overlap(m: WorkMap, ss: Optional[ScreenState]) -> float:
     """Share of the map's recorded on-screen labels visible on the learner's screen (recorded on THIS screen)."""
-    if ss is None or not m.canonical_vars:
-        return 0.0
-    from .common import norm_label
-    labels = {norm_label(re.sub(r"\s*\*$", "", a)) for al in m.canonical_vars.values() for a in al}
-    labels.discard("")
-    on = {norm_label(re.sub(r"\s*\*$", "", f.label or "")) for f in ss.fields}
-    for tb in ss.tables or []:
-        on |= {norm_label(re.sub(r"\s*\*$", "", str(c))) for c in tb.get("columns") or []}
-    return len(labels & on) / len(labels) if labels else 0.0
+    labels = _map_labels(m)
+    return len(labels & _labels_of_state(ss)) / len(labels) if labels and ss is not None else 0.0
+
+
+# ---------------- ONE matcher for maps and requests ----------------
+
+@dataclass
+class Candidate:
+    """Anything a task description can match: a Work Map or a learner's capture request."""
+    key: str
+    text: str
+    apps: list[str] = field(default_factory=list)
+    onet: Optional[OnetMatch] = None
+    labels: set[str] = field(default_factory=set)
+    fts_ns: Optional[str] = None  # FTS index namespace if the candidate is indexed (workflows)
+    obj: Any = None
+
+
+def map_candidate(m: WorkMap) -> Candidate:
+    return Candidate(key=m.workflow_id, text=map_doc_text(m), apps=list(m.apps), onet=m.onet, labels=_map_labels(m),
+                     fts_ns="workflows", obj=m)
+
+
+def screen_state_for(session_id: Optional[str], t: Optional[float] = None) -> Optional[ScreenState]:
+    """Latest ScreenState of a session (live perception first, else the session log, at or before `t`)."""
+    if not session_id:
+        return None
+    try:
+        from claros.perception import current_state
+        st = current_state(session_id)
+        if st is not None and (t is None or st.t <= t + 5_000):
+            return st
+    except Exception:  # noqa: BLE001
+        pass
+    best = None
+    for e in d.st_call("iter_log", session_id, ["screen.state"], default=[]) or []:
+        try:
+            s_ = ScreenState.model_validate(e.get("payload"))
+        except Exception:  # noqa: BLE001
+            continue
+        if t is None or s_.t <= t + 5_000:
+            best = s_ if (best is None or (s_.app or s_.fields) or not (best.app or best.fields)) else best
+    return best
+
+
+def request_candidate(r: dict) -> Candidate:
+    mom = r.get("moment") or {}
+    ss = screen_state_for(mom.get("session_id"), mom.get("t")) if isinstance(mom, dict) else None
+    onet = None
+    try:
+        onet = OnetMatch.model_validate(r["onet"]) if r.get("onet") else None
+    except Exception:  # noqa: BLE001
+        pass
+    return Candidate(key=r["id"], text=_query_text(r.get("workflow_hint") or "", ss),
+                     apps=[ss.app] if ss and ss.app else [], onet=onet, labels=_labels_of_state(ss), obj=r)
+
+
+def _toks(s: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", (s or "").lower()) if len(w) > 2}
+
+
+async def score_candidates(query: str, ss: Optional[ScreenState], cands: list[Candidate],
+                           onet: Optional[OnetMatch] = None, *, query_labels: Optional[set[str]] = None,
+                           query_apps: Optional[list[str]] = None,
+                           normalize: bool = False) -> list[tuple[float, Candidate]]:
+    """fts (index or token overlap) + embedding + O*NET + app + screen-label overlap, same weights everywhere.
+    normalize=True rescales by the weights of the signals BOTH sides have (a request without a screen moment can't
+    score app/screen) — used for request↔request and map→request matching (threshold REQUEST_MATCH)."""
+    if not cands or not query.strip():
+        return []
+    fts: dict[str, float] = {}
+    for ns in {c.fts_ns for c in cands if c.fts_ns}:
+        for r in d.st_call("search_text", ns, query, 50, default=[]) or []:
+            fts[r["id"]] = max(fts.get(r["id"], 0.0), r["score"])
+    fmax = max(fts.values(), default=0) or 1.0
+    qt = _toks(query)
+    vecs = await d.embed([query] + [c.text for c in cands], "retrieval.query")
+    qv = vecs[0]
+    labels = query_labels if query_labels is not None else _labels_of_state(ss)
+    apps = set(query_apps or ([ss.app] if ss and ss.app else []))
+    out = []
+    for c, cv in zip(cands, vecs[1:]):
+        ct = _toks(c.text)  # unindexed candidates (requests): word overlap, symmetric (a map vs a short hint)
+        s_fts = (max(fts.get(c.key, 0.0), 0.0) / fmax) if c.fts_ns else (
+            len(qt & ct) / max(1, min(len(qt), len(ct))))
+        s_emb = max(d.cosine(qv, cv), 0.0)
+        s_onet = 0.0
+        if onet and c.onet and onet.occupation_code == c.onet.occupation_code:
+            s_onet = 1.0 if (onet.task_id and onet.task_id == c.onet.task_id) else 0.7
+        s_app = 1.0 if apps & set(c.apps) else 0.0
+        s_scr = len(c.labels & labels) / len(c.labels) if c.labels and labels else 0.0
+        score = W["fts"] * s_fts + W["emb"] * s_emb + W["onet"] * s_onet + W["app"] * s_app + W["screen"] * s_scr
+        if normalize:
+            avail = W["fts"] + W["emb"] + (W["onet"] if onet and c.onet else 0) + (W["app"] if apps and c.apps else 0) \
+                + (W["screen"] if labels and c.labels else 0)
+            score = score / avail
+        out.append((round(score, 4), c))
+    return sorted(out, key=lambda x: -x[0])
 
 
 class LookupReq(BaseModel):
     screen_state: Optional[ScreenState] = None
     utterance: str = ""
     lang: str = "en"
+    session_id: Optional[str] = None  # the learner's live session: its latest screen is used when screen_state is absent
 
 
 def _query_text(utterance: str, ss: Optional[ScreenState]) -> str:
@@ -50,45 +160,60 @@ def _query_text(utterance: str, ss: Optional[ScreenState]) -> str:
     return " ".join(p for p in parts if p)
 
 
-async def lookup(utterance: str, screen_state: Optional[ScreenState] = None, lang: str = "en") -> dict[str, Any]:
+async def lookup(utterance: str, screen_state: Optional[ScreenState] = None, lang: str = "en",
+                 session_id: Optional[str] = None) -> dict[str, Any]:
+    if screen_state is None and session_id:
+        screen_state = screen_state_for(session_id)
     q = _query_text(utterance, screen_state)
     maps = list_maps()
     onet = await d.onet_match(q) if q.strip() else None
     out: dict[str, Any] = {"match": None, "onet": onet.model_dump(mode="json") if onet else None, "action": "request"}
     if not maps or not q.strip():
         return out
-    fts = {r["id"]: r["score"] for r in (d.st_call("search_text", "workflows", q, 20, default=[]) or [])}
-    fmax = max(fts.values(), default=0) or 1.0
-    vecs = await d.embed([q] + [map_doc_text(m) for m in maps], "retrieval.query")
-    qv = vecs[0]
-    best: Optional[tuple[float, WorkMap]] = None
-    for m, mv in zip(maps, vecs[1:]):
-        s_fts = max(fts.get(m.workflow_id, 0.0), 0.0) / fmax
-        s_emb = max(d.cosine(qv, mv), 0.0)
-        s_onet = 0.0
-        if onet and m.onet and onet.occupation_code == m.onet.occupation_code:
-            s_onet = 1.0 if (onet.task_id and onet.task_id == m.onet.task_id) else 0.7
-        s_app = 1.0 if (screen_state and screen_state.app and screen_state.app in m.apps) else 0.0
-        score = W["fts"] * s_fts + W["emb"] * s_emb + W["onet"] * s_onet + W["app"] * s_app + \
-            W["screen"] * screen_overlap(m, screen_state)
-        if best is None or score > best[0]:
-            best = (score, m)
-    if best and best[0] >= MATCH_THRESHOLD:
-        cov = compute_coverage(best[1])
-        out["match"] = {"workflow_id": best[1].workflow_id, "score": round(best[0], 3),
-                        "coverage": cov.model_dump(mode="json"), "name": best[1].name}
+    ranked = await score_candidates(q, screen_state, [map_candidate(m) for m in maps], onet)
+    if ranked and ranked[0][0] >= MATCH_THRESHOLD:
+        sc, c = ranked[0]
+        m = c.obj
+        cov = compute_coverage(m)
+        out["match"] = {"workflow_id": m.workflow_id, "score": round(sc, 3),
+                        "coverage": cov.model_dump(mode="json"), "name": m.name}
         out["action"] = {"ready": "learn", "partial": "teach_confirmed"}.get(cov.status, "request")
         try:  # the learner is about to start: translate the map for their language in the background
             from .tutor import prewarm
-            prewarm(best[1], lang)
+            prewarm(m, lang)
         except Exception:  # noqa: BLE001
             pass
     return out
 
 
+async def match_map_for_request(r: dict) -> Optional[tuple[float, WorkMap]]:
+    """Which existing map covers this request's task (hint + the learner's screen at the request moment)?"""
+    maps = list_maps()
+    c = request_candidate(r)
+    if not maps or not c.text.strip():
+        return None
+    onet = OnetMatch.model_validate(r["onet"]) if r.get("onet") else None
+    ranked = await score_candidates(c.text, None, [map_candidate(m) for m in maps], onet,
+                                    query_labels=c.labels, query_apps=c.apps)
+    return (ranked[0][0], ranked[0][1].obj) if ranked and ranked[0][0] >= MATCH_THRESHOLD else None
+
+
+OPEN_REQUEST = ("open", "accepted", "recorded")
+
+
+async def match_open_requests(query: str, ss: Optional[ScreenState] = None, onet: Optional[OnetMatch] = None, *,
+                              labels: Optional[set[str]] = None, apps: Optional[list[str]] = None,
+                              exclude: Optional[str] = None) -> list[tuple[float, dict]]:
+    reqs = [r for r in d.st_call("kv_list", "requests", default=[]) or []
+            if r.get("status") in OPEN_REQUEST and r.get("id") != exclude]
+    ranked = await score_candidates(query, ss, [request_candidate(r) for r in reqs], onet,
+                                    query_labels=labels, query_apps=apps, normalize=True)
+    return [(sc, c.obj) for sc, c in ranked if sc >= REQUEST_MATCH]
+
+
 @router.post("/api/workflows/lookup")
 async def lookup_ep(req: LookupReq) -> dict[str, Any]:
-    return await lookup(req.utterance, req.screen_state, req.lang)
+    return await lookup(req.utterance, req.screen_state, req.lang, req.session_id)
 
 
 @router.get("/api/workflows")
@@ -143,10 +268,29 @@ async def create_request(workflow_hint: str, requested_by: User | dict, moment: 
     mom = Moment.model_validate(moment) if isinstance(moment, dict) else moment
     if onet is None:
         onet = await d.onet_match(workflow_hint)
+    # the same task asked again (another learner, other words, same screen) joins the open request
+    ss = screen_state_for(mom.session_id, mom.t) if mom else None
+    try:
+        hits = await match_open_requests(_query_text(workflow_hint, ss), ss, onet)
+    except Exception:  # noqa: BLE001
+        d.log.debug("request matching failed", exc_info=True)
+        hits = []
+    if hits:
+        r = hits[0][1]
+        everyone = r.get("requested_by_all") or [r.get("requested_by")]
+        if not any((x or {}).get("id") == by.id for x in everyone):
+            everyone.append(by.model_dump(mode="json"))
+        r["requested_by_all"] = [x for x in everyone if x]
+        r["count"] = len(r["requested_by_all"])
+        r["merged"] = True
+        d.st_call("kv_put", "requests", r["id"], r)
+        await d.publish("_global", "request.updated", r)
+        return r
     req = CaptureRequest(id=d.new_id("req"), workflow_hint=workflow_hint, requested_by=by, moment=mom, onet=onet,
                          created_at=d.now_ms())  # epoch ms
     data = {**req.model_dump(mode="json"),
-            "workflow_id": workflow_id or f"wf_{_slug(workflow_hint)}_{d.new_id('x')[-6:]}"}
+            "workflow_id": workflow_id or f"wf_{_slug(workflow_hint)}_{d.new_id('x')[-6:]}",
+            "requested_by_all": [by.model_dump(mode="json")], "count": 1}
     d.st_call("kv_put", "requests", req.id, data)
     await d.publish("_global", "request.created", data)
     return data
@@ -174,14 +318,27 @@ async def accept_request_ep(rid: str, body: Optional[dict] = Body(None)) -> dict
     r = set_request_status(rid, "accepted")
     if r is None:
         raise HTTPException(404, "request not found")
-    out: dict[str, Any] = {"request": r, "session_id": None, "mode": "capture", "workflow_id": r.get("workflow_id")}
+    # the task already has a map (another expert, or recorded since the request): continue THAT workflow
+    second_run = False
+    try:
+        if load_map(r.get("workflow_id") or "") is not None:
+            second_run = True
+        else:
+            hit = await match_map_for_request(r)
+            if hit:
+                r["workflow_id"], second_run = hit[1].workflow_id, True
+                d.st_call("kv_put", "requests", rid, r)
+    except Exception:  # noqa: BLE001
+        d.log.debug("request → map matching failed", exc_info=True)
+    out: dict[str, Any] = {"request": r, "session_id": None, "mode": "capture", "workflow_id": r.get("workflow_id"),
+                           "second_run": second_run}
     user = (body or {}).get("user") or DEFAULT_EXPERT
     try:
         from claros.session import sessions  # type: ignore
         s = sessions.create(mode="capture", user=User.model_validate(user),
                             lang=(body or {}).get("lang", "en"), workflow_id=r.get("workflow_id"))
         s.extra.update(request_id=rid, workflow_hint=r.get("workflow_hint"), moment=r.get("moment"),
-                       requested_by=r.get("requested_by"))
+                       requested_by=r.get("requested_by"), second_run=second_run)
         sessions.save(s)
         out["session_id"] = s.id
         out["session"] = s.model_dump(mode="json")
@@ -190,19 +347,43 @@ async def accept_request_ep(rid: str, body: Optional[dict] = Body(None)) -> dict
     return out
 
 
+async def answer_requests(wm: WorkMap) -> list[dict]:
+    """A published map (expert confirmed) answers every open request for its task, whoever recorded it and whether
+    or not the capture came from a request: same matcher, query = the map. Matched → done + learners notified."""
+    if not wm.approved_by:
+        return []
+    out = []
+    reqs = [r for r in d.st_call("kv_list", "requests", default=[]) or [] if r.get("status") in OPEN_REQUEST]
+    if not reqs:
+        return []
+    own = [r for r in reqs if r.get("workflow_id") == wm.workflow_id]
+    try:
+        ranked = await score_candidates(map_doc_text(wm), None, [request_candidate(r) for r in reqs if r not in own],
+                                        wm.onet, query_labels=_map_labels(wm), query_apps=list(wm.apps),
+                                        normalize=True)
+    except Exception:  # noqa: BLE001
+        ranked = []
+    hits = own + [c.obj for sc, c in ranked if sc >= REQUEST_MATCH]
+    for r in hits:
+        r = {**r, "status": "done", "workflow_id": wm.workflow_id}
+        d.st_call("kv_put", "requests", r["id"], r)
+        out.append(r)
+        msg = {"type": "status", "level": "info", "text": f"“{r['workflow_hint']}” is ready to learn.",
+               "workflow_id": wm.workflow_id, "request_id": r["id"]}
+        await d.send("_global", msg)
+        mom = r.get("moment") or {}
+        if isinstance(mom, dict) and mom.get("session_id"):
+            await d.send(mom["session_id"], msg)
+        await d.publish("_global", "request.done", r)
+    return out
+
+
 async def on_map_updated(session_id: str, payload: Any) -> None:
-    """Close requests whose workflow got a map; tell learners (global status)."""
+    """Close requests whose task got a published map (any capture, not only request-accepted ones)."""
     wid = (payload or {}).get("workflow_id") if isinstance(payload, dict) else None
-    if not wid:
-        return
-    for r in d.st_call("kv_list", "requests", default=[]) or []:
-        if r.get("workflow_id") == wid and r.get("status") in ("accepted", "recorded"):
-            m = load_map(wid)
-            if m and m.approved_by:
-                set_request_status(r["id"], "done")
-                await d.send("_global", {"type": "status", "level": "info",
-                                         "text": f"“{r['workflow_hint']}” is ready to learn.",
-                                         "workflow_id": wid, "request_id": r["id"]})
+    m = load_map(wid) if wid else None
+    if m is not None:
+        await answer_requests(m)
 
 
 # ---------------- mastery ----------------

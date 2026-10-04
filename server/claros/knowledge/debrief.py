@@ -51,6 +51,14 @@ SKIP = re.compile(r"\b(not now|later|skip|pass|nicht jetzt|später|plus tard|pas
                   r"не сейчас|потом|пропусти)\b", re.I)
 
 L = {
+    "answers_requests": {"en": "This also answers {n} learner requests.", "de": "Damit sind auch {n} Anfragen von "
+                         "Lernenden beantwortet.", "fr": "Cela répond aussi à {n} demandes d'apprenants.",
+                         "es": "Esto también responde {n} solicitudes de aprendices.",
+                         "ru": "Это также отвечает на запросы учеников: {n}."},
+    "answers_requests_1": {"en": "This also answers a learner's request.", "de": "Damit ist auch eine Anfrage "
+                           "beantwortet.", "fr": "Cela répond aussi à la demande d'un apprenant.",
+                           "es": "Esto también responde la solicitud de un aprendiz.",
+                           "ru": "Это также отвечает на запрос ученика."},
     "thanks": {"en": "Got it.", "de": "Verstanden.", "fr": "Compris.", "es": "Entendido.", "ru": "Понял."},
     "teach_intro": {"en": "Let me say it back.", "de": "Ich fasse zusammen.", "fr": "Je résume.",
                     "es": "Te lo resumo.", "ru": "Давай я перескажу."},
@@ -1340,7 +1348,16 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
         if is_confirm(text, intent):
             second = await publish_confirmed(wm, sid, eid)
             st.phase = "done"
-            return t("done_partial" if second else "done", lang)
+            line = t("done_partial" if second else "done", lang)
+            try:  # the published map may answer open learner requests (same matcher as lookup)
+                from .lookup import answer_requests
+                n = len(await answer_requests(load_map(st.workflow_id) or wm))
+            except Exception:  # noqa: BLE001
+                d.log.debug("answer_requests failed", exc_info=True)
+                n = 0
+            if n:
+                line += " " + t("answers_requests_1" if n == 1 else "answers_requests", lang, n=n)
+            return line
         q = _quote(session, text, lang)
         wm.quotes.append(q)
         wm, diffs = await apply_correction(wm, text, lang, q.id)

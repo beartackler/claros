@@ -865,31 +865,31 @@ def _keep_majority(wm2: WorkMap, wm: WorkMap, maj: dict) -> None:
             s_.decision.kind = "routine"
 
 
-async def _same_expert_workflow(wm: WorkMap, expert_id: str, threshold: float = 0.8) -> Optional[str]:
+SAME_TASK_SCORE = 0.85  # shared matcher score (fts+emb+onet+app+screen); same task ≈ 1.0+, sibling task ≈ 0.7
+
+
+async def _same_expert_workflow(wm: WorkMap, expert_id: str, threshold: float = SAME_TASK_SCORE) -> Optional[str]:
     """A capture that covers an existing workflow updates/merges into it instead of creating a near-duplicate (which
-    would split learner lookups). Same expert: embedding sim ≥ threshold. Another expert: also the same screens —
-    ≥30 % of this map's on-screen labels appear in the candidate's, or the same apps + record kinds."""
+    would split learner lookups). Uses THE shared matcher (knowledge.lookup.score_candidates, query = this map).
+    Another expert must also have worked on the same screens (≥30 % shared labels, or same apps + record kinds)."""
     from .common import list_maps, map_doc_text
-    maps = list_maps()
+    from .lookup import _map_labels, map_candidate, score_candidates
+    maps = [m for m in list_maps() if m.workflow_id != wm.workflow_id]
     if not maps:
         return None
     try:
-        vecs = await d.embed([map_doc_text(wm)] + [map_doc_text(m) for m in maps], "retrieval.passage")
-        sims = [d.cosine(vecs[0], v) for v in vecs[1:]]
+        ranked = await score_candidates(map_doc_text(wm), None, [map_candidate(m) for m in maps], wm.onet,
+                                        query_labels=_map_labels(wm), query_apps=list(wm.apps))
     except Exception:  # noqa: BLE001
         return None
-    best: Optional[tuple[float, str]] = None
-    for m, sim in zip(maps, sims):
-        if sim < threshold:
-            continue
-        mine = any(e.id == expert_id for e in m.experts)
-        if not mine and not same_screens(wm, m):
-            continue
-        if best is None or sim > best[0]:
-            best = (sim, m.workflow_id)
-    if best:
-        d.log.info("capture matches existing workflow %s sim=%.3f", best[1], best[0])
-    return best[1] if best else None
+    for sc, c in ranked:
+        if sc < threshold:
+            break
+        m = c.obj
+        if any(e.id == expert_id for e in m.experts) or same_screens(wm, m):
+            d.log.info("capture matches existing workflow %s score=%.3f", m.workflow_id, sc)
+            return m.workflow_id
+    return None
 
 
 def same_screens(a: WorkMap, b: WorkMap, min_share: float = 0.3) -> bool:

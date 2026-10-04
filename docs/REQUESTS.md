@@ -122,3 +122,15 @@ fails ("This agent requires conversations to be authorized"). Verified 2026-10-0
 "Answered myself from <source>, didn't ask you"). Agent export: `GET /api/export/{workflow_id}.skill.md` (valid Agent
 Skill frontmatter; offer it as "Download agent skill" on the Work Map). MCP at `/mcp` (Streamable HTTP) / `/mcp/sse`;
 the agent-kit and `/check` REST endpoints were dropped by the lead.
+
+## from server-lead (2026-10-04): request ↔ workflow matching
+- `POST /api/workflows/lookup` now accepts `session_id` (the learner's live session). When `screen_state` is null the
+  server uses that session's latest ScreenState. **Web: please send `session_id`** (today it sends `screen_state: null`,
+  so lookup ignored the screen).
+- `POST /api/requests` may return an EXISTING open request (`merged: true`) when another learner already asked for the
+  same task; requests carry `requested_by_all[]` and `count` — show "3 learners asked".
+- `POST /api/requests/{id}/accept` returns `second_run: true` and the existing `workflow_id` when the task already has
+  a map (the capture continues that workflow).
+- Any published map closes matching open requests (`status: done`, `workflow_id` set) and sends `status` "“…” is ready
+  to learn." to `_global` and to the requesting learner's session; the debrief's closing line says "This also answers
+  N learner requests."
