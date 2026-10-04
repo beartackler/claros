@@ -163,26 +163,26 @@ export function StartSequence({
               </div>
               {v === "warn" ? (
                 <div className="mt-3 flex flex-wrap items-center gap-3 pl-16">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                      onStopShare?.();
-                      void run("share");
-                    }}
-                  >
-                    <AppWindow aria-hidden /> {t("start.share.repick")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      set("share", "done");
-                      void fromMic();
-                    }}
-                  >
-                    {t("start.share.anyway")}
-                  </Button>
+                  {/* one tab is fine (a web app in one tab); a whole screen is the risky one */}
+                  {why[s.k]?.[0] === "start.share.tab" ? (
+                    <>
+                      <Button variant="primary" size="sm" onClick={() => { set("share", "done"); void fromMic(); }}>
+                        {t("start.share.continue")}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => { onStopShare?.(); void run("share"); }}>
+                        <AppWindow aria-hidden /> {t("start.share.window")}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="primary" size="sm" onClick={() => { onStopShare?.(); void run("share"); }}>
+                        <AppWindow aria-hidden /> {t("start.share.repick")}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => { set("share", "done"); void fromMic(); }}>
+                        {t("start.share.anyway")}
+                      </Button>
+                    </>
+                  )}
                 </div>
               ) : null}
               {v === "denied" ? (
