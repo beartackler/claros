@@ -155,8 +155,14 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
 
   // Server moves the session to debrief (voice "I'm done", end_task, or POST end) → follow it.
   useEffect(() => {
-    if (phase === "debrief") router.push(`/debrief/${encodeURIComponent(sessionId)}`);
-  }, [phase, router, sessionId]);
+    if (phase === "debrief") {
+      capture.stop(); // the debrief needs the voice, not the screen
+      router.push(`/debrief/${encodeURIComponent(sessionId)}`);
+    }
+  }, [phase, router, sessionId, capture]);
+  // leaving capture by any route (Exit, back button, server phase change) ends the screen share
+  const stopShare = capture.stop;
+  useEffect(() => () => stopShare(), [stopShare]);
   const drip = useDemoDrip(demo && !offRecord);
 
   const [seen, setSeen] = useState<Record<string, Unknown>>({});

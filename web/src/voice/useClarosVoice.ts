@@ -161,7 +161,11 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       try { convRef.current.setMuted(on); } catch {}
       sendControl(on ? "off_record_on" : "off_record_off");
       if (on) announceOff();
-      else enqueueRef.current({ type: "say", id: `offrec-on-${Date.now()}`, text: offRecordLine(lang, "on"), kind: "ack" });
+      else {
+        // back on: drop any queued "off the record" / "still off the record" line before it's spoken late
+        sayQueue.current = sayQueue.current.filter((m) => !m.id.startsWith("offrec-off-") && !m.id.startsWith("offrec-still-"));
+        enqueueRef.current({ type: "say", id: `offrec-on-${Date.now()}`, text: offRecordLine(lang, "on"), kind: "ack" });
+      }
     },
     [set, announceOff, lang],
   );

@@ -48,6 +48,8 @@ async def lifespan(a: FastAPI):
     if os.getenv("CLAROS_AUTOSEED") == "1":  # ephemeral cloud disk: seed fixture maps once (idempotent)
         import asyncio
         seed_task = asyncio.create_task(_autoseed())
+    import asyncio as _aio
+    resume_task = _aio.create_task(_resume_map_builds())
     from contextlib import AsyncExitStack
     async with AsyncExitStack() as stack:
         # packages may register extra lifespans (e.g. the MCP streamable-HTTP session manager)
@@ -62,6 +64,21 @@ async def lifespan(a: FastAPI):
     if llm.HTTP is not None:
         await llm.HTTP.aclose()
         llm.HTTP = None
+
+
+async def _resume_map_builds() -> None:
+    """A restart mid-build (deploy, dev reload) must not leave a debrief waiting forever: finish those builds."""
+    try:
+        stuck = [r for r in store.kv_list("sessions")
+                 if isinstance(r, dict) and r.get("ended") and (r.get("extra") or {}).get("map_status") == "building"]
+        if not stuck:
+            return
+        from .knowledge.builder import on_session_ended
+        for r in stuck:
+            log.info("resuming interrupted map build for %s", r.get("id"))
+            await on_session_ended(r["id"], {"mode": "capture"})
+    except Exception as e:  # noqa: BLE001
+        log.warning("resume map builds failed: %s", e)
 
 
 async def _autoseed() -> None:
