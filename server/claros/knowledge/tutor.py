@@ -403,7 +403,8 @@ def _quote_line(wm: WorkMap, qids: list[str], lang: str, ref: Optional[str] = No
 
 def quote_original(wm: WorkMap, qids: list[str], ref: Optional[str] = None) -> Optional[dict]:
     q = best_quote(wm, qids, ref)
-    return {"id": q.id, "speaker": q.speaker, "lang": q.lang, "text": q.text} if q else None
+    return {"id": q.id, "speaker": q.speaker, "lang": q.lang, "text": q.text,
+            "audio_clip": getattr(q, "audio_clip", None)} if q else None
 
 
 def guardrail_quote_line(wm: WorkMap, g: Guardrail, lang: str) -> Optional[str]:
@@ -785,6 +786,7 @@ async def _novel(st: TutorState, wm: WorkMap, state: ScreenState) -> None:
                                 f"What should they do here?", entity=key, priority=0.6,
                     moment=Moment(session_id=st.session_id, keyframe_ids=[state.keyframe_id] if state.keyframe_id
                                   else [], t=state.t))
+    u.meta["origin"] = "learner"
     wm.open_unknowns.append(u)
     st.wm = await save_map(wm, st.session_id)
 
@@ -1120,7 +1122,8 @@ async def _ask_expert(st: TutorState, text: str) -> str:
                          onet=wm.onet if wm else None, workflow_id=st.workflow_id)
     if wm is not None and text:
         from .common import new_unknown
-        wm.open_unknowns.append(new_unknown("why", f"A learner asked: “{text}”", moment=moment,
-                                            entity=st.current, priority=0.6))
+        lu = new_unknown("why", f"A learner asked: “{text}”", moment=moment, entity=st.current, priority=0.6)
+        lu.meta["origin"] = "learner"
+        wm.open_unknowns.append(lu)
         st.wm = await save_map(wm, st.session_id)
     return tr("asked", st.lang)

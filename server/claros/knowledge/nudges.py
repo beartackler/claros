@@ -617,8 +617,9 @@ async def novel_case(st: Any, wm: WorkMap, n: OpenNudge, text: Optional[str]) ->
     moment = Moment(session_id=st.session_id,
                     keyframe_ids=[st.last_state.keyframe_id] if st.last_state and st.last_state.keyframe_id else [],
                     t=d.now_ms())
-    wm.open_unknowns.append(new_unknown("coverage", q, moment=moment, entity=f"novel:{n.step_id}:{ent}",
-                                        priority=0.7))
+    nu = new_unknown("coverage", q, moment=moment, entity=f"novel:{n.step_id}:{ent}", priority=0.7)
+    nu.meta["origin"] = "learner"
+    wm.open_unknowns.append(nu)
     st.wm = await t.save_map(wm, st.session_id)
     try:
         await create_request(q, User(id=st.learner_id, name=st.learner_name, role="learner"), moment,

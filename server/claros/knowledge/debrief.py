@@ -1,11 +1,17 @@
 """Debrief (mode=debrief): planner + state machine.
 
-phases: questions → teach_back (→ correction loop) → exam → done
-- questions: ordered remaining unknowns (guardrails → exceptions → unseen cases), only company/personal scope,
-  budget ≤ max_questions / max_seconds; stop when ledger empty AND coverage checks pass (or budget spent).
-- teach_back: ≤140 words in session lang with [[step:<id>]] markers (→ client tool highlight_step).
-- correction: patches only the affected steps/guardrails, reads back a diff.
-- exam: 3 variant cases from decision boundaries; Claros predicts + confidence; expert grades → ExamCase.
+phases: questions → teach_back (→ correction loop) → done   (the old self-graded "exam" is gone: it proved nothing)
+- questions (≥3, ≤6, ≤5 min): things NOT answered during the task, in this order:
+    1. disagreements with earlier experts addressed to THIS expert ("Anna holds …; you … — why?")
+    2. exceptions the live ledger noticed but never asked
+    3. rules Claros is unsure about (scope/threshold probes on literals, fuzzy rules, judgments without a reason)
+    4. unseen cases (what distinguishes the case, named party vs every party, who decides/releases)
+  learner-originated items (novel cases, learner questions) are capped at 1 and asked only after the core block.
+  Wording: one batched LLM call at start (brief style, action first), deterministic templates as fallback.
+  Answers to probes patch the guardrail they are about (text + predicate + owner) and attach the quote.
+- teach_back: ≤140 spoken words (≤60 s) in session lang with [[step:<id>]] markers (→ highlight_step).
+- correction: patches only the affected steps/guardrails, reads back ONLY the diff in natural speech.
+- explicit confirm → approve + publish; still-open core items → deferred, needs_second_run (coverage partial).
 
 Brain-facing API: `await next_debrief_utterance(session) -> str`,
 `await handle_debrief_answer(session, text, intent=None) -> str`, `split_markers(text)`.
@@ -19,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from claros.models import (
-    Decision, ExamCase, ExtractedRule, Guardrail, Moment, Quote, Step, Unknown, WorkMap,
+    Decision, ExamCase, ExtractedRule, Guardrail, Moment, Quote, Step, Unknown, Variant, WorkMap,
 )
 
 from . import _deps as d
@@ -29,13 +35,15 @@ from .common import (
     step_by_id,
 )
 
-CONFIG = {"max_questions": 6, "max_seconds": 300, "teachback_words": 140, "exam_cases": 3}
+CONFIG = {"min_questions": 3, "max_questions": 6, "max_seconds": 300, "teachback_words": 140, "exam_cases": 3,
+          "learner_cap": 1, "question_words": 25}
 
 TYPE_RANK = {"limit": 0, "never": 0, "stop_and_ask": 0, "why": 1, "deliberate": 1, "conflict": 1, "coverage": 2}
 EXPERT_SCOPES = ("company", "personal_judgment")
 MARKER = re.compile(r"\[\[step:([\w\-]+)\]\]")
+PROBE_KINDS = ("party", "kind", "threshold", "owner", "fuzzy", "scope")
 
-YES = re.compile(r"^\s*(yes|yeah|yep|correct|right|exactly|that'?s right|sure|ok(ay)?|ja|genau|richtig|stimmt|"
+YES = re.compile(r"^\s*(yes|yeah|yep|correct|right|exactly|that'?s right|that'?s how it works|sure|ok(ay)?|ja|genau|richtig|stimmt|"
                   r"oui|exact(ement)?|c'est (ça|juste)|sí|si|correcto|exacto|así es|да|верно|правильно|точно|ага)\b",
                   re.I)
 NO = re.compile(r"^\s*(no|nope|wrong|nein|falsch|non|faux|incorrecto|нет|неверно|неправильно)\b", re.I)
@@ -82,6 +90,26 @@ L = {
     "confirm_q": {"en": "Looks like: {h} — is that your rule?", "de": "Sieht so aus: {h} – ist das deine Regel?",
                   "fr": "On dirait : {h} — c'est ta règle ?", "es": "Parece que: {h} — ¿es tu regla?",
                   "ru": "Похоже: {h} — это твоё правило?"},
+    "got_it": {"en": "Got it —", "de": "Verstanden —", "fr": "Compris —", "es": "Entendido —", "ru": "Понял —"},
+    "step_now": {"en": "step {n} now: {v}.", "de": "Schritt {n} jetzt: {v}.", "fr": "étape {n} maintenant : {v}.",
+                 "es": "paso {n} ahora: {v}.", "ru": "шаг {n} теперь: {v}."},
+    "rule_now": {"en": "the rule now says: {v}.", "de": "die Regel lautet jetzt: {v}.",
+                 "fr": "la règle dit maintenant : {v}.", "es": "la regla ahora dice: {v}.",
+                 "ru": "правило теперь: {v}."},
+    "owner_now": {"en": "the person to ask is now {v}.", "de": "fragen muss man jetzt {v}.",
+                  "fr": "il faut maintenant demander à {v}.", "es": "ahora hay que preguntar a {v}.",
+                  "ru": "теперь спрашивать нужно {v}."},
+    "when_now": {"en": "I updated when that rule applies.", "de": "Ich habe angepasst, wann die Regel greift.",
+                 "fr": "J'ai mis à jour quand la règle s'applique.", "es": "Actualicé cuándo aplica la regla.",
+                 "ru": "Я обновил, когда действует правило."},
+    "anything_else": {"en": "Anything else, or is that how it works?", "de": "Noch etwas, oder ist das so richtig?",
+                      "fr": "Autre chose, ou c'est bien comme ça ?", "es": "¿Algo más, o es así como funciona?",
+                      "ru": "Что-то ещё, или так всё и работает?"},
+    "done_partial": {"en": "Thanks — the map is published. A few points still need a second run.",
+                     "de": "Danke — die Karte ist veröffentlicht. Ein paar Punkte brauchen noch einen zweiten Durchgang.",
+                     "fr": "Merci — la carte est publiée. Quelques points demandent un second passage.",
+                     "es": "Gracias — el mapa está publicado. Algunos puntos necesitan una segunda ronda.",
+                     "ru": "Спасибо — карта опубликована. Пара моментов требует второго прохода."},
     "no_map": {"en": "I don't have a map for this debrief yet.", "de": "Für dieses Debriefing habe ich noch keine Karte.",
                "fr": "Je n'ai pas encore de carte pour ce débriefing.", "es": "Aún no tengo mapa para este repaso.",
                "ru": "Для этого разбора у меня ещё нет карты."},
@@ -97,8 +125,11 @@ def t(key: str, lang: str, **kw: Any) -> str:
 class DebriefState:
     session_id: str
     workflow_id: str
-    phase: str = "questions"  # questions | teach_back | exam | done
+    phase: str = "questions"  # questions | teach_back | done   ("exam" is no longer entered)
     asked: int = 0
+    core_asked: int = 0
+    learner_asked: int = 0
+    prepared: bool = False
     started_ms: float = field(default_factory=d.now_ms)
     current: Optional[str] = None       # unknown id being asked
     script: Optional[str] = None
@@ -133,17 +164,350 @@ def start(session_id: str, workflow_id: str) -> DebriefState:
 
 # ---------------- planner ----------------
 
-def plan(wm: WorkMap, expert_id: Optional[str] = None, expert_name: Optional[str] = None) -> list[Unknown]:
+LEARNER_PREFIX = ("A learner", "Ein Lernender", "Un apprenant", "Un aprendiz", "Ученик")
+
+
+def is_learner_item(u: Unknown) -> bool:
+    return (u.meta or {}).get("origin") == "learner" or (u.entity or "").startswith("novel:") or \
+        (u.spoken_question or "").startswith(LEARNER_PREFIX)
+
+
+def _for_this_expert(u: Unknown, expert_id: Optional[str], expert_name: Optional[str]) -> bool:
+    """Conflicts are asked of the expert they are addressed to (merge meta), legacy: 'Name: value' hypothesis."""
+    if u.type != "conflict":
+        return True
+    m = u.meta or {}
+    if m.get("ask_expert_id") or m.get("ask_expert_name"):
+        return (bool(expert_id) and m.get("ask_expert_id") == expert_id) or \
+            (bool(expert_name) and m.get("ask_expert_name") == expert_name) or (not expert_id and not expert_name)
+    if expert_name and u.hypothesis:
+        return u.hypothesis.startswith(expert_name)
+    return True
+
+
+def tier(u: Unknown) -> int:
+    """0 conflict for me · 1 exception the ledger noticed · 2 rule I'm unsure about (a literal that may be a demo
+    value, a fuzzy rule, a missing reason) · 3 unseen case (what distinguishes it, who decides) · 9 learner."""
+    m = u.meta or {}
+    if is_learner_item(u):
+        return 9
+    if u.type == "conflict":
+        return 0
+    if m.get("origin") in ("builder", "debrief"):
+        if m.get("probe") in ("kind", "owner") and m.get("origin") == "debrief":
+            return 3
+        return 2
+    if u.type == "coverage" and u.hypothesis:  # builder: "is this really a step / your rule?"
+        return 2
+    return 1
+
+
+def plan(wm: WorkMap, expert_id: Optional[str] = None, expert_name: Optional[str] = None,
+         include_secondary: bool = True) -> list[Unknown]:
+    """Askable items, core first (by tier, then type, priority), learner-originated last."""
     out = []
     for u in wm.open_unknowns:
-        if u.status not in ("open", "asked"):
+        if u.status not in ("open", "asked", "deferred") or (u.meta or {}).get("needs_second_run"):
             continue
+        if u.status == "deferred" and (u.meta or {}).get("skipped"):
+            continue  # the expert said "not now" in THIS debrief
         if u.scope not in EXPERT_SCOPES:
             continue
-        if u.type == "conflict" and expert_name and u.hypothesis and not u.hypothesis.startswith(expert_name):
+        if not _for_this_expert(u, expert_id, expert_name):
             continue  # the other expert's side of a conflict
+        if not include_secondary and (u.meta or {}).get("secondary"):
+            continue
         out.append(u)
-    return sorted(out, key=lambda u: (TYPE_RANK.get(u.type, 3), -u.priority, u.created_t))
+    return sorted(out, key=lambda u: (tier(u), TYPE_RANK.get(u.type, 3), -u.priority, u.created_t))
+
+
+# ---------------- probes (rules I'm unsure about, cases I have not seen) ----------------
+
+_PARTY_TAILS = ("supplier", "vendor", "company", "customer", "party", "payee", "client", "counterparty", "subsidiary",
+                "requester", "employee", "contractor", "merchant", "partner", "account_holder")
+_PARTY_WORD = {"supplier": "supplier", "vendor": "supplier", "company": "company", "subsidiary": "company",
+               "customer": "customer", "client": "customer", "payee": "payee", "party": "party",
+               "counterparty": "counterparty", "requester": "requester", "employee": "employee",
+               "contractor": "contractor", "merchant": "merchant", "partner": "partner"}
+
+
+def _tail(var: str) -> str:
+    return (var or "").split(".")[-1].lower()
+
+
+def _is_party_var(var: str) -> bool:
+    t = _tail(var)
+    return any(p in t for p in _PARTY_TAILS) and not t.endswith(("_no", "_id", "_number", "_date", "_type", "_group"))
+
+
+def _var_name(a: Any) -> Optional[str]:
+    if isinstance(a, dict) and "var" in a:
+        v = a["var"]
+        return v[0] if isinstance(v, list) else v
+    return None
+
+
+def literal_atoms(pred: Any) -> list[tuple[str, str, dict]]:
+    """[(var, literal, atom)] for string-literal comparisons ("in"/"==") anywhere in a predicate."""
+    out: list[tuple[str, str, dict]] = []
+
+    def walk(p: Any) -> None:
+        if isinstance(p, dict) and len(p) == 1:
+            op, args = next(iter(p.items()))
+            if op in ("in", "==", "===") and isinstance(args, list) and len(args) == 2:
+                a, b = args
+                va, vb = _var_name(a), _var_name(b)
+                if va and isinstance(b, str):
+                    out.append((va, b, p))
+                elif vb and isinstance(a, str):
+                    out.append((vb, a, p))
+                elif va and isinstance(b, list) and b and all(isinstance(x, str) for x in b):
+                    out.append((va, b[0], p))
+                return
+            walk(args)
+        elif isinstance(p, list):
+            for x in p:
+                walk(x)
+    walk(pred)
+    return out
+
+
+def threshold_atoms(pred: Any) -> list[tuple[str, float]]:
+    out: list[tuple[str, float]] = []
+
+    def walk(p: Any) -> None:
+        if isinstance(p, dict) and len(p) == 1:
+            op, args = next(iter(p.items()))
+            if op in (">", ">=", "<", "<=") and isinstance(args, list) and len(args) == 2:
+                v = _var_name(args[0])
+                if v and isinstance(args[1], (int, float)) and not isinstance(args[1], bool):
+                    out.append((v, float(args[1])))
+                return
+            walk(args)
+        elif isinstance(p, list):
+            for x in p:
+                walk(x)
+    walk(pred)
+    return out
+
+
+def _fmt(x: float) -> str:
+    return f"{int(x):,}" if float(x).is_integer() else f"{x:,.2f}"
+
+
+_OVER = re.compile(r"^(.*?)\s+(?:over|above|more than|greater than|exceeding|über|mehr als|plus de|au-dessus de|"
+                   r"más de|por encima de|свыше|больше|выше|более)\s", re.I)
+
+
+def _thing(g: Guardrail) -> Optional[str]:
+    """'Equipment over 5,000 is capex' → 'equipment' (the category the expert tied the limit to)."""
+    m = _OVER.search(g.text or "")
+    if not m:
+        return None
+    words = [w for w in re.findall(r"[^\W\d_][\w'-]*", m.group(1))][-3:]
+    words = [w for w in words if w.lower() not in ("any", "all", "every", "the", "a", "an", "jede", "alle", "alles")]
+    return " ".join(words).lower() or None
+
+
+def _step_of(wm: WorkMap, g: Guardrail) -> Optional[Step]:
+    return next((s for s in ordered_steps(wm) if g.id in s.guardrail_ids), None)
+
+
+def _short(v: Any, n: int = 40) -> str:
+    s = re.sub(r"\s*(\.\.\.|…)$", "", str(v or "")).strip()
+    if " - " in s:  # ERP-style "Account - COMPANY" suffix
+        s = s.rsplit(" - ", 1)[0]
+    if len(s) <= n:
+        return s
+    return s[:n].rsplit(" ", 1)[0]
+
+
+def _action_seen(wm: WorkMap, g: Guardrail) -> Optional[str]:
+    """What the expert visibly did on the step this rule guards, in plain words (template fallback)."""
+    if g.action == "hold":
+        return "You held that one."
+    st = _step_of(wm, g)
+    if st and st.decision and st.decision.to_value and st.decision.to_value.lower() not in ("continue", "yes", "no"):
+        v = _short(st.decision.to_value, 32)
+        if re.search(r"hold|on hold|angehalten|задерж", v, re.I):
+            return "You held that one."
+        return f"You moved that one to {v}."
+    return None
+
+
+def _clamp(q: str, n: Optional[int] = None) -> str:
+    n = n or CONFIG["question_words"]
+    w = q.split()
+    return q if len(w) <= n else " ".join(w[:n]).rstrip(",;:—-") + "?"
+
+
+def template_question(kind: str, wm: WorkMap, g: Optional[Guardrail], meta: dict) -> Optional[str]:
+    """Deterministic, action-first fallback wording (English; the LLM call localizes)."""
+    if g is None:
+        return None
+    act = _action_seen(wm, g)
+    lead = (act + " ") if act else ""
+    rule = _short(g.text, 70).rstrip(".")
+    if kind in ("party", "scope"):
+        lit = _short(meta.get("literal") or "", 36)
+        who = _PARTY_WORD.get(next((p for p in _PARTY_TAILS if p in _tail(meta.get("var") or "")), ""), "case")
+        owner = "" if g.owner or g.action not in ("hold", "stop_and_ask") else ", and who decides when to release it"
+        if lit:
+            return _clamp(f"{lead}Is that only for {lit}, or for every {who}{owner}?")
+        return _clamp(f"{lead}Is that for every {who}{owner}?")
+    if kind in ("kind", "threshold"):
+        th = meta.get("threshold")
+        thing = meta.get("thing") or _thing(g)
+        if th is not None and thing:
+            return _clamp(f"{lead}Does that apply to anything over {_fmt(th)}, or only {thing}?")
+        if th is not None:
+            return _clamp(f"{lead}Is {_fmt(th)} the line for every kind of case, or only some?")
+        return _clamp(f"{lead}Does “{rule}” apply to every kind of case, or only some?")
+    if kind == "owner":
+        if g.action == "hold":
+            return _clamp(f"{lead}Who decides when to release it, and what do they need to see?")
+        return _clamp(f"{lead}Who exactly do you ask, and what do you need from them?")
+    if kind == "fuzzy":
+        head = re.split(r"\s*[:—–]\s*|\s+-\s+", rule, maxsplit=1)[0].strip()
+        if head and head != rule and len(head.split()) <= 8:
+            return _clamp(f"How do you spot “{head[:1].lower() + head[1:]}” on the screen?")
+        return _clamp(f"What on the screen tells you that “{_cap_words(rule, 12)}” applies?")
+    return None
+
+
+def make_probes(wm: WorkMap) -> list[Unknown]:
+    """Rules Claros is unsure about + cases it has not seen, one primary probe per guardrail (secondary ones only
+    get asked if the debrief would otherwise end with fewer than min_questions)."""
+    have: dict[str, set[str]] = {}
+    for u in wm.open_unknowns:
+        k = (u.meta or {}).get("probe")
+        if k and u.entity:
+            have.setdefault(u.entity, set()).add("party" if k == "scope" else "kind" if k == "threshold" else k)
+        elif u.entity and u.status in OPEN_STATUSES and u.type in ("limit", "stop_and_ask", "never"):
+            have.setdefault(u.entity, set()).add("any")
+    out: list[Unknown] = []
+    for g in wm.guardrails:
+        kinds: list[tuple[str, dict]] = []
+        lits = [(v, lit) for v, lit, _ in literal_atoms(g.predicate) if _is_party_var(v)] if g.predicate else []
+        ths = threshold_atoms(g.predicate) if g.predicate else []
+        if lits:
+            kinds.append(("party", {"var": lits[0][0], "literal": lits[0][1]}))
+        if ths:
+            kinds.append(("kind", {"var": ths[0][0], "threshold": ths[0][1], "thing": _thing(g)}))
+        if g.action in ("hold", "stop_and_ask") and not g.owner:
+            kinds.append(("owner", {}))
+        if not g.predicate:
+            kinds.append(("fuzzy", {}))
+        taken = have.get(g.id, set())
+        kinds = [(k, m) for k, m in kinds if k not in taken]
+        for i, (k, m) in enumerate(kinds[:2]):
+            if "any" in taken and i == 0:
+                continue  # an open live question already covers this rule
+            utype = {"owner": "stop_and_ask", "fuzzy": "why"}.get(k, "limit")
+            u = Unknown(id=d.new_id("u"), type=utype, scope="company", entity=g.id, hypothesis=g.text,
+                        priority=0.5 - 0.1 * i, created_t=d.now_ms(),
+                        moment=g.evidence[0] if g.evidence else None,
+                        meta={"origin": "debrief", "probe": k, "secondary": i > 0, **m})
+            out.append(u)
+    # rules first in map order, secondary probes after every primary one
+    return sorted(out, key=lambda u: (bool(u.meta.get("secondary")),))
+
+
+WORDING_SYSTEM = """You write the follow-up questions an apprentice asks an expert in a short spoken debrief after
+watching them work. Each item gives the rule the expert taught (their own words in "quote"), what the expert visibly
+did ("seen"), and what the apprentice is unsure about ("kind"):
+- party: a rule tied to one named party/company — ask whether it is only that one or every one like it
+- kind / threshold: a limit — ask what distinguishes the case (does it apply to other categories over the limit too?)
+- owner: a stop/hold rule — ask who decides / releases it
+- fuzzy: a rule with no visible test — ask what on screen tells them the case applies
+- gap / why / other: ask for the missing reason
+Style: spoken, plain words, at most 25 words, action first when "seen" is given, then the question; one or two
+sentences; no lists, no ids, no field names in capitals, no JSON, never "Case 1". Write in language "{lang}".
+Examples (different domain):
+- seen "approved the hotel claim above the cap", kind party, literal "Berlin office" → "You approved that hotel claim
+  above the cap. Is that only for the Berlin office, or for every office?"
+- kind threshold 200, thing "meals" → "Does the 200 limit apply to travel costs too, or only meals?"
+- owner, seen "parked the claim" → "You parked that claim. Who decides when it can be paid, and what do they check?"
+Return JSON {{"questions": {{"<id>": "<question>"}}}}."""
+
+
+def _quotes_of(wm: WorkMap, qids: list[str]) -> list[str]:
+    qs = {q.id: q.text for q in wm.quotes}
+    return [qs[i] for i in qids if i in qs][:2]
+
+
+def _ok_question(q: Any) -> bool:
+    if not isinstance(q, str) or not q.strip():
+        return False
+    t = q.strip()
+    return len(t.split()) <= CONFIG["question_words"] + 3 and not re.search(r"[{}\[\]]|\bcase\s*\d", t, re.I) \
+        and "?" in t
+
+
+async def word_questions(wm: WorkMap, items: list[Unknown], lang: str) -> None:
+    """ONE batched LLM call for every probe/gap question that has no spoken wording yet; templates as fallback."""
+    todo = [u for u in items if not u.spoken_question or (u.meta or {}).get("origin") in ("builder", "debrief")
+            and not (u.meta or {}).get("worded")]
+    if not todo:
+        return
+    payload = []
+    for u in todo:
+        m = u.meta or {}
+        g = guardrail_by_id(wm, u.entity or "")
+        st = step_by_id(wm, u.entity or "") or (_step_of(wm, g) if g else None)
+        dec = st.decision if st and st.decision else None
+        payload.append({"id": u.id, "kind": m.get("probe") or m.get("gap") or u.type,
+                        "rule": g.text if g else (dec.description if dec else u.hypothesis),
+                        "quote": _quotes_of(wm, (g.quote_ids if g else []) + (dec.reason_quote_ids if dec else [])),
+                        "seen": (f"{dec.from_value or ''} → {dec.to_value}" if dec and dec.to_value else
+                                 ("put it on hold" if g and g.action == "hold" else None)),
+                        "step": st.title if st else None, "literal": m.get("literal"), "threshold": m.get("threshold"),
+                        "thing": m.get("thing"), "draft": u.spoken_question})
+    out = await d.chat([{"role": "system", "content": WORDING_SYSTEM.format(lang=lang)},
+                        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+                       model_role="fast", json_schema={"type": "object"})
+    got = (out or {}).get("questions") if isinstance(out, dict) else None
+    got = got if isinstance(got, dict) else {}
+    for u in todo:
+        m = u.meta if u.meta is not None else {}
+        q = got.get(u.id)
+        if _ok_question(q):
+            u.spoken_question = _clamp(q.strip(), CONFIG["question_words"] + 3)
+        elif not u.spoken_question:
+            g = guardrail_by_id(wm, u.entity or "")
+            kind = m.get("probe") or ""
+            u.spoken_question = template_question(kind, wm, g, m) if g else None
+            if not u.spoken_question:
+                st = step_by_id(wm, u.entity or "")
+                if st and st.decision and st.decision.to_value:
+                    u.spoken_question = _clamp(f"You moved that one to {_short(st.decision.to_value, 32)}. "
+                                               f"What made you do that?")
+                elif st:
+                    u.spoken_question = _clamp(f"At “{st.title}”: what do you check there, and why?")
+                else:
+                    u.spoken_question = u.hypothesis and _clamp(f"Is this right: {u.hypothesis}?")
+        m["worded"] = True
+        u.meta = m
+
+
+async def prepare(wm: WorkMap, st: "DebriefState", lang: str) -> None:
+    """Once per debrief: add probes + gap questions to the map, word every unworded question in one LLM call."""
+    st.prepared = True
+    added = make_probes(wm)
+    have = {u.entity for u in wm.open_unknowns if u.status in OPEN_STATUSES} | {u.entity for u in added}
+    gaps = [u for u in gap_unknowns(wm) if u.entity not in have and u.type == "why"]
+    for u in gaps:
+        u.spoken_question = None  # worded action-first below ("You moved that one to … What made you do that?")
+        u.meta = {"origin": "debrief", "gap": "reason"}
+    added += gaps
+    for u in added:
+        u.meta = {**(u.meta or {}), "origin": (u.meta or {}).get("origin") or "debrief"}
+    wm.open_unknowns += added
+    try:
+        await word_questions(wm, [u for u in wm.open_unknowns if u.status in OPEN_STATUSES], lang)
+    except Exception:  # noqa: BLE001
+        d.log.warning("debrief wording failed", exc_info=True)
+    await save_map(wm, st.session_id)
 
 
 def gap_unknowns(wm: WorkMap) -> list[Unknown]:
@@ -197,8 +561,6 @@ def boundary_probes(wm: WorkMap, lang: str = "en", max_n: int = 2) -> list[Unkno
 
 
 def _question(u: Unknown, lang: str, wm: Optional[WorkMap] = None) -> str:
-    if u.hypothesis and u.hypothesis_confidence >= 0.6 and u.type != "conflict":
-        return t("confirm_q", lang, h=u.hypothesis)
     if u.spoken_question:
         return u.spoken_question
     if u.hypothesis:
@@ -211,13 +573,29 @@ def budget_spent(st: DebriefState, now: Optional[float] = None) -> bool:
     return st.asked >= CONFIG["max_questions"] or ((now or d.now_ms()) - st.started_ms) / 1000 > CONFIG["max_seconds"]
 
 
-def should_stop(wm: WorkMap, st: DebriefState, expert_name: Optional[str] = None) -> bool:
-    ledger_empty = not plan(wm, expert_name=expert_name)
-    return (ledger_empty and checks_pass(wm)) or budget_spent(st) or ledger_empty
+def pick_next(wm: WorkMap, st: DebriefState, expert_id: Optional[str], expert_name: Optional[str]
+              ) -> Optional[Unknown]:
+    """Core items first (secondary probes only while fewer than min_questions were asked); then ≤learner_cap
+    learner-originated items; None → teach-back."""
+    if budget_spent(st):
+        return None
+    q = plan(wm, expert_id, expert_name, include_secondary=st.core_asked < CONFIG["min_questions"])
+    core = [u for u in q if not is_learner_item(u)]
+    if core:
+        return core[0]
+    learner = [u for u in q if is_learner_item(u)]
+    if learner and st.learner_asked < CONFIG["learner_cap"]:
+        return learner[0]
+    return None
 
 
-async def _ledger(session_id: str, wm: WorkMap, expert_name: Optional[str]) -> None:
-    q = plan(wm, expert_name=expert_name)
+def should_stop(wm: WorkMap, st: DebriefState, expert_name: Optional[str] = None,
+                expert_id: Optional[str] = None) -> bool:
+    return pick_next(wm, st, expert_id, expert_name) is None
+
+
+async def _ledger(session_id: str, wm: WorkMap, expert_name: Optional[str], expert_id: Optional[str] = None) -> None:
+    q = [u for u in plan(wm, expert_id, expert_name, include_secondary=False) if not is_learner_item(u)]
     await d.send(session_id, {"type": "ledger", "open": len(q),
                               "saved_for_later": len([u for u in wm.open_unknowns if u.status == "deferred"]),
                               "top": q[0].model_dump(mode="json") if q else None})
@@ -261,39 +639,80 @@ def _truncate(script: str, limit: int) -> str:
     return " ".join(out)
 
 
+def _first_name(wm: WorkMap, ids: list[str]) -> Optional[str]:
+    qs = {q.id: q.speaker for q in wm.quotes}
+    names = [qs[i] for i in ids if i in qs]
+    return names[0].split()[0] if names else None
+
+
+def _cap_words(s: str, n: int) -> str:
+    """At most n words, cut at the last clause break inside the limit when one leaves ≥5 words."""
+    s = re.sub(r"\s*\([^)]*\)", "", s or "").strip()  # parenthetical notes / attributions are not read back
+    w = s.split()
+    if len(w) <= n:
+        return s
+    cut = " ".join(w[:n])
+    m = list(re.finditer(r"[,;:—–]", cut))
+    if m and len(cut[:m[-1].start()].split()) >= 5:
+        return cut[:m[-1].start()].strip()
+    return cut.rstrip(",;:—-")
+
+
+_MONTHS = {"january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+           "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+
+
+def _lower_first(txt: str) -> str:
+    first = (txt.split() or [""])[0]
+    if first.lower().strip(",.") in _MONTHS or (len(first) > 1 and first[1:2].isupper()):
+        return txt
+    return txt[:1].lower() + txt[1:]
+
+
 def _template_teachback(wm: WorkMap, lang: str) -> str:
-    """Whole sentences only, within the word budget (steps first, then guardrails)."""
+    """Whole sentences only, within the word budget. Every guardrail and judgment call is said; routine steps are
+    dropped first (from the middle) when the budget is tight."""
     end = t("teach_end", lang)
-    budget = CONFIG["teachback_words"] - len(end.split())
-    out = [t("teach_intro", lang)]
-    for i, s in enumerate(ordered_steps(wm)):
+    budget = CONFIG["teachback_words"] - len(end.split()) - len(t("teach_intro", lang).split())
+    guards = []
+    for i, g in enumerate(wm.guardrails):
+        who = _first_name(wm, g.quote_ids)
+        txt = _cap_words(g.text.rstrip("."), 16)
+        guards.append(("" if i else t("watch", lang) + " ") + txt + (f" ({who})" if who and i == 0 else "") + ".")
+    steps = ordered_steps(wm)
+    sents: list[tuple[bool, str]] = []
+    for i, s in enumerate(steps):
         lead = t("first", lang) if i == 0 else t("then", lang)
-        txt = s.title
-        if s.decision and s.decision.kind == "judgment":
-            txt = s.decision.description
-        sent = f"[[step:{s.id}]] {lead}, {txt[:1].lower() + txt[1:]}."
-        if _word_count(" ".join(out + [sent])) <= budget:
-            out.append(sent)
-    watch_added = False
-    for g in wm.guardrails:
-        sent = ("" if watch_added else t("watch", lang) + " ") + g.text.rstrip(".") + "."
-        if _word_count(" ".join(out + [sent])) <= budget:
-            out.append(sent)
-            watch_added = True
+        judg = bool(s.decision and s.decision.kind == "judgment")
+        txt = _cap_words(s.decision.description if judg else s.title, 20 if judg else 9)
+        sents.append((judg, f"[[step:{s.id}]] {lead}, {_lower_first(txt)}."))
+    used = _word_count(" ".join(guards))
+    keep = list(range(len(sents)))
+    while keep and used + _word_count(" ".join(sents[i][1] for i in keep)) > budget:
+        routine = [i for i in keep if not sents[i][0] and 0 < i < len(sents) - 1] or \
+            [i for i in keep if not sents[i][0]] or keep
+        keep.remove(routine[len(routine) // 2])
+    out = [t("teach_intro", lang)] + [sents[i][1] for i in keep]
+    for g_s in guards:
+        if _word_count(" ".join(out + [g_s])) <= budget + len(t("teach_intro", lang).split()):
+            out.append(g_s)
     return " ".join(out) + " " + end
 
 
 async def teach_back(wm: WorkMap, lang: str) -> str:
     steps = [{"id": s.id, "title": s.title, "decision": s.decision.description if s.decision else None,
-              "conflict": s.conflict} for s in ordered_steps(wm)]
+              "judgment": bool(s.decision and s.decision.kind == "judgment"), "conflict": s.conflict}
+             for s in ordered_steps(wm)]
+    guards = [{"rule": g.text, "expert": _first_name(wm, g.quote_ids), "ask": g.owner} for g in wm.guardrails]
     out = await d.chat([
         {"role": "system", "content": f"Write a spoken teach-back of this workflow for the expert to confirm, in "
-                                      f"language '{lang}', at most {CONFIG['teachback_words']} words. Prefix the "
-                                      "sentence about each step with its marker [[step:<id>]]. Mention every "
-                                      "judgment call and guardrail briefly. End by asking if it's right. Plain "
-                                      "text only."},
-        {"role": "user", "content": json.dumps({"steps": steps, "guardrails": [g.text for g in wm.guardrails]},
-                                               ensure_ascii=False)}], model_role="fast")
+                                      f"language '{lang}', at most {CONFIG['teachback_words']} words (under one "
+                                      "minute). Prefix the sentence about each step with its marker [[step:<id>]]. "
+                                      "Say every judgment call and every guardrail briefly, in the expert's terms "
+                                      "(attribute a rule to the expert by first name once or twice). Routine steps "
+                                      "can be merged. End by asking if that's how it works. Plain text only."},
+        {"role": "user", "content": json.dumps({"steps": steps, "guardrails": guards}, ensure_ascii=False)}],
+        model_role="fast")
     if isinstance(out, str) and MARKER.search(out):
         known = {s.id for s in wm.steps}
         out = MARKER.sub(lambda m: m.group(0) if m.group(1) in known else "", out)
@@ -401,19 +820,38 @@ async def apply_correction(wm: WorkMap, text: str, lang: str, quote_id: Optional
     return wm, diffs
 
 
+_ACTION_WORDS = {"block_and_explain": "stop and explain", "warn": "warn", "stop_and_ask": "stop and ask",
+                 "hold": "put it on hold"}
+
+
 def diff_readback(wm: WorkMap, diffs: list[dict], lang: str) -> str:
+    """Natural speech, ONLY what changed: 'Got it — step 3 now: … Anything else, or is that how it works?'."""
     if not diffs:
         return t("nochange", lang)
-    bits = []
+    bits: list[str] = []
+    said_when = False
     for df in diffs:
-        tag = ""
+        new = df.get("new")
         if df["target"] == "step":
             s = step_by_id(wm, df["id"])
-            tag = f"[[step:{df['id']}]] " if s else ""
-        old = df["old"] if not isinstance(df["old"], (dict, list)) else json.dumps(df["old"])
-        new = df["new"] if not isinstance(df["new"], (dict, list)) else json.dumps(df["new"])
-        bits.append(f"{tag}{t('changed', lang)}: “{old or '—'}” → “{new}”.")
-    return " ".join(bits) + " " + t("right_now", lang)
+            if s is None or isinstance(new, (dict, list)) or new in (None, ""):
+                continue
+            bits.append(f"[[step:{s.id}]] " + t("step_now", lang, n=s.order, v=_short(new, 120).rstrip(".")))
+        else:
+            f = df.get("field")
+            if f == "predicate" or isinstance(new, (dict, list)):
+                if not said_when:
+                    bits.append(t("when_now", lang))
+                    said_when = True
+            elif f == "owner" and new:
+                bits.append(t("owner_now", lang, v=_short(new, 60)))
+            elif f == "action" and new:
+                bits.append(t("rule_now", lang, v=_ACTION_WORDS.get(str(new), str(new).replace("_", " "))))
+            elif new:
+                bits.append(t("rule_now", lang, v=_short(new, 120).rstrip(".")))
+    if not bits:
+        return t("nochange", lang)
+    return f"{t('got_it', lang)} " + " ".join(bits) + " " + t("anything_else", lang)
 
 
 # ---------------- exam ----------------
@@ -542,39 +980,25 @@ async def next_debrief_utterance(session: Any) -> str:
     wm = await _load(st)
     if wm is None:
         return t("no_map", lang)
-    _, ename = _expert(session)
+    eid, ename = _expert(session)
     if st.phase == "questions":
-        if not st.probed:
-            st.probed = True
-            probes = boundary_probes(wm, lang)
-            if probes:
-                wm.open_unknowns += probes
-                await save_map(wm, st.session_id)
-        q = plan(wm, expert_name=ename)
-        if not q and not checks_pass(wm) and not budget_spent(st):
-            gaps = gap_unknowns(wm)
-            if gaps:
-                wm.open_unknowns += gaps
-                await save_map(wm, st.session_id)
-                q = plan(wm, expert_name=ename)
-        if not should_stop(wm, st, ename) and q:
-            u = q[0]
+        if not st.prepared:
+            await prepare(wm, st, lang)
+        u = pick_next(wm, st, eid, ename)
+        if u is not None:
             u.status = "asked"
             st.current = u.id
             st.asked += 1
-            await _ledger(st.session_id, wm, ename)
+            if is_learner_item(u):
+                st.learner_asked += 1
+            else:
+                st.core_asked += 1
+            await _ledger(st.session_id, wm, ename, eid)
             return _question(u, lang, wm)
         st.phase = "teach_back"
     if st.phase == "teach_back":
         st.script = await teach_back(wm, lang)
         return st.script
-    if st.phase == "exam":
-        if not st.exam:
-            st.exam = make_exam(wm, lang)
-        if st.exam_idx < len(st.exam):
-            c = st.exam[st.exam_idx]
-            return t("case", lang, n=st.exam_idx + 1, v=c.variant, p=c.predicted, c=int(c.confidence * 100))
-        st.phase = "done"
     return t("done", lang)
 
 
@@ -596,6 +1020,231 @@ async def _extract_rule(u: Unknown, text: str, wm: WorkMap) -> Optional[dict]:
     return out if isinstance(out, dict) else None
 
 
+# ---- answers that fix under-specified rules ----
+
+GENERAL = re.compile(r"\b(every|all|any|each|whole|always|regardless|no matter|not only|jede[rsnm]?|alle[n]?|"
+                     r"immer|egal|nicht nur|tous|toutes|tout|chaque|n'importe|todos|todas|cualquier|siempre|"
+                     r"все|всех|любой|любых|всегда|не только)\b", re.I)
+ONLY = re.compile(r"\b(only|just|nur|seulement|uniquement|solo|solamente|только|лишь)\b", re.I)
+WHEN = re.compile(r"\b(if|when|whenever|unless|depends|only|wenn|falls|sofern|nur|si|quand|seulement|cuando|"
+                  r"solo|если|когда|только)\b", re.I)
+ROLE = re.compile(r"\b(controller|manager|supervisor|team lead|lead|cfo|director|treasurer|accountant|approver|"
+                  r"buyer|purchasing|head of [\w-]+|controllerin|vorgesetzte\w*|leiter\w*|contrôleur|responsable|"
+                  r"gerente|jefe|контролер\w*|контролёр\w*|руководител\w*|бухгалтер\w*)\b", re.I)
+CONFIRM_EXTRA = re.compile(r"\b(but|except|only|actually|instead|aber|außer|nur|eigentlich|mais|sauf|seulement|"
+                           r"plutôt|pero|excepto|solo|en realidad|но|кроме|только|вообще-то)\b", re.I)
+HOW_IT_WORKS = re.compile(r"that'?s (how it works|it|right|correct)|genau so|so ist es|c'est (ça|bien ça)|así es|"
+                          r"именно так|всё верно", re.I)
+
+PATCH_G_SCHEMA = {"type": "object", "properties": {
+    "text": {"type": "string"}, "predicate": {}, "owner": {}, "changed": {"type": "boolean"}}}
+
+
+def _allowed_vars(wm: WorkMap) -> set[str]:
+    base = set(wm.canonical_vars) | set(PRIOR_VARS)
+    return base | {k[:-5] + suf for k in wm.canonical_vars if k.endswith("_date") for suf in ("_month", "_year")}
+
+
+def _str_literals(p: Any) -> set[str]:
+    out: set[str] = set()
+    if isinstance(p, dict):
+        for k, v in p.items():
+            if k != "var":
+                out |= _str_literals(v)
+    elif isinstance(p, list):
+        for x in p:
+            out |= _str_literals(x)
+    elif isinstance(p, str):
+        out.add(p)
+    return out
+
+
+def valid_patch_predicate(wm: WorkMap, old: Any, new: Any, answer: str) -> bool:
+    """Vars must be observable; every string literal must be in the old predicate or in the expert's words."""
+    if new is None:
+        return True
+    if not isinstance(new, dict):
+        return False
+    vs = predicate_vars(new)
+    if not vs or any(v not in _allowed_vars(wm) and not v.startswith("doc.") for v in vs):
+        return False
+    try:
+        eval_predicate(new, {v: 1 for v in vs})
+    except Exception:  # noqa: BLE001
+        return False
+    old_l = {x.lower() for x in _str_literals(old)}
+    low = (answer or "").lower()
+    return all(x.lower() in old_l or x.lower() in low for x in _str_literals(new))
+
+
+def drop_atoms(pred: Any, var: Optional[str], literal: Optional[str]) -> Any:
+    """Remove string-literal atoms over `var` (or containing `literal`) from an AND/OR tree; None when empty."""
+    def is_target(a: Any) -> bool:
+        for v, lit, atom in literal_atoms(a):
+            if atom is a and ((var and v == var) or (literal and literal.lower() in json.dumps(a).lower())):
+                return True
+        return False
+
+    def walk(p: Any) -> Any:
+        if not isinstance(p, dict) or len(p) != 1:
+            return p
+        if is_target(p):
+            return None
+        op, args = next(iter(p.items()))
+        if op in ("and", "or") and isinstance(args, list):
+            kept = [x for x in (walk(a) for a in args) if x is not None]
+            if not kept:
+                return None
+            return kept[0] if len(kept) == 1 else {op: kept}
+        if op == "!":
+            inner = walk(args[0] if isinstance(args, list) else args)
+            return None if inner is None else {"!": inner}
+        return p
+    return walk(copy.deepcopy(pred))
+
+
+def _owner_from(text: str) -> Optional[str]:
+    m = ROLE.search(text or "")
+    if m:
+        return m.group(1)
+    names = re.findall(r"(?<![.!?]\s)(?<!^)\b([A-ZÄÖÜА-Я][a-zäöüßа-я]{2,})\b", text or "")
+    return names[0] if names else None
+
+
+async def patch_guardrail(wm: WorkMap, g: Guardrail, u: Unknown, text: str, q: Quote, expert_name: str,
+                          lang: str) -> list[dict]:
+    """The expert answered a probe about ONE rule: patch only that guardrail (text, predicate, owner)."""
+    m = u.meta or {}
+    kind = m.get("probe") or ""
+    before = {"text": g.text, "predicate": copy.deepcopy(g.predicate), "owner": g.owner}
+    out = await d.chat([
+        {"role": "system", "content":
+            "An expert answered a follow-up question about ONE rule of a recorded workflow. Return the minimally "
+            "patched rule as JSON {text, predicate, owner, changed}. text: the rule in the expert's terms, one "
+            "sentence, in the rule's language. predicate: json-logic that is TRUE when a new record breaks the "
+            "rule; use ONLY these vars: " + ", ".join(sorted(_allowed_vars(wm))) + ". If the answer widens a named "
+            "party/value to a whole class, remove that atom (or use a var that expresses the class); if it adds a "
+            "distinguishing condition, add it only when a var can express it; never add literals the expert did "
+            "not say; null predicate if the rule cannot be checked from those vars. owner: who decides/is asked "
+            "(null if not said). changed=false if the answer confirms the rule as it is."},
+        {"role": "user", "content": json.dumps({"rule": g.text, "predicate": g.predicate, "owner": g.owner,
+                                                "question": u.spoken_question, "probe": kind,
+                                                "literal": m.get("literal"), "answer": text}, ensure_ascii=False)}],
+        model_role="fast", json_schema=PATCH_G_SCHEMA)
+    applied = False
+    if isinstance(out, dict) and ("text" in out or "predicate" in out):
+        if out.get("changed") is False:
+            applied = True
+        else:
+            pred = out.get("predicate") if "predicate" in out else g.predicate
+            if isinstance(pred, str):
+                pred = d.parse_json(pred)
+            if valid_patch_predicate(wm, before["predicate"], pred, text):
+                if isinstance(out.get("text"), str) and out["text"].strip():
+                    g.text = out["text"].strip()
+                g.predicate = pred if isinstance(pred, dict) else None
+                if isinstance(out.get("owner"), str) and out["owner"].strip():
+                    g.owner = out["owner"].strip()
+                applied = True
+    if not applied:  # deterministic fallback
+        first = (expert_name or "").split()[0] if expert_name else ""
+        note = f" ({first}: “{_short(text, 90)}”)" if first else f" (“{_short(text, 90)}”)"
+        widen = GENERAL.search(text or "") and not ONLY.search(text or "")
+        if kind in ("party", "scope") and widen:
+            g.predicate = drop_atoms(g.predicate, m.get("var"), m.get("literal")) if g.predicate else None
+            g.text = g.text.rstrip(".") + note
+        elif kind in ("kind", "threshold") and (ONLY.search(text or "") or WHEN.search(text or "") or
+                                                re.search(r"\b(not|never|except|nicht|kein\w*|sauf|no|не|кроме)\b",
+                                                          text or "", re.I)) and len(text.split()) >= 4:
+            g.text = g.text.rstrip(".") + note  # a distinguishing condition the predicate cannot express yet
+        elif kind == "fuzzy" and len(text.split()) >= 4:
+            g.text = g.text.rstrip(".") + note  # how the expert spots the case: the fuzzy judge reads it
+        if g.action in ("hold", "stop_and_ask") and not g.owner and kind in ("owner", "party", "scope"):
+            g.owner = _owner_from(text) or g.owner
+    g.fuzzy = not g.predicate
+    g.quote_ids = list(dict.fromkeys(g.quote_ids + [q.id]))
+    diffs = []
+    for f in ("text", "predicate", "owner"):
+        if getattr(g, f) != before[f]:
+            g.approved = False
+            diffs.append({"target": "guardrail", "id": g.id, "field": f, "old": before[f], "new": getattr(g, f),
+                          "label": g.text})
+    return diffs
+
+
+async def answer_conflict(wm: WorkMap, u: Unknown, text: str, q: Quote, eid: str, ename: str) -> bool:
+    """Record this expert's reason as their attributed variant; clear the conflict when the answer says when each
+    way applies (→ decision.counterfactual). Returns True when the conflict is resolved."""
+    st_ = step_by_id(wm, u.entity or "")
+    if st_ is None:
+        return False
+    m = u.meta or {}
+    mine = next((v for v in st_.variants if v.expert_id == eid), None)
+    if mine is not None:
+        mine.reason_quote_ids = list(dict.fromkeys(mine.reason_quote_ids + [q.id]))
+    elif eid in st_.experts and st_.decision is not None and not m.get("this_did"):
+        st_.decision.reason_quote_ids = list(dict.fromkeys(st_.decision.reason_quote_ids + [q.id]))
+    else:
+        st_.variants.append(Variant(expert_id=eid, description=m.get("this_did") or
+                                    (st_.decision.description if st_.decision else st_.title),
+                                    reason_quote_ids=[q.id]))
+    explains, cond = None, None
+    out = await d.chat([
+        {"role": "system", "content": "Two experts handle the same step differently. Does this answer say WHEN each "
+                                      "way applies (a case distinction), rather than just defending one way? JSON "
+                                      "{explains_when: bool, condition: string|null} — condition = the distinction "
+                                      "in one short sentence, in the answer's language."},
+        {"role": "user", "content": json.dumps({"disagreement": st_.conflict, "question": u.spoken_question,
+                                                "answer": text}, ensure_ascii=False)}],
+        model_role="fast", json_schema={"type": "object"})
+    if isinstance(out, dict) and isinstance(out.get("explains_when"), bool):
+        explains, cond = out["explains_when"], out.get("condition")
+    if explains is None:
+        explains = bool(WHEN.search(text or "")) and len(text.split()) >= 4
+    if explains:
+        if st_.decision is not None:
+            st_.decision.counterfactual = (cond if isinstance(cond, str) and cond.strip() else text).strip()
+        st_.conflict = None
+        for o in wm.open_unknowns:  # the mirrored side (legacy pairs) is settled too
+            if o.id != u.id and o.type == "conflict" and o.entity == u.entity and o.status in OPEN_STATUSES:
+                o.status, o.resolution, o.resolution_source = "resolved", text, "expert"
+    return bool(explains)
+
+
+async def publish_confirmed(wm: WorkMap, sid: str, eid: str) -> bool:
+    """Explicit confirm: approve + publish. Unanswered core items are NOT left as a list: they become deferred
+    'needs a second run' (coverage stays partial). Returns True if anything needs a second run."""
+    for s in wm.steps:
+        s.approved = True
+    for g in wm.guardrails:
+        g.approved = True
+    wm.approved_by = list(dict.fromkeys(wm.approved_by + [eid]))
+    second = False
+    for u in wm.open_unknowns:
+        if (u.meta or {}).get("origin") == "debrief" and (u.meta or {}).get("secondary") and u.status == "open":
+            u.status = "dropped"  # optional extra probe, never needed
+            continue
+        if u.status in ("open", "asked") and u.scope in EXPERT_SCOPES and not is_learner_item(u):
+            u.status = "deferred"
+            u.meta = {**(u.meta or {}), "needs_second_run": True}
+            second = True
+        elif u.status == "deferred" and u.scope in EXPERT_SCOPES and not is_learner_item(u):
+            u.meta = {**(u.meta or {}), "needs_second_run": True}
+            second = True
+    await save_map(wm, sid)
+    return second
+
+
+def is_confirm(text: str, intent: Optional[str]) -> bool:
+    txt = text or ""
+    if intent == "correction" or NO.search(txt):
+        return False
+    extra = CONFIRM_EXTRA.search(txt) and len(txt.split()) > 6
+    if extra:
+        return False
+    return intent == "confirm" or bool(YES.search(txt)) or bool(HOW_IT_WORKS.search(txt))
+
+
 async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] = None) -> str:
     st = get_state(session)
     lang = d.lang_of(session)
@@ -613,6 +1262,7 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
         if u is not None:
             if intent == "not_now" or SKIP.search(text or ""):
                 u.status = "deferred"
+                u.meta = {**(u.meta or {}), "skipped": True}
             else:
                 q = _quote(session, text, lang)
                 wm.quotes.append(q)
@@ -620,46 +1270,25 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
                 u.answer_utterance_ids.append(q.id)
                 ev = Moment(session_id=sid, keyframe_ids=list(u.moment.keyframe_ids) if u.moment else [],
                             t=q.t, utterance_ids=[q.id])
-                _link_answer(wm, u, q, ev)
-                rule = await _extract_rule(u, text, wm)
-                if rule:
-                    u.extracted_rule = ExtractedRule(**{k: (str(rule[k]) if rule.get(k) is not None else None)
-                                                        for k in ("condition", "threshold", "action", "escalate_to")})
-                    pred = rule.get("predicate") if isinstance(rule.get("predicate"), dict) else None
-                    if pred and not all(v in wm.canonical_vars or v.startswith("doc.") or v in PRIOR_VARS
-                                            for v in predicate_vars(pred)):
-                        rule["predicate"] = None  # unobservable vars would never evaluate on a learner screen
-                    dup = _similar_guardrail(wm, rule.get("guardrail_text") or "", text) \
-                        if rule.get("guardrail_text") else None
-                    if dup is not None:  # same rule restated (e.g. "the controller, Frank, approves UK invoices")
-                        dup.quote_ids = list(dict.fromkeys(dup.quote_ids + [q.id]))
-                        if rule.get("escalate_to") and not dup.owner:
-                            dup.owner = rule["escalate_to"]
-                    elif rule.get("guardrail_text") and not guardrail_by_id(wm, u.entity or ""):
-                        g = Guardrail(id=d.new_id("g"), text=rule["guardrail_text"], quote_ids=[q.id],
-                                      predicate=rule.get("predicate") if isinstance(rule.get("predicate"), dict)
-                                      else None, evidence=[ev], experts=[eid],
-                                      action="stop_and_ask" if u.type == "stop_and_ask" else "block_and_explain",
-                                      owner=rule.get("escalate_to"))
-                        g.fuzzy = g.predicate is None
-                        wm.guardrails.append(g)
-                        step = step_by_id(wm, u.entity or "")
-                        if step:
-                            step.guardrail_ids.append(g.id)
+                g_probe = guardrail_by_id(wm, u.entity or "") if (u.meta or {}).get("probe") else None
+                if u.type == "conflict":
+                    await answer_conflict(wm, u, text, q, eid, ename)
+                elif g_probe is not None:
+                    await patch_guardrail(wm, g_probe, u, text, q, ename, lang)
+                    if ev.keyframe_ids:
+                        g_probe.evidence.append(ev)
+                else:
+                    _link_answer(wm, u, q, ev)
+                    await _rule_from_answer(wm, u, text, q, ev, eid)
             await save_map(wm, sid)
         nxt = await next_debrief_utterance(session)
         return f"{t('thanks', lang)} {nxt}"
 
     if st.phase == "teach_back":
-        if intent == "confirm" or (intent is None and YES.search(text or "") and not NO.search(text or "")):
-            for s in wm.steps:
-                s.approved = True
-            for g in wm.guardrails:
-                g.approved = True
-            wm.approved_by = list(dict.fromkeys(wm.approved_by + [eid]))
-            await save_map(wm, sid)
-            st.phase = "exam"
-            return f"{t('exam_intro', lang)} {await next_debrief_utterance(session)}"
+        if is_confirm(text, intent):
+            second = await publish_confirmed(wm, sid, eid)
+            st.phase = "done"
+            return t("done_partial" if second else "done", lang)
         q = _quote(session, text, lang)
         wm.quotes.append(q)
         wm, diffs = await apply_correction(wm, text, lang, q.id)
@@ -669,20 +1298,37 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
                 await d.send(sid, {"type": "highlight_step", "step_id": df["id"]})
         return diff_readback(wm, diffs, lang)
 
-    if st.phase == "exam" and st.exam_idx < len(st.exam):
-        c = st.exam[st.exam_idx]
-        ok = intent == "confirm" or (intent is None and YES.search(text or "") and not NO.search(text or ""))
-        c.expert_verdict = "correct" if ok else "wrong"
-        if not ok:
-            c.correction = NO.sub("", text or "").strip(" ,.") or None
-        wm.exam.append(c)
-        st.exam_idx += 1
-        await save_map(wm, sid)
-        prefix = t("thanks", lang) if ok else t("noted", lang)
-        return f"{prefix} {await next_debrief_utterance(session)}"
-
     st.phase = "done"
     return t("done", lang)
+
+
+async def _rule_from_answer(wm: WorkMap, u: Unknown, text: str, q: Quote, ev: Moment, eid: str) -> None:
+    """A live leftover / gap answer may state a new rule: restated rules are merged, new ones become guardrails."""
+    rule = await _extract_rule(u, text, wm)
+    if not rule:
+        return
+    u.extracted_rule = ExtractedRule(**{k: (str(rule[k]) if rule.get(k) is not None else None)
+                                        for k in ("condition", "threshold", "action", "escalate_to")})
+    pred = rule.get("predicate") if isinstance(rule.get("predicate"), dict) else None
+    if pred and not all(v in wm.canonical_vars or v.startswith("doc.") or v in PRIOR_VARS
+                        for v in predicate_vars(pred)):
+        rule["predicate"] = None  # unobservable vars would never evaluate on a learner screen
+    dup = _similar_guardrail(wm, rule.get("guardrail_text") or "", text) if rule.get("guardrail_text") else None
+    if dup is not None:  # same rule restated (e.g. "the controller, Frank, approves UK invoices")
+        dup.quote_ids = list(dict.fromkeys(dup.quote_ids + [q.id]))
+        if rule.get("escalate_to") and not dup.owner:
+            dup.owner = rule["escalate_to"]
+    elif rule.get("guardrail_text") and not guardrail_by_id(wm, u.entity or ""):
+        g = Guardrail(id=d.new_id("g"), text=rule["guardrail_text"], quote_ids=[q.id],
+                      predicate=rule.get("predicate") if isinstance(rule.get("predicate"), dict) else None,
+                      evidence=[ev], experts=[eid],
+                      action="stop_and_ask" if u.type == "stop_and_ask" else "block_and_explain",
+                      owner=rule.get("escalate_to"))
+        g.fuzzy = g.predicate is None
+        wm.guardrails.append(g)
+        step = step_by_id(wm, u.entity or "")
+        if step:
+            step.guardrail_ids.append(g.id)
 
 
 def _toks(s: str) -> set[str]:

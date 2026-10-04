@@ -236,7 +236,7 @@ async def test_debrief_flow(env):
     r = await debrief.handle_debrief_answer(sess, "Yes, that's how it works")
     assert "Case" not in r and st.phase == "done" and "published" in r
     final = common.load_map("wf_ap_invoice")
-    assert "u_anna" in final.approved_by and not final.exam and all(g.approved for g in final.guardrails)
+    assert "u_anna" in final.approved_by and len(final.exam) == len(fx().exam) and all(g.approved for g in final.guardrails)
     # the skipped question is not left as a list: it needs a second run
     assert next(u for u in final.open_unknowns if u.spoken_question == "Why cost center 0400?").meta.get(
         "needs_second_run")
