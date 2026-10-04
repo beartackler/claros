@@ -50,6 +50,9 @@ class GateState:
     off_record: bool = False
     grace_until: float = 0.0
     boundary_t: float = 0.0
+    boundary_kind: Optional[str] = None
+    sig_last: Optional[tuple] = None
+    sig_t: float = 0.0
     last_decide_t: float = 0.0
     last_reasons: Optional[tuple] = None
     log: deque = field(default_factory=lambda: deque(maxlen=300))
@@ -120,6 +123,7 @@ class Gate:
             view = (d.get("summary") or "").lower()
             if k in ("save", "submit") or (k == "navigate" and ("list" in view or "liste" in view or "спис" in view)):
                 s.boundary_t = deps.now_ms()
+                s.boundary_kind = k if k in ("save", "submit") else "list"
 
     def snooze(self, sid: str, ms: Optional[float] = None) -> None:
         self.st(sid).snooze_until = deps.now_ms() + (ms or self.cfg.snooze_ms)
@@ -283,13 +287,73 @@ class Gate:
                 pass
             lg.mark_asked(u.id)
             s.asks.append(now)
-            await deps.send(sid, {"type": "ask", "unknown_id": u.id, "text": u.spoken_question})
+            why = self.why(sid, lg, u, now)
+            lg.meta.setdefault(u.id, {})["why"] = why
+            entry["why"] = why
+            await deps.send(sid, {"type": "ask", "unknown_id": u.id, "text": u.spoken_question, "why": why})
+            await self.emit_signals(sid, now, force=True)
             await lg.emit()
         elif ch == "defer":
             u.status = "deferred"
             await lg.emit()
         self._log(sid, entry)
         return entry
+
+    # ---------- "how Claros decided" (contract v2.2) ----------
+    def signal_values(self, sid: str, now: float) -> dict:
+        s, c = self.st(sid), self.cfg
+        silence = 0 if s.speaking else int(min(600_000.0, max(0.0, now - (s.last_speech_t or 0.0))))
+        return {"silence_ms": silence, "screen_settled_ms": int(max(0.0, now - s.last_change_t)),
+                "typing": bool(s.activity == "typing" and now - s.activity_t < 5000),
+                "boundary": s.boundary_kind if s.boundary_kind and now - s.boundary_t < c.boundary_bonus_ms else None}
+
+    def why(self, sid: str, lg: Any, u: Any, now: float) -> dict:
+        sig = self.signal_values(sid, now)
+        quiet_s = min(sig["silence_ms"], sig["screen_settled_ms"]) / 1000
+        b = sig["boundary"]
+        when = (f"pause after {'going back to the list' if b == 'list' else b.capitalize()} · {quiet_s:.1f} s quiet"
+                if b else f"pause · {quiet_s:.1f} s quiet")
+        m = lg.meta.get(u.id, {})
+        e = m.get("event")
+        k = getattr(e, "kind", None)
+        if m.get("synthetic"):
+            what = "no stop rule heard yet"
+        elif u.type == "limit":
+            what = "an amount near a round limit"
+        elif k == "hold":
+            what = "you put a record on hold"
+        elif k == "escalate":
+            what = "you sent it for approval"
+        elif k == "reject":
+            what = "you rejected a record"
+        elif k == "undo" or m.get("class") == "slip":
+            what = "you undid a change"
+        elif m.get("class") == "judgment":
+            what = "you changed a pre-filled value"
+        else:
+            what = "something you did on screen"
+        return {"when": when, "signals": sig, "what": what, "scope": u.scope}
+
+    async def emit_signals(self, sid: str, now: Optional[float] = None, force: bool = False) -> Optional[dict]:
+        """ws.out `signals` for the live indicator: only on change (≤2/s), plus a 5 s heartbeat."""
+        now = now if now is not None else deps.now_ms()
+        s, c = self.st(sid), self.cfg
+        typing = bool(s.activity == "typing" and now - s.activity_t < 5000)
+        screen = "away" if s.activity == "away" else ("changing" if now - s.last_change_t < c.settle_ms else "settled")
+        last_ask = s.asks[-1] if s.asks else None
+        if last_ask is not None and (now - last_ask < 8000 or (s.agent_mode == "speaking" and now - last_ask < 20_000)):
+            g = "asking"
+        else:
+            bl = [r for r in self.blockers(sid, now) if not r.startswith(("budget", "min gap"))]
+            g = "quiet" if bl else "ready"
+        cur = (typing, bool(s.speaking), screen, g)
+        changed = cur != s.sig_last
+        if not force and not (changed and now - s.sig_t >= 500) and not (now - s.sig_t >= 5000):
+            return None
+        s.sig_last, s.sig_t = cur, now
+        msg = {"type": "signals", "typing": typing, "speaking": bool(s.speaking), "screen": screen, "gate": g}
+        await deps.send(sid, msg)
+        return msg
 
     # ---------- ticker ----------
     def _ensure_ticker(self) -> None:
@@ -312,6 +376,11 @@ class Gate:
                     await self.evaluate(sid)
                 except Exception:  # noqa: BLE001
                     deps.log.exception("gate evaluate failed")
+                if getattr(sess, "mode", "capture") in ("capture", "debrief"):
+                    try:
+                        await self.emit_signals(sid)
+                    except Exception:  # noqa: BLE001
+                        deps.log.debug("signals failed", exc_info=True)
 
     def decisions(self, sid: str) -> list[dict]:
         return list(self.st(sid).log)

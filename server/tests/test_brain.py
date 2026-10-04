@@ -131,12 +131,12 @@ def test_ledger_opens_and_closes_unknowns(offline):
     assert "why" in types and "limit" in types
     lim = next(u for u in opened if u.type == "limit")
     assert lim.hypothesis and "5,000" in lim.hypothesis and lim.hypothesis_confidence >= 0.7
-    assert "is that your rule" in lim.spoken_question
+    assert lim.spoken_question.startswith("That one is close to 5,000")
     for u in opened:
-        assert len(u.spoken_question.split()) <= 15
+        assert len(u.spoken_question.split()) <= 22
         assert u.scope in ("company", "personal_judgment") and u.status == "open"
     why = next(u for u in opened if u.type == "why")
-    assert "0400" in why.spoken_question
+    assert why.spoken_question == "You changed the cost center to 0400 — what made you do that?"
     # ledger message emitted
     assert any(m[2].get("type") == "ledger" and m[2]["open"] == 2 for m in offline.sent if m[1] == "ws.out")
     # dedupe: same edit again does not open new unknown
@@ -409,7 +409,7 @@ def test_hypothesis_first_confirm(offline, monkeypatch):
     lg = ledger_mod.get_ledger("h1")
     u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
     assert u.hypothesis_confidence >= 0.7 and "0400" in u.hypothesis
-    assert "is that your rule" in u.spoken_question
+    assert u.spoken_question.startswith("You changed the cost center to 0400 — is it because")
     assert lg.meta[u.id]["tag"] == "opportunistic"
 
 
@@ -421,7 +421,7 @@ def test_hypothesis_spread_keeps_open_why(offline, monkeypatch):
     monkeypatch.setattr(deps, "llm_chat", llm)
     lg = ledger_mod.get_ledger("h2")
     u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
-    assert u.hypothesis_confidence < 0.7 and u.spoken_question.startswith("Why")
+    assert u.hypothesis_confidence < 0.7 and u.spoken_question.startswith("You changed the cost center")
 
 
 # ---------------- integration: debrief / learn / phase ----------------
@@ -505,4 +505,4 @@ def test_first_ask_never_uses_truncated_or_fragment_values(offline):
     lg2 = ledger_mod.get_ledger("s_frag")
     opened = run(lg2.on_events([ev(1, "edit", field="Cost Center", old="Administration - Ol", new="Ol", source="typed")]))
     q = opened[0].spoken_question
-    assert q == "Why this Cost Center here?"
+    assert q == "You changed the cost center — what made you do that?"

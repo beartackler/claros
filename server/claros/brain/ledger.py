@@ -297,8 +297,7 @@ class Ledger:
         lang = self.lang()
         u = Unknown(id=f"u_{uuid.uuid4().hex[:10]}", type="stop_and_ask", scope="company",
                     about_event_ids=[e.id], entity=e.entity_id or e.entity_type,
-                    spoken_question=L.clamp_words(L.fill("never_generic", lang,
-                                                         e=e.entity_type or e.entity_id or "this")),
+                    spoken_question=L.clamp_words(L.fill("submit_guard", lang, L.ACTION_TEMPLATES), 22),
                     created_t=now, expires_t=now + EXPIRE_MS,
                     moment=Moment(session_id=self.session_id, keyframe_ids=[e.keyframe_id] if e.keyframe_id else [],
                                   t=e.t))
@@ -354,30 +353,64 @@ class Ledger:
                     out += [str(r[i]) for r in tb.get("rows") or [] if isinstance(r, list) and len(r) > i and r[i]]
         return list(dict.fromkeys(out))
 
-    def make_question(self, u: Unknown, e: Optional[ScreenEvent]) -> str:
+    def _action_parts(self, u: Unknown, e: Optional[ScreenEvent]) -> tuple[str, dict]:
+        """Which action template fits this unknown + the template slots (plain-word field, speakable value...)."""
+        m = self.meta.get(u.id, {})
         lang = self.lang()
-        f = _ui_text((e.field or e.canonical) if e else None)
-        raw = (e.new if e and e.new not in (None, "") else (e.old if e else None)) if e else None
-        full = self.full_values(e)
-        v = speakable_value(raw, full) if raw else None
-        if v is None and e is not None and not e.field:
-            v = speakable_value(e.summary)  # status/tag events: the summary is the value
+        if m.get("synthetic"):
+            return "submit_guard", {}
+        th = m.get("threshold")
+        if u.type == "limit" and th:
+            return "limit", {"th": L.fmt_num(th, lang)}
+        if e is None:
+            return "generic", {"n": "that one"}
+        n = record_noun(e, lang)
+        f = plain_label(e.field or e.canonical)
+        k = e.kind
+        if k == "undo" or m.get("class") == "slip":
+            return ("undo", {"f": f}) if f else ("generic", {"n": n})
+        if k == "hold":
+            return "hold", {"n": n}
+        if k == "escalate":
+            second = re.search(r"second|zweit|deuxi|segund|втор", f"{e.new or ''} {e.summary or ''}", re.I)
+            return "escalate", {"n": n, "appr": L.APPROVAL_WORDS["second" if second else "plain"]}
+        if k == "reject":
+            return "reject", {"n": n}
+        if k == "approve":
+            return "approve", {"n": n}
+        if k in ("edit", "select") and f:
+            raw = e.new if e.new not in (None, "") else e.old
+            v = speakable_value(raw, self.full_values(e)) if raw else None
+            return ("edit", {"f": f, "v": v}) if v else ("edit_nov", {"f": f})
+        return "generic", {"n": n}
+
+    def make_question(self, u: Unknown, e: Optional[ScreenEvent]) -> str:
+        """Action-phrased question: what the expert DID in plain words, then why (never a raw field dump or a
+        truncated value). LLM phrasing (meta llm_q / action) wins when it passed validation; templates otherwise."""
+        lang = self.lang()
+        m = self.meta.get(u.id, {})
+        key, kw = self._action_parts(u, e)
+        if key in ("limit", "submit_guard"):
+            return L.clamp_words(L.fill(key, lang, L.ACTION_TEMPLATES, **kw), 22)
         if u.hypothesis and u.hypothesis_confidence >= 0.7:
-            q = L.fill("confirm", lang, h=u.hypothesis)
-        elif v is None and f:
-            # never speak a truncated / OCR-fragment value: fall back to the field label
-            q = L.fill("why_field", lang, f=f)
-        else:
-            key = u.type if u.type in L.Q_TEMPLATES else "why"
-            q = L.fill(key, lang, f=f or "this", v=v or "this", e=u.entity or "this")
-        return L.clamp_words(q, 15)
+            clause = m.get("action")
+            if not clause and key in L.ACTION_CLAUSES:
+                clause = L.fill(key, lang, L.ACTION_CLAUSES, **kw)
+            if clause:
+                h = u.hypothesis.strip().rstrip(".?!")
+                h = h[:1].lower() + h[1:] if h[:2] != h[:2].upper() else h
+                return L.clamp_words(L.fill("confirm", lang, L.ACTION_TEMPLATES, a=clause.rstrip(" .—-"), h=h), 22)
+            return L.clamp_words(L.fill("confirm", lang, h=u.hypothesis), 22)
+        if m.get("llm_q"):
+            return m["llm_q"]
+        return L.clamp_words(L.fill(key, lang, L.ACTION_TEMPLATES, **kw), 22)
 
     def refresh_question(self, u: Unknown) -> None:
         """Right before speaking: re-read the asked value from the CURRENT screen (vision often fixes an OCR
-        glyph the event captured, e.g. '… - OPF' → '… - OPP')."""
+        glyph the event captured, e.g. '… - OPF' → '… - OPP'). LLM-phrased questions passed the fragment check."""
         m = self.meta.get(u.id, {})
         e = m.get("event")
-        if e is None or not e.field or not e.new or (u.hypothesis and u.hypothesis_confidence >= 0.7):
+        if e is None or not e.field or not e.new or m.get("llm_q") or (u.hypothesis and u.hypothesis_confidence >= 0.7):
             return
         try:
             from claros.perception import current_state
@@ -390,6 +423,40 @@ class Ledger:
         cur = next((f.value for f in st.fields if f.label == e.field and f.value), None)
         if cur and cur != e.new and _same_text(e.new, cur):
             u.spoken_question = self.make_question(u, e.model_copy(update={"new": cur}))
+
+    async def _phrase(self, u: Unknown, e: ScreenEvent) -> None:
+        """GLM (fast) phrases the expert's action like a colleague would ("You moved that one to capex — what made
+        you do that?"). Validated; any failure keeps the deterministic template."""
+        key, kw = self._action_parts(u, e)
+        if key in ("limit", "submit_guard"):
+            return
+        lang = self.lang()
+        raw_new = e.new if e.new not in (None, "") else None
+        payload = {"event_kind": e.kind, "field": plain_label(e.field or e.canonical),
+                   "old": speakable_value(e.old, self.full_values(e)) if e.old else None,
+                   "new": speakable_value(raw_new, self.full_values(e)) if raw_new else None,
+                   "summary": e.summary, "record_kind": e.entity_type, "question_type": u.type,
+                   "recent": [x.summary for x in self.events[-4:] if x.summary and x.id != e.id]}
+        sys = ("An apprentice watched an expert work on screen and will ask ONE short spoken question about what the "
+               "expert just did. Describe the ACTION in plain colleague words, second person, past tense — its "
+               "business meaning, not raw field names or codes (e.g. 'You moved that one to capex', 'You put that "
+               "invoice on hold', 'You sent that one for a second approval'). Then ask why in a few words. Never "
+               "include record ids, cut-off text, ALL-CAPS labels or account suffixes; never guess the reason. "
+               f"Language: {L.LANG_NAMES.get(lang, 'English')}. Reply JSON {{\"action\": \"<≤10 words>\", "
+               "\"question\": \"<action> — <short why question>?\"}, question ≤20 words.")
+        try:
+            txt = await asyncio.wait_for(deps.llm_chat(
+                [{"role": "system", "content": sys}, {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+                model_role="fast", json_schema={"type": "object"}, temperature=0.3), 4.0)
+        except Exception:  # noqa: BLE001
+            return
+        d = systemone._parse_json(txt) if txt else None
+        if not isinstance(d, dict):
+            return
+        q, a = valid_phrasing(d.get("question"), d.get("action"), lang)
+        if q:
+            m = self.meta.setdefault(u.id, {})
+            m["llm_q"], m["action"] = q, a
 
     def _ctx(self, e: ScreenEvent) -> dict:
         return {"app": e.app, "entity_type": e.entity_type, "field": e.field, "value": e.new,
@@ -458,13 +525,23 @@ class Ledger:
                 u.resolution_source = note.source
                 u.expires_t = None
                 self.context_notes.append(note)
+                await deps.send(self.session_id, looked_up_msg(u, e, note))
             else:
                 u.scope = "company" if u.type in GUARDRAIL_TYPES else "personal_judgment"
         if u.status == "open" and u.scope in EXPERT_SCOPES:
-            try:
-                await asyncio.wait_for(self._hypothesize(u, e), 8.0)
-            except Exception:  # noqa: BLE001
-                deps.log.debug("hypothesis sampling failed", exc_info=True)
+            async def hyp() -> None:
+                try:
+                    await asyncio.wait_for(self._hypothesize(u, e), 8.0)
+                except Exception:  # noqa: BLE001
+                    deps.log.debug("hypothesis sampling failed", exc_info=True)
+
+            async def phrase() -> None:
+                try:
+                    await self._phrase(u, e)
+                except Exception:  # noqa: BLE001
+                    deps.log.debug("question phrasing failed", exc_info=True)
+            await asyncio.gather(hyp(), phrase())
+            u.spoken_question = self.make_question(u, e)
         self.meta.setdefault(u.id, {})["tag"] = self.tag(u)
         if u.status == "open":
             now = deps.now_ms()
@@ -588,6 +665,71 @@ class Ledger:
         for u in self.unknowns.values():
             if u.status in ("open", "asked"):
                 u.status = "deferred"
+
+
+def plain_label(label: Optional[str]) -> Optional[str]:
+    """'Expense Head *' → 'expense head', 'PRIORITY' → 'priority'; short acronyms (VAT, PO) stay."""
+    t = _ui_text(label)
+    if not t:
+        return None
+    t = re.sub(r"\s*\[\d+\]$", "", t).strip()
+    words = [w if (w.isupper() and len(w) <= 4) else w.lower() for w in t.split()]
+    return " ".join(words) or None
+
+
+def record_noun(e: Optional[ScreenEvent], lang: str = "en") -> str:
+    """'that invoice' / 'that ticket' (English only; other languages use the template's own pronoun)."""
+    if (lang or "en")[:2] != "en" or e is None or not e.entity_type:
+        return "that one"
+    w = re.sub(r"[^A-Za-z ]", " ", e.entity_type).split()
+    w = w[-1].lower() if w else ""
+    return f"that {w}" if 3 <= len(w) <= 14 and w not in ("form", "list", "view", "record", "page") else "that one"
+
+
+_ALLCAPS = re.compile(r"\b[A-ZÄÖÜА-ЯЁ]{5,}\b")
+_IDLIKE = re.compile(r"\b[A-Z]{2,}[-/][\w-]*\d")
+_FRAG = re.compile(r"\s[-–]\s?[A-Z]{2,4}\b")
+
+
+def valid_phrasing(q: Any, a: Any, lang: str = "en") -> tuple[Optional[str], Optional[str]]:
+    """Accept an LLM-phrased question only if it speaks like a colleague: ends with '?', ≤22 words, no ellipsis /
+    ALL-CAPS label / record id / ERP suffix fragment, and (English) starts with 'You '."""
+    if not isinstance(q, str) or not isinstance(a, str):
+        return None, None
+    q, a = re.sub(r"\s+", " ", q).strip(), re.sub(r"\s+", " ", a).strip().rstrip(".?!—- ")
+    if not q.endswith("?") or not a or len(q.split()) > 22 or len(a.split()) > 12:
+        return None, None
+    for bad in (_ALLCAPS, _IDLIKE, _FRAG):
+        if bad.search(q) or bad.search(a):
+            return None, None
+    if "..." in q or "…" in q or "⟦" in q:
+        return None, None
+    if (lang or "en")[:2] == "en" and not (q.startswith("You ") and a.startswith("You ")):
+        return None, None
+    return q, a
+
+
+def note_source(src: Optional[str]) -> dict:
+    """ContextNote.source → looked_up.source {kind, title, url?}."""
+    s = (src or "").strip()
+    if s.startswith("app_docs:"):
+        s = s[len("app_docs:"):]
+    if s.startswith("http"):
+        from urllib.parse import urlparse
+        u = urlparse(s)
+        tail = [p for p in u.path.split("/") if p][-1:] if u.path else []
+        title = (u.hostname or "docs") + (f" › {tail[0].replace('-', ' ').replace('_', ' ')}" if tail else "")
+        return {"kind": "app_docs", "title": title, "url": s}
+    if s.startswith("onet:"):
+        return {"kind": "onet", "title": f"O*NET {s[5:]}"}
+    return {"kind": "general", "title": "General knowledge"}
+
+
+def looked_up_msg(u: Unknown, e: Optional[ScreenEvent], note: ContextNote) -> dict:
+    ans = note.text if len(note.text) <= 300 else note.text[:299].rsplit(" ", 1)[0] + "…"
+    return {"type": "looked_up", "unknown_id": u.id,
+            "unknown_summary": u.spoken_question or (e.summary if e else None) or u.type,
+            "answer": ans, "source": note_source(note.source)}
 
 
 _TRUNC = re.compile(r"\s*(\.\.\.|…)\s*$")

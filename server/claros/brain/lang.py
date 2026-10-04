@@ -138,6 +138,82 @@ Q_TEMPLATES: dict[str, dict[str, str]] = {
                       "ru": "Когда перед отправкой {e} вы бы остановились и спросили?"},
 }
 
+# Action-phrased live questions (contract v2.2): describe what the expert DID in plain words, then ask why.
+# {f}=field label (plain case), {v}=speakable value, {th}=round threshold, {n}=record noun ("that one"/"that invoice"),
+# {a}=action clause, {h}=hypothesis
+ACTION_TEMPLATES: dict[str, dict[str, str]] = {
+    "edit": {"en": "You changed the {f} to {v} — what made you do that?",
+             "de": "Sie haben {f} auf {v} geändert — warum?",
+             "fr": "Vous avez changé {f} en {v} — qu'est-ce qui vous a fait faire ça ?",
+             "es": "Cambió {f} a {v} — ¿qué le hizo decidir eso?",
+             "ru": "Вы поменяли {f} на {v} — почему?"},
+    "edit_nov": {"en": "You changed the {f} — what made you do that?",
+                 "de": "Sie haben {f} geändert — warum?",
+                 "fr": "Vous avez changé {f} — qu'est-ce qui vous a fait faire ça ?",
+                 "es": "Cambió {f} — ¿qué le hizo decidir eso?",
+                 "ru": "Вы поменяли {f} — почему?"},
+    "hold": {"en": "You put {n} on hold — what made you do that? Who decides when it's released?",
+             "de": "Sie haben das zurückgehalten — warum? Wer entscheidet über die Freigabe?",
+             "fr": "Vous l'avez mis en attente — pourquoi ? Qui décide de le débloquer ?",
+             "es": "Lo dejó en espera — ¿por qué? ¿Quién decide cuándo liberarlo?",
+             "ru": "Вы поставили это на удержание — почему? Кто решает, когда его отпустить?"},
+    "escalate": {"en": "You sent {n} for {appr} — what made you do that?",
+                 "de": "Sie haben das zur Freigabe geschickt — warum?",
+                 "fr": "Vous l'avez envoyé pour approbation — pourquoi ?",
+                 "es": "Lo envió a aprobación — ¿por qué?",
+                 "ru": "Вы отправили это на согласование — почему?"},
+    "approve": {"en": "You approved {n} — what did you check before that?",
+                "de": "Sie haben das freigegeben — was haben Sie vorher geprüft?",
+                "fr": "Vous l'avez approuvé — qu'avez-vous vérifié avant ?",
+                "es": "Lo aprobó — ¿qué comprobó antes?",
+                "ru": "Вы это одобрили — что вы проверили перед этим?"},
+    "reject": {"en": "You rejected {n} — what would you never let through?",
+               "de": "Sie haben das abgelehnt — was würden Sie nie durchlassen?",
+               "fr": "Vous l'avez rejeté — que ne laisseriez-vous jamais passer ?",
+               "es": "Lo rechazó — ¿qué nunca dejaría pasar?",
+               "ru": "Вы это отклонили — что вы никогда не пропустите?"},
+    "undo": {"en": "You undid the {f} — slip, or on purpose?",
+             "de": "Sie haben {f} rückgängig gemacht — Versehen oder Absicht?",
+             "fr": "Vous avez annulé {f} — erreur ou exprès ?",
+             "es": "Deshizo {f} — ¿error o a propósito?",
+             "ru": "Вы отменили {f} — случайно или намеренно?"},
+    "limit": {"en": "That one is close to {th} — is there a limit there? What happens above it?",
+              "de": "Das liegt nahe bei {th} — gibt es da eine Grenze? Was passiert darüber?",
+              "fr": "C'est proche de {th} — y a-t-il une limite ? Que se passe-t-il au-dessus ?",
+              "es": "Está cerca de {th} — ¿hay un límite ahí? ¿Qué pasa por encima?",
+              "ru": "Это около {th} — есть ли там граница? Что происходит выше?"},
+    "submit_guard": {"en": "Before you submit that one: when would you stop and ask someone?",
+                     "de": "Bevor Sie das abschicken: Wann würden Sie anhalten und jemanden fragen?",
+                     "fr": "Avant de valider : quand vous arrêteriez-vous pour demander à quelqu'un ?",
+                     "es": "Antes de enviarlo: ¿cuándo pararía a preguntar a alguien?",
+                     "ru": "Перед отправкой: когда бы вы остановились и спросили кого-то?"},
+    "generic": {"en": "You did something on {n} just now — what made you do that?",
+                "de": "Sie haben da gerade etwas gemacht — warum?",
+                "fr": "Vous venez de faire quelque chose — pourquoi ?",
+                "es": "Acaba de hacer algo ahí — ¿por qué?",
+                "ru": "Вы только что что-то сделали — почему?"},
+    "confirm": {"en": "{a} — is it because {h}?",
+                "de": "{a} — weil {h}?",
+                "fr": "{a} — est-ce parce que {h} ?",
+                "es": "{a} — ¿es porque {h}?",
+                "ru": "{a} — это потому, что {h}?"},
+}
+
+# action clause (no question) per kind — leads hypothesis-confirm questions
+ACTION_CLAUSES: dict[str, dict[str, str]] = {
+    "edit": {"en": "You changed the {f} to {v}", "de": "Sie haben {f} auf {v} geändert",
+             "fr": "Vous avez changé {f} en {v}", "es": "Cambió {f} a {v}", "ru": "Вы поменяли {f} на {v}"},
+    "edit_nov": {"en": "You changed the {f}", "de": "Sie haben {f} geändert", "fr": "Vous avez changé {f}",
+                 "es": "Cambió {f}", "ru": "Вы поменяли {f}"},
+    "hold": {"en": "You put {n} on hold", "de": "Sie haben das zurückgehalten", "fr": "Vous l'avez mis en attente",
+             "es": "Lo dejó en espera", "ru": "Вы поставили это на удержание"},
+    "escalate": {"en": "You sent {n} for {appr}", "de": "Sie haben das zur Freigabe geschickt",
+                 "fr": "Vous l'avez envoyé pour approbation", "es": "Lo envió a aprobación",
+                 "ru": "Вы отправили это на согласование"},
+}
+
+APPROVAL_WORDS = {"plain": "approval", "second": "a second approval"}
+
 HYP_TEMPLATES: dict[str, dict[str, str]] = {
     "threshold": {"en": "{f} over {th} needs review", "de": "{f} über {th} wird geprüft",
                   "fr": "{f} au-dessus de {th} est vérifié", "es": "{f} sobre {th} se revisa",
@@ -152,7 +228,7 @@ def fill(tpl_key: str, lang: str, table: dict = Q_TEMPLATES, **kw: str) -> str:
     d = table[tpl_key]
     s = d.get((lang or "en")[:2], d["en"])
     for k, v in kw.items():
-        s = s.replace("{" + k + "}", _short(v, 70 if k == "h" else 28))
+        s = s.replace("{" + k + "}", _short(v, 90 if k in ("h", "a") else 28 if k != "appr" else 40))
     return s
 
 
