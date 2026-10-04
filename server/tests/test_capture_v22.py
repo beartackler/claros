@@ -78,7 +78,7 @@ def test_requirement_guard_is_action_phrased(offline):
     lg = ledger_mod.get_ledger("p4")
     offline.clock.t += 120_000
     u = run(lg.on_events([ev(1, "submit")]))[0]
-    assert u.spoken_question == "Before you submit that one: when would you stop and ask someone?"
+    assert u.spoken_question == "On invoices like this one, when would you stop and ask someone first?"
 
 
 def test_german_session_uses_german_template(offline):

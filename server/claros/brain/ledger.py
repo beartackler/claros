@@ -265,6 +265,8 @@ class Ledger:
                 except Exception:  # noqa: BLE001
                     continue
                 self.events.append(e)
+                if e.kind == "undo":
+                    self._drop_reverted(e)
                 cls = await self.classify(e)
                 self.event_class[e.id] = cls
                 key = e.canonical or e.field
@@ -285,6 +287,18 @@ class Ledger:
             await asyncio.gather(*pending, return_exceptions=True)
             await self.emit()
         return opened
+
+    def _drop_reverted(self, e: ScreenEvent) -> None:
+        """A value that flipped and flipped back (a dropdown over another field, a misread) is not a decision:
+        drop open, not-yet-asked questions about that field (live: "why did you set the delivery terms?")."""
+        fld = e.canonical or e.field
+        if not fld:
+            return
+        ids = {x.id for x in self.events if (x.canonical or x.field) == fld and x.kind in ("edit", "select")
+               and (x.entity_id or x.entity_type) == (e.entity_id or e.entity_type)}
+        for u in self.unknowns.values():
+            if u.status == "open" and u.about_event_ids and set(u.about_event_ids) <= ids:
+                u.status = "dropped"
 
     async def _requirement_guard(self, e: ScreenEvent) -> Optional[Unknown]:
         """Ensure ≥1 guardrail-type question exists once the task reaches a boundary."""

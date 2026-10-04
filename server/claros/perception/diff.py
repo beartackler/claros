@@ -202,6 +202,9 @@ class Differ:
             if not typed:  # no spatial match at all: first change is the typed one, rest autofill
                 for i, (k, _, _) in enumerate(changes):
                     sources[k] = "typed" if i == 0 else "system"
+        # even while typing: a value appearing in / vanishing from ANOTHER field is a dropdown or popup drawn
+        # over it (live: cost-center options read as "Incoterm: Maintenance - OPP"), not an edit
+        changes = [(k, p, f) for k, p, f in changes if (p.value and f.value) or sources.get(k) == "typed"]
         ekey = cur.entity_id or ent
         for k, p, f in changes:
             hist = self.history.setdefault((ekey, k), [(prev.t, p.value)])

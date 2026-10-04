@@ -62,8 +62,7 @@ def register(bus: Any) -> None:
                 await get_ledger(sid).emit()
             if a == "end_task":
                 await announce_debrief(sid)
-            if a == "off_record_off":  # Resume tap (the mic was muted while off the record)
-                await dialog.say(sid, L.phrase("on_record", deps.session_lang(sid)), "ack")
+            # off_record_off: the web app already says "Back on the record" (saying it here too doubled it)
 
     async def on_hello(sid: str, p: Any) -> None:
         s = deps.get_session(sid)

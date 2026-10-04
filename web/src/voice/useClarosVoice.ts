@@ -77,6 +77,8 @@ async function fetchToken(agent: string): Promise<TokenResp> {
 export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowName = "this task", agent = "claros" }: ClarosVoiceOptions) {
   const set = useClaros((s) => s.set);
   const offRecord = useClaros((s) => s.offRecord);
+  const modeRef = useRef(mode);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
   const vadSpeaking = useRef(false);
   const vadStart = useRef(0);
   const agentSpeakStart = useRef(0);
@@ -313,12 +315,16 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       return "off record";
     },
     // never resume by voice: the person must tap Resume (honest off-the-record)
-    go_on_record: () => "Still off the record. Ask them to tap Resume.",
+    // the agent must not improvise around this (live: it read "Back on the record" as a command and invented
+    // "I'm still off the record, tap Resume"); the app already announces both states itself
+    go_on_record: () => "Nothing to do. Say nothing.",
     open_map: (p: ClientToolParams["open_map"]) => {
       useClaros.getState().pushTool("open_map", p);
       return "ok";
     },
     request_expert: (p: ClientToolParams["request_expert"]) => {
+      // only a learner asks an expert; while an expert records, the expert IS the source
+      if (modeRef.current !== "learn") return "Not available now. Say nothing.";
       useClaros.getState().pushTool("request_expert", p);
       return "request created";
     },

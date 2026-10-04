@@ -214,8 +214,13 @@ async def _control_turn(sid: str, mode: str, intent: str, lang: str) -> dict:
     return {"intent": intent, "action": action, "said": said}
 
 
+FILLER = re.compile(r"^\W*((mm+|hm+|uh+|um+|er+|ah+|okay|ok|yeah|so|well|hmm+|ммм?|э+|ну)\W*){1,3}$", re.I)
+
+
 async def _capture_turn(sid: str, intent: str, text: str, lang: str, pending: Any) -> dict:
     lg = get_ledger(sid)
+    if intent == "answer" and FILLER.match(text or ""):
+        return {"intent": "narration"}  # thinking noise, not the answer (live: "Mm." got "Got it, thanks")
     if intent in ("answer", "correction", "confirm"):
         target = pending or lg.last_asked(180_000)
         if target is None:
