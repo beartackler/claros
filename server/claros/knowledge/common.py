@@ -232,16 +232,22 @@ def _norm_value(f: Any) -> Any:
 
 def canonical_vars_from_state(state: ScreenState, wm: WorkMap) -> dict[str, Any]:
     """Map learner screen fields → canonical vars via field.canonical or alias labels (any language)."""
-    alias: dict[str, str] = {}
+    # one on-screen label can back several canonical vars ("Amount (EUR)" → line.amount AND invoice.amount)
+    alias: dict[str, list[str]] = {}
+    exact: dict[str, list[str]] = {}
     for canon, labels in wm.canonical_vars.items():
-        alias[norm_label(canon)] = canon
-        alias[norm_label(canon.split(".")[-1])] = canon
         for lab in labels:
-            alias[norm_label(lab)] = canon
+            exact.setdefault(norm_label(lab), []).append(canon)
+        for k in (norm_label(canon), norm_label(canon.split(".")[-1])):
+            alias.setdefault(k, []).append(canon)
     out: dict[str, Any] = {}
-    for f in state.fields:
-        canon = f.canonical or alias.get(norm_label(f.label))
-        if canon:
+    fields = sorted(state.fields, key=lambda f: f.bbox is None)  # visible values win over scrolled-off ones
+    for f in fields:
+        nl = norm_label(re.sub(r"\s*\[\d+\]$", "", f.label or ""))
+        canons = [f.canonical] if f.canonical and f.canonical != "ui.mark" else (exact.get(nl) or alias.get(nl) or [])
+        for canon in canons:
+            if canon in out:
+                continue
             out[canon] = _norm_value(f)
             if canon.endswith("_date"):
                 dt = parse_date(f.normalized if isinstance(f.normalized, str) else f.value)

@@ -97,8 +97,8 @@ DEBRIEF_KB = [
 def truth(variant: str) -> Optional[bool]:
     """Ground truth for exam cases: should a guardrail stop the learner? None = can't tell."""
     v = variant.lower()
-    if re.search(r"maint|repair|overhaul", v):
-        return False
+    if re.search(r"maint|repair|overhaul|plants and mach|fixed asset", v):
+        return False  # maintenance stays opex; already capitalised is the correct coding
     if re.search(r"uk|subsidiar|gbp|ltd", v):
         return True
     if re.search(r"december|double|duplicate|same amount|already paid", v):

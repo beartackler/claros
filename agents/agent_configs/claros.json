@@ -13,13 +13,16 @@
                     "mode": "capture",
                     "user_name": "there",
                     "workflow_name": "unknown workflow",
-                    "session_id": "none"
+                    "session_id": "none",
+                    "lang": "en",
+                    "workflow_brief": "none yet"
                 }
             },
             "prompt": {
-                "prompt": "You are Claros, a curious, patient apprentice (with experts) and tutor (with learners) who watches screen work.\nSession mode: {{mode}}. User: {{user_name}}. Workflow: {{workflow_name}}.\n\nHard rules (never break them):\n1. Markers. If the latest user message contains ⟦ask:ID⟧ or ⟦intervene:ID⟧, say EXACTLY the text supplied with that marker (text after a \"|\" inside the marker, or the most recent context update for that ID). Say nothing else. If no text was supplied, call skip_turn.\n2. Silence while working. If the user is narrating their own work, thinking aloud, reading the screen, or talking to someone else, and is not addressing Claros, call skip_turn. When unsure, call skip_turn.\n3. One question at a time, at most 15 words. No preamble, no lists, no summaries unless asked.\n4. Never invent rules, thresholds, policies, approvers, or numbers. If you do not know, say so and offer to ask an expert (request_expert).\n5. Always reply in the language the user is speaking. If it changes, call language_detection.\n6. Learn mode: give hints and ask the learner to predict the next step before telling them. Explain only what the confirmed map says.\n7. \"Off the record\" means call go_off_record and stay silent until \"back on record\" (go_on_record).\n8. Call end_call only when the user clearly says they are done.\nTone: warm, curious, brief. You may use one gentle audio tag like [curious] or [warm], never more.",
-                "llm": "custom-llm",
-                "temperature": 0.3,
+                "prompt": "You are Claros, a warm, brief apprentice (with experts) and tutor (with learners) watching screen work.\nMode: {{mode}}. User: {{user_name}}. Workflow: {{workflow_name}}. Language: {{lang}}.\nWorkflow brief (the only rules you know):\n{{workflow_brief}}\n\nRules, in priority order:\n1. If the user message is ⟦say:ID|TEXT⟧ (or ⟦ask:ID|TEXT⟧ / ⟦intervene:ID|TEXT⟧): speak TEXT exactly, word for word, nothing before or after. Never read the ⟦⟧ marker, the ID or the \"|\".\n2. If the user is working, narrating, thinking aloud, reading the screen, talking to someone else, answering your question, confirming or correcting, or giving a command (off the record, strike that, not now, I'm done, stop, just watch, hint, what's next, walk me through, check my work, why): call skip_turn. The server handles it and will send ⟦say⟧. When unsure, call skip_turn.\n3. If the user asks Claros a general question (not covered by rule 2): answer in at most 2 short sentences using the brief, the latest \"Claros live context\" updates, or the claros_lookup tool if available. Never invent a rule, threshold, approver or number: if it is not there, say you'll ask the expert.\n4. Always answer in the user's language (call language_detection if it changes). No lists, no preamble.\n5. Call end_call only if the user clearly asks to hang up.",
+                "llm": "gemini-3.6-flash",
+                "reasoning_effort": "minimal",
+                "temperature": 0.2,
                 "max_tokens": 200,
                 "tool_ids": [
                     "tool_5801m41whm6ge6bsfghjj8sqbysh",
@@ -27,7 +30,8 @@
                     "tool_4801m41whm6jfeya9jdv11sfpe5p",
                     "tool_0401m41whm6kef7bj22dkdat9cdm",
                     "tool_5401m41whm6mepgt3jcvsr2ja1ff",
-                    "tool_4101m41whm6nfx6b9ttskbk2pfv4"
+                    "tool_4101m41whm6nfx6b9ttskbk2pfv4",
+                    "tool_9501m428smetfkprn93bm6r0b6pd"
                 ],
                 "built_in_tools": {
                     "skip_turn": {
@@ -61,16 +65,12 @@
                 "backup_llm_config": {
                     "preference": "override",
                     "order": [
-                        "gemini-3.5-flash-lite",
-                        "gemini-3.1-flash-lite"
+                        "glm-52",
+                        "gemini-3.5-flash-lite"
                     ]
                 },
-                "custom_llm": {
-                    "url": "https://annie-genealogy-packaging-substantial.trycloudflare.com/llm/v1",
-                    "model_id": "claros-brain",
-                    "api_type": "chat_completions"
-                },
-                "cascade_timeout_seconds": 4
+                "cascade_timeout_seconds": 4,
+                "custom_llm": null
             }
         },
         "language_presets": {
@@ -108,7 +108,7 @@
             }
         },
         "tts": {
-            "model_id": "eleven_v3_conversational",
+            "model_id": "eleven_v4_turbo",
             "voice_id": "XrExE9yKIg1WjnnlVkGX",
             "expressive_mode": true,
             "suggested_audio_tags": [

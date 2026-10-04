@@ -169,7 +169,7 @@ Rules:
   visible fields/columns in the STATE lines (each must be a key of canonical_vars with its on-screen labels), compared
   with literal values exactly as they appear on screen. Never invent derived or boolean vars (no "is_equipment",
   "is_uk_subsidiary", "double_bills"). Express the situation the rule must catch through what is visible, e.g. the
-  value the expert corrected away from: {"and":[{">":[{"var":"line.amount"},5000]},{"in":["Tools and Small Equipment",
+  value the expert corrected AWAY from (the mistake, never the corrected value): {"and":[{">":[{"var":"line.amount"},5000]},{"in":["Tools and Small Equipment",
   {"var":"line.expense_account"}]}]} ("in" with a string = substring match), or {"in":["Ltd",{"var":"invoice.company"}]}.
   Ops: and, or, !, ==, !=, >, >=, <, <=, in, var. For dates use "<x>_month" / "<x>_year" derived vars of a *_date var.
   If the rule cannot be decided from visible fields: predicate null, fuzzy true.
@@ -439,6 +439,8 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
             if bad:
                 d.log.info("guardrail %s predicate uses unobservable vars %s → fuzzy", g.id, bad)
                 g.predicate = None
+            elif g.action in ("block_and_explain", "warn"):
+                g.predicate = orient_predicate(g.predicate, wm, r, g.id)
         g.fuzzy = not g.predicate
 
     # evidence gaps → open Unknowns (coverage)
@@ -492,6 +494,67 @@ async def _same_expert_workflow(wm: WorkMap, expert_id: str, threshold: float = 
     i = max(range(len(mine)), key=lambda k: sims[k])
     d.log.info("same-expert workflow match %s sim=%.3f", mine[i].workflow_id, sims[i])
     return mine[i].workflow_id if sims[i] >= threshold else None
+
+
+def _before_after(r: Replay) -> list[tuple[ScreenState, ScreenState]]:
+    """Per record the expert corrected: (state just before the first edit, last state of that record)."""
+    out = []
+    for ent in dict.fromkeys(e.entity_id for e in r.events if e.entity_id and e.kind in ("edit", "select")):
+        first = min(e.t for e in r.events if e.entity_id == ent and e.kind in ("edit", "select"))
+        sts = [s_ for s_ in r.states if s_.entity_id == ent]
+        before = [s_ for s_ in sts if s_.t < first]
+        if before and sts:
+            out.append((before[-1], sts[-1]))
+    return out
+
+
+def _clean_literal(v: Any) -> Optional[str]:
+    t = re.sub(r"\s*(\.\.\.|…)$", "", str(v or "")).strip()
+    if " - " in t:  # ERP-style "Account - COMPANY" suffix (often truncated on screen)
+        t = t.rsplit(" - ", 1)[0].strip()
+    return t or None
+
+
+def orient_predicate(pred: dict, wm: WorkMap, r: Replay, gid: str = "") -> Optional[dict]:
+    """A blocking guardrail must catch the situation the expert corrected AWAY from. LLMs often write the corrected
+    state instead ('amount > 5000 and account in Plants and Machineries'), which would block the right answer and
+    never the mistake. Check against the captured before/after screens; repair the string literal from the
+    before-value, else drop to fuzzy."""
+    from .common import canonical_vars_from_state
+    pairs = _before_after(r)
+    if not pairs:
+        return pred
+    verdicts = [(eval_predicate(pred, canonical_vars_from_state(b, wm)), eval_predicate(pred, canonical_vars_from_state(a, wm)),
+                 b, a) for b, a in pairs]
+    if any(vb is True and va is not True for vb, va, _, _ in verdicts):
+        return pred  # fires on the mistake, not on the fix
+    inverted = [(b, a) for vb, va, b, a in verdicts if va is True and vb is not True]
+    if not inverted:
+        return pred
+    b, a = inverted[0]
+    vb_, va_ = canonical_vars_from_state(b, wm), canonical_vars_from_state(a, wm)
+    fixed = json.loads(json.dumps(pred))
+
+    def walk(p: Any) -> None:
+        if isinstance(p, dict):
+            for op, args in p.items():
+                if op == "in" and isinstance(args, list) and len(args) == 2 and isinstance(args[0], str) \
+                        and isinstance(args[1], dict) and "var" in args[1]:
+                    var = args[1]["var"][0] if isinstance(args[1]["var"], list) else args[1]["var"]
+                    lit = _clean_literal(vb_.get(var))
+                    if lit and args[0].lower() in str(va_.get(var, "")).lower():
+                        args[0] = lit
+                else:
+                    walk(args)
+        elif isinstance(p, list):
+            for x in p:
+                walk(x)
+    walk(fixed)
+    if eval_predicate(fixed, vb_) is True and eval_predicate(fixed, va_) is not True:
+        d.log.info("guardrail %s predicate described the corrected state; re-oriented → %s", gid, fixed)
+        return fixed
+    d.log.info("guardrail %s predicate fires on the expert's corrected screen → fuzzy", gid)
+    return None
 
 
 def tautological(pred: Any, wm: WorkMap) -> bool:

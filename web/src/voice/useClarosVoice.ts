@@ -5,14 +5,18 @@
  * - token: GET {api}/api/el/token?agent=claros  (server holds the API key)
  * - customLlmExtraBody {session_id, mode} + dynamicVariables {session_id, mode, lang, user_name}
  * - forwards final transcripts → `utterance`, VAD crossings → `vad`, mode → `agent_state`
- * - server `ask` / `intervene` → sendUserMessage("⟦ask:ID⟧" / "⟦intervene:ID⟧"), `context_update` → sendContextualUpdate
+ * - server `say {id,text,kind,step_id?}` (and legacy `ask` / `intervene`, mapped to say) → queued, sent as
+ *   sendUserMessage("⟦say:ID|TEXT⟧") only when the agent is listening and the user is quiet; the hosted LLM
+ *   speaks TEXT verbatim. Segments with step_id highlight that step when sent (deduped vs. the agent's own
+ *   highlight_step call). `context_update` → sendContextualUpdate
+ * - dynamic variables come from GET {api}/api/dialog/vars?session_id= (mode, user_name, workflow_name, lang, workflow_brief)
  * - sendUserActivity() ≤1/s while the capture worker reports typing/scrolling
  * - client tools → zustand store (useClaros)
  * Must be rendered under <ConversationProvider> (see voice/providers.tsx).
  */
 import { useCallback, useEffect, useRef } from "react";
 import { useConversation } from "@elevenlabs/react";
-import { API_BASE, type ClientToolParams, type Mode } from "@/lib/contracts";
+import { API_BASE, type ClientToolParams, type Mode, type SayKind, type SayMsg } from "@/lib/contracts";
 import { now } from "@/lib/clock";
 import { getSocket, onSocketChange } from "@/lib/ws";
 import { useClaros } from "./store";
@@ -29,6 +33,34 @@ export interface ClarosVoiceOptions {
 }
 
 const HIDDEN = /⟦[^⟧]*⟧/;
+const SAY_QUIET_MS = 450;
+const SAY_MAX_WAIT_MS = 12_000;
+const HIGHLIGHT_DEDUPE_MS = 8_000;
+
+export type { SayKind, SayMsg } from "@/lib/contracts";
+
+type DialogVars = Record<string, string>;
+
+async function fetchDialogVars(sessionId: string): Promise<DialogVars> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 3500);
+  try {
+    const r = await fetch(`${API_BASE}/api/dialog/vars?session_id=${encodeURIComponent(sessionId)}`, { signal: ctl.signal });
+    if (!r.ok) return {};
+    const j = (await r.json()) as Record<string, unknown>;
+    const out: DialogVars = {};
+    for (const [k, v] of Object.entries(j)) if (typeof v === "string") out[k] = v;
+    return out;
+  } catch {
+    return {};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const askKind = (id: string): SayKind =>
+  id.startsWith("pred-") || id.startsWith("ex-") || id.startsWith("hint-") ? "tutor" : id.startsWith("phase-") ? "ack" : "ask";
+const markerText = (t: string) => t.replace(/[⟦⟧]/g, "").replace(/\s+/g, " ").trim();
 const VAD_ON = 0.6;
 const VAD_OFF = 0.35;
 
@@ -50,10 +82,18 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
   const agentSpeakStart = useRef(0);
   const lastUserActivity = useRef(0);
   const statusRef = useRef<string>("disconnected");
+  const agentModeRef = useRef<"speaking" | "listening">("listening");
+  const sayQueue = useRef<SayMsg[]>([]);
+  const sayInFlight = useRef<{ id: string; t: number; spoke: boolean } | null>(null);
+  const sayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastQuietT = useRef(0);
+  const lastSayHighlight = useRef<{ step: string; t: number } | null>(null);
+  const pumpRef = useRef<() => void>(() => {});
 
   const conv = useConversation({
     onStatusChange: ({ status }) => {
       statusRef.current = status;
+      if (status === "connected") setTimeout(() => pumpRef.current(), SAY_QUIET_MS);
       set({ voiceStatus: status === "connected" ? "connected" : status === "connecting" ? "connecting" : "disconnected" });
     },
     onError: (message) => {
@@ -63,6 +103,13 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     onModeChange: ({ mode: m }) => {
       const t = now();
       if (m === "speaking") agentSpeakStart.current = t;
+      agentModeRef.current = m;
+      if (m === "speaking" && sayInFlight.current) sayInFlight.current.spoke = true;
+      if (m === "listening") {
+        lastQuietT.current = Date.now();
+        if (sayInFlight.current?.spoke) sayInFlight.current = null;
+        setTimeout(() => pumpRef.current(), SAY_QUIET_MS);
+      }
       set({ agentMode: m });
       getSocket()?.send({ type: "agent_state", t, mode: m });
     },
@@ -73,6 +120,10 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       if (is !== was) {
         vadSpeaking.current = is;
         if (is) vadStart.current = t;
+        else {
+          lastQuietT.current = Date.now();
+          setTimeout(() => pumpRef.current(), SAY_QUIET_MS);
+        }
         set({ userSpeaking: is });
         getSocket()?.send({ type: "vad", t, speaking: is, score: vadScore });
       }
@@ -110,6 +161,35 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     }
   }, [offRecord]);
 
+  // ---- server → agent: say queue (never talk over the user or the agent) ----
+  const pump = useCallback(() => {
+    if (sayTimer.current) { clearTimeout(sayTimer.current); sayTimer.current = null; }
+    if (!connected() || !sayQueue.current.length) return;
+    const now_ = Date.now();
+    const f = sayInFlight.current;
+    if (f && now_ - f.t < SAY_MAX_WAIT_MS) { sayTimer.current = setTimeout(pump, 500); return; }
+    if (agentModeRef.current === "speaking" || vadSpeaking.current || now_ - lastQuietT.current < SAY_QUIET_MS) {
+      sayTimer.current = setTimeout(pump, 300);
+      return;
+    }
+    const m = sayQueue.current.shift()!;
+    sayInFlight.current = { id: m.id, t: now_, spoke: false };
+    if (m.step_id) {
+      lastSayHighlight.current = { step: m.step_id, t: now_ };
+      useClaros.getState().pushTool("highlight_step", { step_id: m.step_id });
+    }
+    set({ caption: m.text });
+    try { convRef.current.sendUserMessage(`⟦say:${m.id}|${markerText(m.text)}⟧`); } catch { sayInFlight.current = null; }
+  }, [set]);
+  pumpRef.current = pump;
+  const enqueueSay = useCallback((m: SayMsg) => {
+    if (!m.text?.trim()) return;
+    if (sayQueue.current.some((x) => x.id === m.id)) return;
+    sayQueue.current.push(m);
+    if (sayQueue.current.length > 20) sayQueue.current.splice(0, sayQueue.current.length - 20);
+    pump();
+  }, [pump]);
+
   // ---- server → agent ----
   useEffect(() => {
     let offs: (() => void)[] = [];
@@ -119,8 +199,12 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       const s = getSocket();
       if (!s) return;
       offs.push(
-        s.on("ask", (m) => { if (connected()) convRef.current.sendUserMessage(`⟦ask:${m.unknown_id}|${m.text}⟧`); }),
-        s.on("intervene", (m) => { if (connected()) convRef.current.sendUserMessage(`⟦intervene:${m.guardrail_id}|${m.text}⟧`); }),
+        s.on("ask", (m) => enqueueSay({ type: "say", id: m.unknown_id, text: m.text, kind: askKind(m.unknown_id) })),
+        s.on("intervene", (m) => enqueueSay({ type: "say", id: m.guardrail_id, text: m.text, kind: "intervene" })),
+        s.onAny((raw) => {
+          const m = raw as unknown as SayMsg;
+          if (m.type === "say" && m.id && typeof m.text === "string") enqueueSay(m);
+        }),
         // brain-originated control (expert said it by voice): store already mirrors it; don't echo back
         s.on("control", (m) => {
           if (m.action === "off_record_on" || m.action === "off_record_off") {
@@ -140,7 +224,7 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       offChange();
       offs.forEach((f) => f());
     };
-  }, []);
+  }, [enqueueSay]);
 
   // ---- user is working → keep the agent from barging in ----
   useEffect(
@@ -159,6 +243,8 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
   // ---- client tools ----
   const clientTools = useRef({
     highlight_step: (p: ClientToolParams["highlight_step"]) => {
+      const last = lastSayHighlight.current;
+      if (last && last.step === p.step_id && Date.now() - last.t < HIGHLIGHT_DEDUPE_MS) return "ok"; // already shown
       useClaros.getState().pushTool("highlight_step", p);
       return "ok";
     },
@@ -194,9 +280,17 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     await navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => s.getTracks().forEach((t) => t.stop())).catch(() => {
       throw new Error("Microphone permission denied");
     });
+    const dv = await fetchDialogVars(sessionId);
+    const vars: Record<string, string> = {
+      session_id: sessionId, mode, lang, user_name: userName || "there", workflow_name: workflowName, workflow_brief: "none yet",
+      ...Object.fromEntries(Object.entries(dv).filter(([k]) => k !== "dialog_mode" && k !== "session_id" && k !== "mode")),
+    };
+    if (userName) vars.user_name = userName;
+    const shortLang = (lang || "en").slice(0, 2);
     const common = {
       customLlmExtraBody: { session_id: sessionId, mode },
-      dynamicVariables: { session_id: sessionId, mode, lang, user_name: userName, workflow_name: workflowName },
+      dynamicVariables: vars,
+      ...(["de", "fr", "es", "ru"].includes(shortLang) ? { overrides: { agent: { language: shortLang as "de" | "fr" | "es" | "ru" } } } : {}),
       clientTools: clientTools.current as unknown as Record<string, (p: unknown) => string>,
     };
     let tok: TokenResp = {};

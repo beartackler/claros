@@ -1,0 +1,27 @@
+{
+    "type": "webhook",
+    "name": "claros_lookup",
+    "description": "Search the captured workflow (steps, expert rules/guardrails, expert quotes) for what the user asked. Use before answering any question about how or why this workflow is done.",
+    "response_timeout_secs": 5,
+    "pre_tool_speech": "off",
+    "api_schema": {
+        "url": "https://claros-server.onrender.com/api/dialog/lookup",
+        "method": "GET",
+        "query_params_schema": {
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "dynamic_variable": "session_id"
+                },
+                "q": {
+                    "type": "string",
+                    "description": "The user's question in a few keywords, any language."
+                }
+            },
+            "required": [
+                "session_id",
+                "q"
+            ]
+        }
+    }
+}

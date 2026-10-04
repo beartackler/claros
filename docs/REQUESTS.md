@@ -67,3 +67,16 @@ deps: scipy (optional; Hungarian step alignment in knowledge.merge — greedy fa
 - .env.example (lead): add `EXA_API_KEY=` and `CLAROS_CRAWL4AI=1`.
 - server-core (app.py lifespan, optional): on shutdown `await claros.context.web.close_crawler()` to close the shared headless browser.
 - search() now takes `include_domains`; DuckDuckGo fallback removed (no keys → []).
+
+## from dialog-layer (2026-10-03) — LLM bifurcation (hosted dialog default)
+- Agent pushed: llm `gemini-3.6-flash` (effort minimal), backup `glm-52` → `gemini-3.5-flash-lite` (backup order takes ids
+  only, so glm-52 runs at its default effort), TTS `eleven_v4_turbo` (accepted; `expressive_mode` stays true in the
+  config, API docs say it auto-disables for non-v3), webhook tool `claros_lookup` → https://claros-server.onrender.com.
+  Dynamic var placeholders now include `lang`, `workflow_brief`. Switch to the brain: `agents/set_custom_llm.sh` (defaults
+  to Render) + `CLAROS_DIALOG_MODE=custom` on the server; back: `agents/set_custom_llm.sh --hosted`.
+- lead (contracts.ts): add `SayMsg {type:"say"; id; text; kind: "ask"|"intervene"|"debrief"|"teachback"|"tutor"|"ack";
+  step_id?; lang?}` to `ServerMsg` (voice currently reads it via `onAny` with a local type in voice/useClarosVoice.ts).
+- server-core / Render: set `CLAROS_DIALOG_MODE=hosted` (default anyway); redeploy so `/api/dialog/*` exists (404 on Render
+  until then — the lookup tool fails soft).
+- web-ui: pass `workflowName` to `useClarosVoice` if known; otherwise it comes from `/api/dialog/vars`.
+- brain/__init__.py: two additive lines register `dialog` (router + bus) — no behavior change in custom mode.

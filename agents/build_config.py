@@ -4,36 +4,46 @@
 Edit this file, run `python3 agents/build_config.py`, then `cd agents && elevenlabs agents push`.
 Field names verified against https://api.elevenlabs.io/openapi.json (2026-10-03).
 
+Dialog surface (default, CLAROS_DIALOG_MODE=hosted): ElevenAgents hosted LLM gemini-3.6-flash (reasoning
+effort minimal), backup cascade glm-52 -> gemini-3.5-flash-lite, TTS eleven_v4_turbo. The server decides what
+to say and pushes ⟦say:ID|TEXT⟧ user messages (see server/claros/brain/dialog.py).
+
 Env (optional):
-  CLAROS_LLM_URL    -> if set, use custom LLM at this base URL (ElevenLabs appends /chat/completions)
+  CLAROS_DIALOG_MODE -> hosted (default) | custom
+  CLAROS_LLM_URL    -> custom mode only: custom LLM base URL (ElevenLabs appends /chat/completions)
   CLAROS_LLM_SECRET -> workspace secret id holding the bearer key for the custom LLM
-  CLAROS_TTS_MODEL  -> override TTS model (default eleven_v3_conversational)
+  CLAROS_TTS_MODEL  -> override TTS model (default eleven_v4_turbo)
+  CLAROS_LOOKUP_URL -> stable https base URL of the server; registers webhook tool `claros_lookup`
+                       (same as `--lookup-url URL`). Quick tunnels (trycloudflare/ngrok/localhost) are refused.
 """
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "agent_configs" / "claros.json"
 
-HOSTED_LLM = "gemini-3.5-flash-lite"  # lowest-latency non-deprecated hosted model in `elevenlabs agents llm list`
+HOSTED_LLM = "gemini-3.6-flash"  # dialog surface (fast, co-located); effort "minimal" per `agents llm list`
+HOSTED_EFFORT = "minimal"
+BACKUP_LLMS = ["glm-52", "gemini-3.5-flash-lite"]  # backup order takes model ids only (no per-model effort)
 VOICE_ID = "XrExE9yKIg1WjnnlVkGX"  # Matilda: warm upbeat alto, "knowledgeable", educational use case; verified de/fr/es
-TTS_MODEL = os.environ.get("CLAROS_TTS_MODEL", "eleven_v3_conversational")
+TTS_MODEL = os.environ.get("CLAROS_TTS_MODEL", "eleven_v4_turbo")
 EXTRA_LANGS = ["de", "fr", "es", "ru"]
 
-PROMPT = """You are Claros, a curious, patient apprentice (with experts) and tutor (with learners) who watches screen work.
-Session mode: {{mode}}. User: {{user_name}}. Workflow: {{workflow_name}}.
+PROMPT = """You are Claros, a warm, brief apprentice (with experts) and tutor (with learners) watching screen work.
+Mode: {{mode}}. User: {{user_name}}. Workflow: {{workflow_name}}. Language: {{lang}}.
+Workflow brief (the only rules you know):
+{{workflow_brief}}
 
-Hard rules (never break them):
-1. Markers. If the latest user message contains ⟦ask:ID⟧ or ⟦intervene:ID⟧, say EXACTLY the text supplied with that marker (text after a "|" inside the marker, or the most recent context update for that ID). Say nothing else. If no text was supplied, call skip_turn.
-2. Silence while working. If the user is narrating their own work, thinking aloud, reading the screen, or talking to someone else, and is not addressing Claros, call skip_turn. When unsure, call skip_turn.
-3. One question at a time, at most 15 words. No preamble, no lists, no summaries unless asked.
-4. Never invent rules, thresholds, policies, approvers, or numbers. If you do not know, say so and offer to ask an expert (request_expert).
-5. Always reply in the language the user is speaking. If it changes, call language_detection.
-6. Learn mode: give hints and ask the learner to predict the next step before telling them. Explain only what the confirmed map says.
-7. "Off the record" means call go_off_record and stay silent until "back on record" (go_on_record).
-8. Call end_call only when the user clearly says they are done.
-Tone: warm, curious, brief. You may use one gentle audio tag like [curious] or [warm], never more."""
+Rules, in priority order:
+1. If the user message is ⟦say:ID|TEXT⟧ (or ⟦ask:ID|TEXT⟧ / ⟦intervene:ID|TEXT⟧): speak TEXT exactly, word for word, nothing before or after. Never read the ⟦⟧ marker, the ID or the "|".
+2. If the user is working, narrating, thinking aloud, reading the screen, talking to someone else, answering your question, confirming or correcting, or giving a command (off the record, strike that, not now, I'm done, stop, just watch, hint, what's next, walk me through, check my work, why): call skip_turn. The server handles it and will send ⟦say⟧. When unsure, call skip_turn.
+3. If the user asks Claros a general question (not covered by rule 2): answer in at most 2 short sentences using the brief, the latest "Claros live context" updates, or the claros_lookup tool if available. Never invent a rule, threshold, approver or number: if it is not there, say you'll ask the expert.
+4. Always answer in the user's language (call language_detection if it changes). No lists, no preamble.
+5. Call end_call only if the user clearly asks to hang up."""
 
 PH = lambda desc: {"type": "string", "description": desc}  # noqa: E731
 
@@ -114,6 +124,61 @@ TOOLS = [
 ]
 
 
+LOOKUP_TOOL_NAME = "claros_lookup"
+LOOKUP_TOOL_FILE = HERE / "tool_configs" / "claros_lookup.json"
+
+
+def lookup_tool(base_url: str) -> dict:
+    """ElevenLabs webhook tool → GET {base}/api/dialog/lookup?session_id=&q= (server/claros/brain/dialog.py)."""
+    return {
+        "type": "webhook",
+        "name": LOOKUP_TOOL_NAME,
+        "description": "Search the captured workflow (steps, expert rules/guardrails, expert quotes) for what the "
+                       "user asked. Use before answering any question about how or why this workflow is done.",
+        "response_timeout_secs": 5,
+        "pre_tool_speech": "off",
+        "api_schema": {
+            "url": base_url.rstrip("/") + "/api/dialog/lookup",
+            "method": "GET",
+            "query_params_schema": {
+                "properties": {
+                    "session_id": {"type": "string", "dynamic_variable": "session_id"},
+                    "q": {"type": "string", "description": "The user's question in a few keywords, any language."},
+                },
+                "required": ["session_id", "q"],
+            },
+        },
+    }
+
+
+def stable_https(url: str) -> bool:
+    u = urlparse(url or "")
+    host = (u.hostname or "").lower()
+    quick = ("trycloudflare.com", "ngrok-free.app", "ngrok.io", "loca.lt", "localhost", "127.0.0.1")
+    return u.scheme == "https" and bool(host) and not any(host == q or host.endswith("." + q) for q in quick)
+
+
+def register_lookup(base_url: str) -> str:
+    """Create (or update) the workspace webhook tool and pin its id in tool_ids.json."""
+    if not stable_https(base_url):
+        raise SystemExit(f"refusing to register {LOOKUP_TOOL_NAME}: {base_url!r} is not a stable https URL")
+    cfg = lookup_tool(base_url)
+    LOOKUP_TOOL_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LOOKUP_TOOL_FILE.write_text(json.dumps(cfg, indent=4) + "\n")
+    ids = json.loads(TOOL_IDS.read_text()) if TOOL_IDS.exists() else {}
+    body = json.dumps({"tool_config": cfg})
+    if ids.get(LOOKUP_TOOL_NAME):
+        cmd = ["elevenlabs", "agents", "tools", "update", "--tool-id", ids[LOOKUP_TOOL_NAME], "--json", body,
+               "--format", "json", "--query", "id"]
+    else:
+        cmd = ["elevenlabs", "agents", "tools", "create", "--json", body, "--format", "json", "--query", "id"]
+    out = subprocess.run(cmd, check=True, capture_output=True, text=True).stdout.strip().strip('"')
+    if out and out != "null":
+        ids[LOOKUP_TOOL_NAME] = out
+        TOOL_IDS.write_text(json.dumps(ids, indent=4) + "\n")
+    return ids.get(LOOKUP_TOOL_NAME, "")
+
+
 TOOL_IDS = HERE / "tool_ids.json"
 
 
@@ -125,20 +190,31 @@ def tools_block():
         return {"tools": TOOLS}
     ids = json.loads(TOOL_IDS.read_text())
     builtin = {t["name"]: t for t in TOOLS if t["type"] == "system"}
-    return {"tool_ids": [ids[t["name"]] for t in TOOLS if t["type"] == "client"], "built_in_tools": builtin}
+    tool_ids = [ids[t["name"]] for t in TOOLS if t["type"] == "client"]
+    if ids.get(LOOKUP_TOOL_NAME):
+        tool_ids.append(ids[LOOKUP_TOOL_NAME])
+    return {"tool_ids": tool_ids, "built_in_tools": builtin}
+
+
+def dialog_mode() -> str:
+    m = os.environ.get("CLAROS_DIALOG_MODE", "hosted").strip().lower()
+    return m if m in ("hosted", "custom") else "hosted"
 
 
 def build():
-    llm_url = os.environ.get("CLAROS_LLM_URL", "").strip()
+    llm_url = os.environ.get("CLAROS_LLM_URL", "").strip() if dialog_mode() == "custom" else ""
     prompt = {
         "prompt": PROMPT,
         "llm": HOSTED_LLM,
-        "temperature": 0.3,
+        "reasoning_effort": HOSTED_EFFORT,
+        "temperature": 0.2,
         "max_tokens": 200,
         **tools_block(),
         "ignore_default_personality": True,
         "enable_parallel_tool_calls": False,
-        "backup_llm_config": {"preference": "default"},
+        "backup_llm_config": {"preference": "override", "order": BACKUP_LLMS},
+        "cascade_timeout_seconds": 4,
+        "custom_llm": None,  # explicit null: the remote config may still hold the old custom-llm block
     }
     if llm_url:
         url = llm_url.rstrip("/")
@@ -150,9 +226,9 @@ def build():
             custom["api_key"] = {"secret_id": secret}
         prompt["llm"] = "custom-llm"
         prompt["custom_llm"] = custom
-        # if the brain is down, cascade to the hosted model with the strict prompt above
-        prompt["backup_llm_config"] = {"preference": "override", "order": [HOSTED_LLM, "gemini-3.1-flash-lite"]}
-        prompt["cascade_timeout_seconds"] = 4
+        prompt.pop("reasoning_effort")
+        # if the brain is down, cascade to the hosted models with the same strict prompt
+        prompt["backup_llm_config"] = {"preference": "override", "order": [HOSTED_LLM] + BACKUP_LLMS}
 
     lang_presets = {
         code: {"overrides": {"agent": {"language": code}}, "first_message_translation": None}
@@ -172,6 +248,8 @@ def build():
                         "user_name": "there",
                         "workflow_name": "unknown workflow",
                         "session_id": "none",
+                        "lang": "en",
+                        "workflow_brief": "none yet",
                     }
                 },
                 "prompt": prompt,
@@ -221,6 +299,12 @@ def build():
 
 
 if __name__ == "__main__":
+    args = sys.argv[1:]
+    lookup = os.environ.get("CLAROS_LOOKUP_URL", "").strip()
+    if "--lookup-url" in args:
+        lookup = args[args.index("--lookup-url") + 1]
+    if lookup:
+        print(f"{LOOKUP_TOOL_NAME} -> {register_lookup(lookup)}")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(build(), indent=4, ensure_ascii=False) + "\n")
     print(f"wrote {OUT}")

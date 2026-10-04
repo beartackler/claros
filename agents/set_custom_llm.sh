@@ -2,8 +2,8 @@
 # Switch the Claros ElevenLabs agent to our custom-LLM brain (or back to the hosted backup).
 #
 #   agents/set_custom_llm.sh https://xyz.trycloudflare.com     # uses ${URL}/llm/v1
-#   agents/set_custom_llm.sh                                   # uses $CLAROS_PUBLIC_URL from ../.env
-#   agents/set_custom_llm.sh --hosted                          # revert to hosted gemini-3.5-flash-lite
+#   agents/set_custom_llm.sh                                   # uses $CLAROS_BRAIN_URL or https://claros-server.onrender.com
+#   agents/set_custom_llm.sh --hosted                          # revert to hosted dialog mode (gemini-3.6-flash)
 #   CLAROS_LLM_KEY=sometoken agents/set_custom_llm.sh <url>    # also send "Authorization: Bearer sometoken"
 #
 # ElevenLabs appends "/chat/completions" to the configured URL, so the agent is pointed at
@@ -25,7 +25,7 @@ if [[ "${1:-}" == "--hosted" ]]; then
   exit 0
 fi
 
-BASE="${1:-${CLAROS_PUBLIC_URL:-}}"
+BASE="${1:-${CLAROS_BRAIN_URL:-https://claros-server.onrender.com}}"
 if [[ -z "$BASE" ]]; then
   echo "usage: $0 <public-base-url> | --hosted   (or set CLAROS_PUBLIC_URL in .env)" >&2
   exit 1
@@ -53,7 +53,7 @@ if [[ -n "${CLAROS_LLM_KEY:-}" ]]; then
   fi
 fi
 
-CLAROS_LLM_URL="$LLM_URL" CLAROS_LLM_SECRET="$SECRET_ID" python3 build_config.py
+CLAROS_DIALOG_MODE=custom CLAROS_LLM_URL="$LLM_URL" CLAROS_LLM_SECRET="$SECRET_ID" python3 build_config.py
 elevenlabs agents push --version-description "custom LLM -> $LLM_URL"
 
 echo

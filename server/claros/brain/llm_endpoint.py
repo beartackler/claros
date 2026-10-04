@@ -1,6 +1,8 @@
 """OpenAI-compatible custom-LLM endpoint for ElevenLabs: POST /llm/v1/chat/completions (SSE).
 
+OPTIONAL dialog mode (CLAROS_DIALOG_MODE=custom); default is hosted (see brain/dialog.py).
 Routing of the latest user message:
+  ⟦say:ID|T⟧     → ledger/prewritten/intervention text for ID, else T verbatim
   ⟦ask:U⟧        → pre-written Unknown.spoken_question verbatim
   ⟦intervene:G⟧  → pre-written intervention text verbatim
   otherwise      → intent (mode-specific) → deterministic handler / skip_turn tool call / LLM
@@ -36,6 +38,7 @@ register_text = register_intervention
 
 # ⟦ask:ID⟧ or ⟦ask:ID|fallback text⟧ (same for intervene)
 ASK_RE = re.compile(r"[⟦\[]{1,2}\s*ask\s*:\s*([\w\-]+)\s*(?:\|\s*([^⟧\]]*?))?\s*[⟧\]]{1,2}", re.S)
+SAY_RE = re.compile(r"[⟦\[]{1,2}\s*say\s*:\s*([\w\-]+)\s*(?:\|\s*([^⟧\]]*?))?\s*[⟧\]]{1,2}", re.S)
 INTERVENE_RE = re.compile(r"[⟦\[]{1,2}\s*intervene\s*:\s*([\w\-]+)\s*(?:\|\s*([^⟧\]]*?))?\s*[⟧\]]{1,2}", re.S)
 SESSION_LINE_RE = re.compile(r"claros-session\s*:\s*([\w\-]+)", re.I)
 BUFFER_AFTER_S = 0.9
@@ -276,7 +279,7 @@ async def route(body: dict) -> Reply:
     sess = deps.get_session(sid)
     mode = getattr(sess, "mode", "capture") or "capture"
 
-    m = ASK_RE.search(text)
+    m = ASK_RE.search(text) or SAY_RE.search(text)
     if m:
         u = get_ledger(sid).unknowns.get(m.group(1)) if sid else None
         if u and u.spoken_question:
@@ -285,6 +288,10 @@ async def route(body: dict) -> Reply:
         t = _prewritten_ask(sid, m.group(1))
         if t:
             return Reply(text=t)
+        if m.re is SAY_RE:
+            t = await _intervention_text(sid, m.group(1))
+            if t:
+                return Reply(text=t)
         suffix = (m.group(2) or "").strip()
         return Reply(text=suffix) if suffix else _skip(body)
     m = INTERVENE_RE.search(text)

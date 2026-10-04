@@ -57,18 +57,42 @@ Client → server:
 Server → client:
 - `events {items: ScreenEvent[]}`  (for the notebook)
 - `ledger {open: int, saved_for_later: int, top?: Unknown}`
-- `ask {unknown_id, text}` → client calls `conversation.sendUserMessage("⟦ask:" + unknown_id + "⟧")`
-- `intervene {guardrail_id, text, moment: Moment}` → client calls `sendUserMessage("⟦intervene:" + id + "⟧")` and shows moment
+- `say {id, text, kind: ask|intervene|debrief|teachback|tutor|ack, step_id?, lang}` → client queues it and, only when
+  the agent is listening and the user has been quiet ~450 ms, calls `sendUserMessage("⟦say:" + id + "|" + text + "⟧")`;
+  the agent speaks `text` verbatim. A segment with `step_id` highlights that step when sent (client dedupes the agent's
+  own `highlight_step` for the same step within 8 s). Teach-back = one `say` per segment, sent in order.
+- `ask {unknown_id, text}` (legacy, still emitted by gate/tutor) → client maps to `say {id: unknown_id, kind: ask|tutor}`
+- `intervene {guardrail_id, text, moment: Moment}` (legacy) → client maps to `say {id: guardrail_id, kind: intervene}` and shows moment
 - `context_update {text}` → client calls `sendContextualUpdate(text)`
 - `show_moment {moment: Moment}` / `highlight_step {step_id}`
 - `map_updated {workflow_id, version}`
 - `status {level: info|warn|error, text}`
 
-## Custom LLM endpoint (ElevenLabs → brain)  `POST /llm/v1/chat/completions`
+## Dialog mode  `CLAROS_DIALOG_MODE=hosted|custom` (default `hosted`)
+- **hosted** (default): ElevenAgents hosted LLM speaks (`gemini-3.6-flash`, reasoning `minimal`; backup cascade
+  `glm-52` → `gemini-3.5-flash-lite`; TTS `eleven_v4_turbo`). The server never is the LLM: `claros/brain/dialog.py`
+  consumes final `utterance` events → intents (rules → systemone) → control actions (off record, strike that, not now,
+  end task → phase debrief), capture acks, debrief turns (`knowledge.debrief`) and learner turns (`knowledge.tutor`),
+  and pushes `say`. It waits for the floor (agent listening + user quiet) before speaking. On `hello mode=debrief` it
+  pushes the first debrief question. It also pushes throttled `context_update` (≤400 chars: screen, current Work Map
+  step, open questions, learner mastery hint).
+- **custom**: ElevenLabs calls the brain endpoint below (`agents/set_custom_llm.sh [url]`, default Render URL); the
+  dialog loop is idle. Thinking surface in both modes = GLM-5.3-Flash via `claros.llm` (server-side, async).
+- Agent prompt rules (hosted): ⟦say:ID|TEXT⟧ → speak TEXT exactly; user working/answering/commanding → `skip_turn`;
+  general question → ≤2 sentences from `{{workflow_brief}}` + context updates + `claros_lookup`, never invent rules;
+  answer in the user's language; never read ⟦⟧.
+- `GET /api/dialog/vars?session_id=` → `{session_id, mode, user_name, lang, workflow_name, workflow_brief, dialog_mode}`;
+  client passes these as ElevenLabs dynamic variables. `workflow_brief` (≤1500 chars) is GLM-written from the map
+  (steps + guardrails with expert attribution, unconfirmed/conflict flags), prefetched on hello, template fallback.
+- `GET /api/dialog/lookup?session_id=&q=` → `{found, answer (≤300 chars, attributed), items:[{kind: step|guardrail|quote,
+  id, text, expert, confirmed?}], workflow?}`. Registered as ElevenLabs webhook tool `claros_lookup`
+  (`python3 agents/build_config.py --lookup-url https://claros-server.onrender.com`; quick tunnels are refused).
+
+## Custom LLM endpoint (optional mode; ElevenLabs → brain)  `POST /llm/v1/chat/completions`
 OpenAI chat-completions, `stream: true` → SSE `data: {chunk}\n\n` ... `data: [DONE]`.
 Session binding: `elevenlabs_extra_body.session_id` (sent by client via `customLlmExtraBody`).
 Routing of the latest user message:
-- `⟦ask:U⟧` → stream pre-written `Unknown.spoken_question` verbatim (no model call).
+- `⟦say:ID|T⟧` / `⟦ask:U⟧` → stream ledger `spoken_question` / pre-written text for the id, else `T` verbatim (no model call).
 - `⟦intervene:G⟧` → stream pre-written intervention text verbatim.
 - otherwise → intent classification (mode-specific) → handler. Handlers may stream text or
   return a tool call to `skip_turn` (silence). Default in `capture` for `narration` = `skip_turn`.
@@ -77,6 +101,7 @@ Response language = session lang (switch if `language_detection` fires).
 ## Agent client tools (registered in ElevenLabs, implemented in web/src/voice)
 `highlight_step {step_id}` · `show_moment {keyframe_ids, t}` · `go_off_record {}` ·
 `go_on_record {}` · `open_map {workflow_id}` · `request_expert {workflow_hint}`.
+Webhook tool: `claros_lookup {q}` (session_id from dynamic variable) → `GET /api/dialog/lookup`.
 
 ## REST (server)
 **Timestamps:** every wall-clock field on the wire (`created_at`, `updated_at`, session `created_at`, `server_t`)

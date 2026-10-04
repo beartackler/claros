@@ -355,8 +355,11 @@ export interface PhaseMsg { type: "phase"; phase: Mode }
 export interface ServerControlMsg { type: "control"; action: ControlAction }
 export interface ClockSyncIn { type: "clock_sync"; client_t: number; server_t: number }
 
+export type SayKind = "ask" | "intervene" | "debrief" | "teachback" | "tutor" | "ack";
+export interface SayMsg { type: "say"; id: string; text: string; kind: SayKind; step_id?: string | null; lang?: string }
+
 export type ServerMsg =
-  | EventsMsg | LedgerMsg | AskMsg | InterveneMsg | ContextUpdateMsg
+  | SayMsg | EventsMsg | LedgerMsg | AskMsg | InterveneMsg | ContextUpdateMsg
   | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn | ServerControlMsg | PhaseMsg;
 
 export type ServerMsgType = ServerMsg["type"];

@@ -17,8 +17,11 @@ from .gate import gate
 from .ledger import get_ledger, ledgers
 from .llm_endpoint import announce_debrief, apply_control, interventions, router as _llm_router
 
+from . import dialog
+
 router = APIRouter()
 router.include_router(_llm_router)
+router.include_router(dialog.router)
 
 
 @router.get("/api/sessions/{session_id}/ledger")
@@ -87,6 +90,7 @@ def register(bus: Any) -> None:
     bus.subscribe("ws.in.control", on_control)
     bus.subscribe("ws.in.hello", on_hello)
     bus.subscribe("session.ended", on_ended)
+    dialog.register(bus)  # hosted dialog loop (no-op in CLAROS_DIALOG_MODE=custom)
 
     try:
         import asyncio

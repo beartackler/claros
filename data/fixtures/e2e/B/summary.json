@@ -1,143 +1,127 @@
 {
-  "session_id": "s_ebd765b3968c",
+  "session_id": "s_f69df28f34d4",
   "frames": [],
   "turns": [
     {
-      "t": 1791070458142.72,
+      "t": 1791077816580.555,
       "sent": "Okay, let's do it.",
-      "text": "Got it. What if it were 4,999? Would “Equipment purchases above 5,000 must be booked to Plants and Machineries with the Production cost center, never to small tools.” still apply?",
+      "text": "Got it. Is the 5,000 capex cutoff from tax rules or internal policy?",
       "tool": null,
-      "ttft_ms": 1157,
-      "total_ms": 1157,
+      "ttft_ms": 2062,
+      "total_ms": 2062,
       "kind": "user"
     },
     {
-      "t": 1791070459601.674,
-      "sent": "No — below 5,000 it stays an expense, small tools is fine then.",
-      "text": "Got it. Looks like: The expert recognizes duplicate amounts from memory of previously paid invoices rather than from anything on screen. — is that your rule?",
+      "t": 1791077818944.9128,
+      "sent": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.",
+      "text": "Got it. Does the December duplicate check apply to all suppliers or just this one?",
       "tool": null,
-      "ttft_ms": 2150,
-      "total_ms": 2150,
+      "ttft_ms": 2296,
+      "total_ms": 2296,
       "kind": "user"
     },
     {
-      "t": 1791070462053.111,
+      "t": 1791077821542.5642,
       "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "text": "Got it. Does a number suffix on the invoice signal a re-bill?",
+      "text": "Got it. Teach-back: I'm walking through your AP workflow — please confirm I've got it right. I open the supplier purchase invoice and check the pre-filled expense account. If equipment costs over the threshold, I treat it as capex: instead of the default small-tools booking, I move the expense account to Plants and Machineries and set the cost center to Production. I save the corrected invoice. On the invoice list for the next supplier, if the amount matches an already-paid December invoice, I recognize it as a suspected duplicate, not a normal booking. I hold that suspected duplicate until the supplier confirms — I don't book it, even with the old invoice number plus a suffix. I save the held invoice. For the next invoice, I identify it as belonging to the UK subsidiary. Did I get that right?",
       "tool": null,
-      "ttft_ms": 1449,
-      "total_ms": 1449,
+      "ttft_ms": 2664,
+      "total_ms": 32839,
       "kind": "user"
     },
     {
-      "t": 1791070463802.573,
-      "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "text": "Got it. Here's my teach-back of the workflow: I open the supplier invoice and review its header and lines, judging from the item and amount whether the pre-filled expense account fits the nature of the purchase. Since this is capital equipment, I change the expense account from the small-tools default to the fixed-asset account, because the invoice amount exceeds the capitalization threshold. Per the guardrail, purchases above 5,000 must go to Plants and Machineries, never small tools. I also move the cost center from the default to the Production cost center so it aligns with the capital-equipment booking, as the guardrail requires. I save the corrected invoice and return to the list. Did I get that right?",
-      "tool": null,
-      "ttft_ms": 5768,
-      "total_ms": 26332,
-      "kind": "user"
-    },
-    {
-      "t": 1791070490436.416,
+      "t": 1791077854684.149,
       "sent": "Yes, that's right.",
-      "text": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account. I would: block and explain — Equipment purchases above 5,000 must be booked to Plants and Machineries with the Production cost center, never to small tools. (85% sure). Right?",
+      "text": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
       "tool": null,
-      "ttft_ms": 208,
-      "total_ms": 208,
+      "ttft_ms": 211,
+      "total_ms": 211,
       "kind": "user"
     },
     {
-      "t": 1791070490945.5527,
+      "t": 1791077855197.9329,
       "sent": "Yes, correct.",
-      "text": "Got it. Case 2: Amount (EUR) = 4,800, Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (80% sure). Right?",
+      "text": "Got it. Case 2: Company = Ltd account. I would: stop and ask — Anything from the UK subsidiary needs a second approval from the controller before it is booked. (85% sure). Right?",
       "tool": null,
-      "ttft_ms": 177,
-      "total_ms": 177,
+      "ttft_ms": 232,
+      "total_ms": 233,
       "kind": "user"
     },
     {
-      "t": 1791070491424.0042,
+      "t": 1791077855732.8708,
       "sent": "Yes, correct.",
-      "text": "Got it. Case 3: a case where: When a supplier invoice repeats an amount already paid (known December double-billing pattern), set Tags to On Hold and wait for the supplier to confirm before processing.. I would: hold — When a supplier invoice repeats an amount already paid (known December double-billing pattern), set Tags to On Hold and wait for the supplier to confirm before processing. (60% sure). Right?",
+      "text": "Got it. Case 3: Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
       "tool": null,
-      "ttft_ms": 187,
-      "total_ms": 187,
+      "ttft_ms": 127,
+      "total_ms": 127,
       "kind": "user"
     },
     {
-      "t": 1791070491912.3809,
+      "t": 1791077856162.522,
       "sent": "Yes, correct.",
       "text": "Got it. That's everything. The map is published for learners.",
       "tool": null,
-      "ttft_ms": 261,
-      "total_ms": 261,
+      "ttft_ms": 128,
+      "total_ms": 128,
       "kind": "user"
     }
   ],
-  "map_build_s": 64.7,
+  "map_build_s": 31.2,
   "built": {
     "type": "status",
     "level": "info",
-    "text": "Work map built: 7 steps, 2 guardrails, 2 open questions.",
-    "_at": 1791070456662.313
+    "text": "Work map built: 8 steps, 3 guardrails, 3 open questions.",
+    "_at": 1791077815055.4
   },
   "debrief": [
     {
       "say": "Okay, let's do it.",
-      "reply": "Got it. What if it were 4,999? Would “Equipment purchases above 5,000 must be booked to Plants and Machineries with the Production cost center, never to small tools.” still apply?",
+      "reply": "Got it. Is the 5,000 capex cutoff from tax rules or internal policy?",
       "tool": null,
-      "ttft_ms": 1157,
-      "total_ms": 1157
+      "ttft_ms": 2062,
+      "total_ms": 2062
     },
     {
-      "say": "No — below 5,000 it stays an expense, small tools is fine then.",
-      "reply": "Got it. Looks like: The expert recognizes duplicate amounts from memory of previously paid invoices rather than from anything on screen. — is that your rule?",
+      "say": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.",
+      "reply": "Got it. Does the December duplicate check apply to all suppliers or just this one?",
       "tool": null,
-      "ttft_ms": 2150,
-      "total_ms": 2150
-    },
-    {
-      "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "reply": "Got it. Does a number suffix on the invoice signal a re-bill?",
-      "tool": null,
-      "ttft_ms": 1449,
-      "total_ms": 1449
+      "ttft_ms": 2296,
+      "total_ms": 2296
     },
     {
       "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "reply": "Got it. Here's my teach-back of the workflow: I open the supplier invoice and review its header and lines, judging from the item and amount whether the pre-filled expense account fits the nature of the purchase. Since this is capital equipment, I change the expense account from the small-tools default to the fixed-asset account, because the invoice amount exceeds the capitalization threshold. Per the guardrail, purchases above 5,000 must go to Plants and Machineries, never small tools. I also move the cost center from the default to the Production cost center so it aligns with the capital-equipment booking, as the guardrail requires. I save the corrected invoice and return to the list. Did I get that right?",
+      "reply": "Got it. Teach-back: I'm walking through your AP workflow — please confirm I've got it right. I open the supplier purchase invoice and check the pre-filled expense account. If equipment costs over the threshold, I treat it as capex: instead of the default small-tools booking, I move the expense account to Plants and Machineries and set the cost center to Production. I save the corrected invoice. On the invoice list for the next supplier, if the amount matches an already-paid December invoice, I recognize it as a suspected duplicate, not a normal booking. I hold that suspected duplicate until the supplier confirms — I don't book it, even with the old invoice number plus a suffix. I save the held invoice. For the next invoice, I identify it as belonging to the UK subsidiary. Did I get that right?",
       "tool": null,
-      "ttft_ms": 5768,
-      "total_ms": 26332
+      "ttft_ms": 2664,
+      "total_ms": 32839
     },
     {
       "say": "Yes, that's right.",
-      "reply": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account. I would: block and explain — Equipment purchases above 5,000 must be booked to Plants and Machineries with the Production cost center, never to small tools. (85% sure). Right?",
+      "reply": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
       "tool": null,
-      "ttft_ms": 208,
-      "total_ms": 208
+      "ttft_ms": 211,
+      "total_ms": 211
     },
     {
       "say": "Yes, correct.",
-      "reply": "Got it. Case 2: Amount (EUR) = 4,800, Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (80% sure). Right?",
+      "reply": "Got it. Case 2: Company = Ltd account. I would: stop and ask — Anything from the UK subsidiary needs a second approval from the controller before it is booked. (85% sure). Right?",
       "tool": null,
-      "ttft_ms": 177,
-      "total_ms": 177
+      "ttft_ms": 232,
+      "total_ms": 233
     },
     {
       "say": "Yes, correct.",
-      "reply": "Got it. Case 3: a case where: When a supplier invoice repeats an amount already paid (known December double-billing pattern), set Tags to On Hold and wait for the supplier to confirm before processing.. I would: hold — When a supplier invoice repeats an amount already paid (known December double-billing pattern), set Tags to On Hold and wait for the supplier to confirm before processing. (60% sure). Right?",
+      "reply": "Got it. Case 3: Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
       "tool": null,
-      "ttft_ms": 187,
-      "total_ms": 187
+      "ttft_ms": 127,
+      "total_ms": 127
     },
     {
       "say": "Yes, correct.",
       "reply": "Got it. That's everything. The map is published for learners.",
       "tool": null,
-      "ttft_ms": 261,
-      "total_ms": 261
+      "ttft_ms": 128,
+      "total_ms": 128
     }
   ],
   "coverage": {
