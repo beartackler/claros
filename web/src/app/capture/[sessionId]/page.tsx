@@ -154,15 +154,16 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
   const pip = usePip();
 
   // Server moves the session to debrief (voice "I'm done", end_task, or POST end) → follow it.
+  const stopShare = capture.stop;
+  const movedOn = useRef(false);
   useEffect(() => {
-    if (phase === "debrief") {
-      capture.stop(); // the debrief needs the voice, not the screen
-      router.push(`/debrief/${encodeURIComponent(sessionId)}`);
-    }
-  }, [phase, router, sessionId, capture]);
+    if (phase !== "debrief" || movedOn.current) return;
+    movedOn.current = true; // once: stop() updates state, which must not re-trigger this (it looped)
+    stopShare(); // the debrief needs the voice, not the screen
+    router.push(`/debrief/${encodeURIComponent(sessionId)}`);
+  }, [phase, router, sessionId, stopShare]);
   // leaving capture by any route (Exit, back button, server phase change) ends the screen share
   // (deferred: React dev mounts → unmounts → remounts once; only a real unmount may stop the share)
-  const stopShare = capture.stop;
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;

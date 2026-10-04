@@ -475,7 +475,7 @@ def test_learn_ask_prewritten_and_tutor(offline, client, monkeypatch):
 def test_capture_end_moves_to_debrief(offline, client):
     llm_endpoint._phase_sent.clear()
     ch = _sse(client.post("/llm/v1/chat/completions", json=_body("I'm done", sid="c9")))
-    assert _content(ch) == "Thanks! Let's do a quick debrief."
+    assert _content(ch) == "Thanks! I'm putting your map together, then I'll ask a few questions."
     out = [m[2] for m in offline.sent if m[1] == "ws.out"]
     assert {"type": "phase", "phase": "debrief", "workflow_id": None} in out
     assert any(m.get("text") == "debrief_ready" for m in out)
@@ -484,7 +484,7 @@ def test_capture_end_moves_to_debrief(offline, client):
     run(llm_endpoint.announce_debrief("c10"))
     ask = next(m[2] for m in offline.sent if m[2].get("type") == "ask")
     ch = _sse(client.post("/llm/v1/chat/completions", json=_body(f"⟦ask:{ask['unknown_id']}⟧", sid="c10")))
-    assert _content(ch) == "Thanks! Let's do a quick debrief."
+    assert _content(ch) == "Thanks! I'm putting your map together, then I'll ask a few questions."
 
 
 def test_first_ask_never_uses_truncated_or_fragment_values(offline):

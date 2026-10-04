@@ -15,7 +15,7 @@ import { ClarosDot, EmptyState, ErrorState, SourceNote, useResource } from "@/co
 import { ZoomShot } from "@/components/claros/Lightbox";
 import { MapBuilding } from "@/components/claros/MapBuilding";
 import { sortedSteps, stepHighlight } from "@/components/claros/mapUtils";
-import { useJoinSession, useLive, useLiveStore } from "@/components/claros/live";
+import { sendControl, useJoinSession, useLive, useLiveStore } from "@/components/claros/live";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getSession, getWorkflow, latestWorkflowId, publishSession } from "@/lib/api";
@@ -26,11 +26,6 @@ import type { Step, Unknown, WorkMap } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 
 type Stage = "questions" | "teachback" | "publish";
-/** What the debrief can still ask the expert (mirrors the server planner). */
-const askable = (u: Unknown) =>
-  ["open", "asked", "deferred"].includes(u.status) &&
-  !(u.meta as { needs_second_run?: boolean } | undefined)?.needs_second_run &&
-  (u.scope === "company" || u.scope === "personal_judgment");
 const EMPTY = "__empty__";
 type Voice = ReturnType<typeof useLive>["voice"];
 
@@ -69,6 +64,9 @@ function Debrief() {
   useJoinSession(res.data ? sessionId : null, "debrief", EXPERT, lang, res.data?.workflow_id);
   const { voice } = useLive(sessionId, "debrief", lang, EXPERT.name);
   const [stage, setStage] = useState<Stage>("questions");
+  // confirmed by voice ("yes, that's how it works"): the server already published — show it
+  const db = useLiveStore((s) => s.debrief);
+  if (db?.phase === "done" && stage !== "publish") setStage("publish");
   // done (published) or leaving the page: Claros stops listening and talking, and the session closes
   const voiceEnd = voice.end;
   const finish = useCallback(() => {
@@ -107,7 +105,7 @@ function Debrief() {
       </div>
       {stage === "questions" && <Questions map={map} demo={res.source === "mock"} voice={voice} onDone={() => setStage("teachback")} />}
       {stage === "teachback" && <TeachBack map={map} voice={voice} onDone={() => setStage("publish")} />}
-      {stage === "publish" && <Publish map={map} sessionId={sessionId} onPublished={finish} />}
+      {stage === "publish" && <Publish map={map} sessionId={sessionId} onPublished={finish} byVoice={db?.phase === "done" ? { second: !!db.needs_second_run } : null} />}
       <span className="sr-only">{t("debrief.title")}</span>
     </div>
   );
@@ -143,43 +141,34 @@ function Stepper({ stage }: { stage: Stage }) {
   );
 }
 
-/* ---------------- questions: one at a time, next to its screen moment ---------------- */
+/* ---------------- questions: voice-first, mirrors the spoken debrief ---------------- */
 
 function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; voice: Voice; onDone: () => void }) {
   const { t } = useUi();
-  const liveLedger = useLiveStore((s) => s.ledger);
-  const queue: Unknown[] = useMemo(
-    () =>
-      [...(demo ? MOCK_UNKNOWNS.filter((u) => u.status === "deferred") : []), ...map.open_unknowns.filter(askable)].filter(
-        (u, i, a) => a.findIndex((x) => x.id === u.id) === i,
-      ),
-    [map.open_unknowns, demo],
-  );
-  const [i, setI] = useState(0);
-  const total = Math.max(queue.length, 1);
-  const remaining = liveLedger ? liveLedger.open : Math.max(0, queue.length - i);
-  const cur: Unknown | undefined = liveLedger?.top ?? queue[i];
-  const done = remaining === 0 || !cur;
+  const db = useLiveStore((s) => s.debrief);
+  const transcript = useLiveStore((s) => s.transcript);
+  const caption = useLiveStore((s) => s.caption);
+  // offline demo only: page through mock questions locally
+  const mockQueue: Unknown[] = useMemo(() => (demo ? MOCK_UNKNOWNS.filter((u) => u.status === "deferred") : []), [demo]);
+  const [mi, setMi] = useState(0);
   const latestWhy = useLatestWhy();
-  const lookedUp = useLookedUp(
-    demo
-      ? MOCK_UNKNOWNS.filter((u) => u.status === "resolved").map((u) => ({
-          type: "looked_up" as const,
-          unknown_summary: u.entity ?? u.type,
-          answer: u.resolution ?? "",
-          source: u.resolution_source?.startsWith("app_docs:") ? { kind: "app_docs" as const, title: "docs.erpnext.com", url: u.resolution_source.slice(9) } : { kind: "general" as const, title: "LLM" },
-        }))
-      : [],
-  );
+  const lookedUp = useLookedUp([]);
 
-  const advance = () => {
-    setI((x) => x + 1);
-  };
-  const step: Step | undefined = cur
-    ? map.steps.find((s) => s.id === cur.entity) ?? map.steps.find((s) => cur.moment?.keyframe_ids?.some((k) => s.moment?.keyframe_ids.includes(k))) ?? (cur.type === "conflict" ? map.steps.find((s) => s.conflict) : undefined)
-    : undefined;
+  // the server moved on to the spoken teach-back (or finished): follow it
+  useEffect(() => {
+    if (!demo && db && db.phase !== "questions") onDone();
+  }, [demo, db, onDone]);
 
-  if (done)
+  const cur: Unknown | null | undefined = demo ? mockQueue[mi] : db?.current;
+  const n = demo ? mi + 1 : Math.max(db?.asked ?? 0, 1);
+  const voiceOn = voice.status === "connected";
+  const skip = () => (demo ? setMi((x) => x + 1) : sendControl("debrief_skip"));
+  // what the expert is saying right now (their answer, live), after this question appeared
+  const [mark, setMark] = useState<{ id?: string; from: number }>({ from: 0 });
+  if (cur?.id !== mark.id) setMark({ id: cur?.id, from: transcript.length }); // new question: answers start here
+  const said = transcript.slice(mark.from).filter((l) => l.role === "user").map((l) => l.text).join(" ") || undefined;
+
+  if (demo && !cur)
     return (
       <div className="claros-enter flex flex-col items-start gap-8 py-10">
         <ClarosDot size={72} />
@@ -190,40 +179,70 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
       </div>
     );
 
+  if (!cur)
+    return (
+      <div className="claros-enter flex flex-col items-start gap-6 py-10" role="status" aria-live="polite">
+        <ClarosDot size={72} />
+        <h1 className="max-w-[20ch] text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-5xl">{t("db.preparing")}</h1>
+        {!voiceOn ? (
+          <Button variant="claros" size="xl" onClick={() => void voice.start()}>
+            <Mic aria-hidden /> {t("db.voice.on")}
+          </Button>
+        ) : null}
+      </div>
+    );
+
+  const step: Step | undefined =
+    map.steps.find((s) => s.id === cur.entity) ??
+    map.steps.find((s) => cur.moment?.keyframe_ids?.some((k) => s.moment?.keyframe_ids.includes(k))) ??
+    (cur.type === "conflict" ? map.steps.find((s) => s.conflict) : undefined);
   const kf = cur.moment?.keyframe_ids?.[0] ?? step?.moment?.keyframe_ids?.[0] ?? null;
+  const q = cur.spoken_question ?? cur.hypothesis ?? "";
   return (
     <>
-    <div key={cur.id} className="claros-enter grid items-start gap-10 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:gap-14">
-      <div className="min-w-0">
-        <p className="tnum text-lg font-bold text-ink-2">{t("db.q", { n: Math.min(i + 1, total), total })}</p>
-        <div className="mt-3 flex gap-1.5" aria-hidden>
-          {queue.map((u, k) => (
-            <span key={u.id} className={cn("h-3 flex-1 rounded-[2px] border-2 border-ink", k < i ? "bg-ready" : k === i ? "bg-claros" : "bg-card")} />
-          ))}
-        </div>
-        <h1 className={cn("mt-8 font-black leading-[1.05] tracking-[-0.04em]", (cur.spoken_question ?? cur.hypothesis ?? "").length > 80 ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl")}>{cur.spoken_question ?? cur.hypothesis}</h1>
-        {cur.hypothesis && cur.spoken_question && cur.type !== "conflict" ? <p className="mt-5 text-xl text-ink-2">{cur.hypothesis}</p> : null}
-        <WhyTag why={latestWhy ?? (cur.created_t ? { when: t("ev.debrief.when"), what: step || cur.entity ? `${step?.title ?? cur.entity} · ${t(`q.kind.${cur.type}` as DictKey)}` : t(`q.kind.${cur.type}` as DictKey), scope: cur.scope === "company" || cur.scope === "personal_judgment" ? cur.scope : undefined } : null)} className="mt-5" />
+      <div key={cur.id} className="claros-enter grid items-start gap-10 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:gap-14">
+        <div className="min-w-0">
+          <p className="tnum text-lg font-bold text-ink-2">{t("db.q.n", { n })}</p>
+          <h1 className={cn("mt-6 font-black leading-[1.05] tracking-[-0.04em]", q.length > 80 ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl")}>{q}</h1>
+          <WhyTag why={latestWhy ?? (cur.created_t ? { when: t("ev.debrief.when"), what: step || cur.entity ? `${step?.title ?? cur.entity} · ${t(`q.kind.${cur.type}` as DictKey)}` : t(`q.kind.${cur.type}` as DictKey), scope: cur.scope === "company" || cur.scope === "personal_judgment" ? cur.scope : undefined } : null)} className="mt-5" />
 
-          <div className="mt-10 flex flex-wrap gap-3">
-            <Button variant="claros" size="xl" onClick={() => (voice.status === "connected" ? advance() : voice.start().catch(() => advance()))}>
-              <Mic aria-hidden /> {t("db.voice")}
-            </Button>
-            <Button variant="ghost" size="xl" onClick={advance}>
+          {/* the answer is spoken: show that Claros is listening, and the words as they come */}
+          <div className="mt-10 rounded-base border-2 border-ink bg-card p-5 shadow-hard" aria-live="polite">
+            {voiceOn || demo ? (
+              <>
+                <p className="flex items-center gap-3 text-xl font-extrabold">
+                  <span className="relative flex size-4" aria-hidden>
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-claros opacity-60 motion-reduce:animate-none" />
+                    <span className="relative inline-flex size-4 rounded-full bg-claros" />
+                  </span>
+                  {t("db.listening")}
+                </p>
+                <p className={cn("mt-3 min-h-[3.5rem] text-2xl leading-snug", said ? "font-semibold text-ink" : "text-ink-2")}>
+                  {said ? `“${said}”` : caption && caption !== q ? caption : t("db.listening.sub")}
+                </p>
+              </>
+            ) : (
+              <Button variant="claros" size="xl" onClick={() => void voice.start()}>
+                <Mic aria-hidden /> {t("db.voice.on")}
+              </Button>
+            )}
+          </div>
+          <div className="mt-6">
+            <Button variant="ghost" size="lg" onClick={skip}>
               <SkipForward aria-hidden /> {t("db.skip")}
             </Button>
           </div>
+        </div>
+        <div className="min-w-0 space-y-4">
+          <ZoomShot
+            group={`db-${cur.id}`}
+            frames={[{ id: kf ?? `synthetic-${cur.id}`, keyframeId: kf, title: step?.title ?? cur.entity ?? "", highlight: step ? stepHighlight(step) : cur.entity ? { label: cur.entity, to: "?" } : null, caption: q }]}
+            priority
+            className="shadow-hard-lg"
+          />
+        </div>
       </div>
-      <div className="min-w-0 space-y-4">
-        <ZoomShot
-          group={`db-${cur.id}`}
-          frames={[{ id: kf ?? `synthetic-${cur.id}`, keyframeId: kf, title: step?.title ?? cur.entity ?? "", highlight: step ? stepHighlight(step) : cur.entity ? { label: cur.entity, to: "?" } : null, caption: cur.spoken_question ?? "" }]}
-          priority
-          className="shadow-hard-lg"
-        />
-      </div>
-    </div>
-    <LookedUpList items={lookedUp} className="mt-14 border-t-2 border-ink pt-6" />
+      <LookedUpList items={lookedUp} className="mt-14 border-t-2 border-ink pt-6" />
     </>
   );
 }
@@ -350,10 +369,16 @@ function TeachBack({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone:
 
 /* ---------------- publish ---------------- */
 
-function Publish({ map, sessionId, onPublished }: { map: WorkMap; sessionId: string; onPublished: () => void }) {
+function Publish({ map, sessionId, onPublished, byVoice }: { map: WorkMap; sessionId: string; onPublished: () => void; byVoice: { second: boolean } | null }) {
   const { t } = useUi();
-  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
-  const [second, setSecond] = useState(false);
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">(byVoice ? "done" : "idle");
+  const [second, setSecond] = useState(byVoice?.second ?? false);
+  const wrapped = useRef(false);
+  useEffect(() => {
+    if (!byVoice || wrapped.current) return;
+    wrapped.current = true;
+    onPublished(); // already published on the server; just wrap up the session (once)
+  }, [byVoice, onPublished]);
   const publish = async () => {
     setState("busy");
     const r = await publishSession(sessionId); // the server approves the steps and rules; nothing is "published" locally

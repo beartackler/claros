@@ -281,7 +281,7 @@ export interface LookupResponse {
 
 export type ActivityKind = "typing" | "scrolling" | "navigating" | "idle" | "away";
 export type KeyframeReason = "settle" | "boundary" | "heartbeat" | "toast";
-export type ControlAction = "off_record_on" | "off_record_off" | "strike_that" | "not_now" | "end_task";
+export type ControlAction = "off_record_on" | "off_record_off" | "strike_that" | "not_now" | "end_task" | "debrief_skip";
 /** [x, y, w, h] in keyframe pixel coords */
 export type Rect = [number, number, number, number];
 
@@ -410,7 +410,16 @@ export interface SayMsg { type: "say"; id: string; text: string; kind: SayKind; 
 export type ServerMsg =
   | SayMsg | EventsMsg | LedgerMsg | AskMsg | InterveneMsg | ContextUpdateMsg
   | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn | ServerControlMsg | PhaseMsg
-  | NudgeMsg | NudgeResultMsg | LookedUpMsg | SignalsMsg;
+  | NudgeMsg | NudgeResultMsg | LookedUpMsg | SignalsMsg | DebriefMsg;
+
+/** The spoken debrief's progress, mirrored on screen (server-driven: it asks, records, moves on). */
+export interface DebriefMsg {
+  type: "debrief";
+  phase: "questions" | "teach_back" | "done";
+  asked: number;
+  current: Unknown | null;
+  needs_second_run?: boolean;
+}
 
 export type ServerMsgType = ServerMsg["type"];
 export type ServerMsgOf<T extends ServerMsgType> = Extract<ServerMsg, { type: T }>;

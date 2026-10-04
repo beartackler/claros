@@ -62,6 +62,12 @@ def register(bus: Any) -> None:
                 await get_ledger(sid).emit()
             if a == "end_task":
                 await announce_debrief(sid)
+            if a == "debrief_skip":  # the debrief screen's Skip: defer the current question, ask the next one
+                fn = deps.knowledge_attr("debrief.handle_debrief_answer")
+                if fn:
+                    out = await fn(deps.get_session(sid), "__skip__", "not_now")
+                    if out:
+                        await dialog.say(sid, out, "debrief")
             # off_record_off: the web app already says "Back on the record" (saying it here too doubled it)
 
     async def on_hello(sid: str, p: Any) -> None:

@@ -191,7 +191,7 @@ def test_capture_controls_and_ack(offline):
     assert r["action"] == "end_task"
     out = [m for _, m in offline.sent]
     assert {"type": "phase", "phase": "debrief", "workflow_id": None} in out
-    assert says(offline.sent)[-1]["text"] == "Thanks! Let's do a quick debrief."
+    assert says(offline.sent)[-1]["text"] == "Thanks! I'm putting your map together, then I'll ask a few questions."
 
 
 def test_dialog_mode_switch(offline, monkeypatch):

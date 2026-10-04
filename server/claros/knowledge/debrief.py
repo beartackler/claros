@@ -676,6 +676,20 @@ async def _ledger(session_id: str, wm: WorkMap, expert_name: Optional[str], expe
     await d.send(session_id, {"type": "ledger", "open": len(q),
                               "saved_for_later": len([u for u in wm.open_unknowns if u.status == "deferred"]),
                               "top": q[0].model_dump(mode="json") if q else None})
+    await send_state(session_id, wm)
+
+
+async def send_state(session_id: str, wm: Optional[WorkMap] = None, **extra: Any) -> None:
+    """The debrief screen mirrors the spoken debrief: phase, the question being asked right now, how many so far."""
+    st = _states.get(session_id)
+    if st is None:
+        return
+    cur = next((u for u in (wm.open_unknowns if wm else []) if u.id == st.current), None)
+    await d.send(session_id, {"type": "debrief", "phase": st.phase, "asked": st.asked,
+                              "current": cur.model_dump(mode="json") if cur else None, **extra})
+
+
+SKIP_TOKEN = "__skip__"  # the debrief screen's Skip button (no speech needed)
 
 
 # ---------------- teach-back ----------------
@@ -1140,6 +1154,7 @@ async def next_debrief_utterance(session: Any) -> str:
         st.phase = "teach_back"
     if st.phase == "teach_back":
         st.script = await teach_back(wm, lang)
+        await send_state(st.session_id, wm)
         return st.script
     return t("done", lang)
 
@@ -1407,7 +1422,7 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
         u = next((x for x in wm.open_unknowns if x.id == st.current), None)
         st.current = None
         if u is not None:
-            if intent == "not_now" or SKIP.search(text or ""):
+            if intent == "not_now" or SKIP.search(text or "") or text == SKIP_TOKEN:
                 u.status = "deferred"
                 u.meta = {**(u.meta or {}), "skipped": True}
             else:
@@ -1435,6 +1450,7 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
         if is_confirm(text, intent):
             second = await publish_confirmed(wm, sid, eid)
             st.phase = "done"
+            await send_state(sid, wm, needs_second_run=second)
             line = t("done_partial" if second else "done", lang)
             try:  # the published map may answer open learner requests (same matcher as lookup)
                 from .lookup import answer_requests

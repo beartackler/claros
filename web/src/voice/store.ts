@@ -8,7 +8,7 @@
  */
 import { create } from "zustand";
 import type {
-  ActivityKind, ClientToolName, Mode, ClientToolParams, LedgerMsg, Moment, ScreenEvent, ServerMsg,
+  ActivityKind, ClientToolName, Mode, ClientToolParams, DebriefMsg, LedgerMsg, Moment, ScreenEvent, ServerMsg,
 } from "@/lib/contracts";
 
 export type OrbState =
@@ -48,6 +48,7 @@ export interface ClarosState {
   transcript: TranscriptLine[];
   events: ScreenEvent[];
   ledger: Omit<LedgerMsg, "type"> | null;
+  debrief: Omit<DebriefMsg, "type"> | null;
   highlightedStepId: string | null;
   moment: Moment | null;
   openMapId: string | null;
@@ -80,6 +81,7 @@ const initial = {
   transcript: [] as TranscriptLine[],
   events: [] as ScreenEvent[],
   ledger: null,
+  debrief: null,
   highlightedStepId: null,
   moment: null,
   openMapId: null,
@@ -119,6 +121,9 @@ export const useClaros = create<ClarosState>((set) => ({
           break;
         case "ledger":
           patch.ledger = { open: m.open, saved_for_later: m.saved_for_later, top: m.top };
+          break;
+        case "debrief":
+          patch.debrief = { phase: m.phase, asked: m.asked, current: m.current, needs_second_run: m.needs_second_run };
           break;
         case "ask":
         case "intervene":
