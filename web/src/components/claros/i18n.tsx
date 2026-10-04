@@ -2,7 +2,7 @@
 
 // Dictionary i18n + UI prefs (language, role, theme). Dictionaries live in ./dict.ts.
 import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
-import { de, en, es, fr, ru, type Dict, type DictKey } from "./dict";
+import { PLURALS, de, en, es, fr, ru, type Dict, type DictKey, type PluralKey } from "./dict";
 
 export type { DictKey };
 export const LANGS = ["en", "de", "fr", "es", "ru"] as const;
@@ -12,17 +12,15 @@ export const LANG_NAMES: Record<UiLang, string> = { en: "English", de: "Deutsch"
 const DICTS: Record<UiLang, Dict> = { en, de, fr, es, ru };
 
 export type Role = "learner" | "expert";
-export const THEMES = ["system", "light", "dark"] as const;
-export type Theme = (typeof THEMES)[number];
 
 type Ctx = {
   lang: UiLang;
   setLang: (l: UiLang) => void;
   role: Role;
   setRole: (r: Role) => void;
-  theme: Theme;
-  setTheme: (t: Theme) => void;
   t: (k: DictKey, vars?: Record<string, string | number>) => string;
+  /** plural-aware count label ("1 frame", "5 кадров") */
+  tn: (k: PluralKey, n: number) => string;
 };
 
 const UiCtx = createContext<Ctx | null>(null);
@@ -51,13 +49,12 @@ export function translate(lang: UiLang, k: DictKey, vars?: Record<string, string
 
 // Tiny external store so prefs survive client navigation without flicker and hydrate safely.
 const listeners = new Set<() => void>();
-const prefs: { lang: UiLang; role: Role; theme: Theme; loaded: boolean } = { lang: "en", role: "learner", theme: "system", loaded: false };
+const prefs: { lang: UiLang; role: Role; loaded: boolean } = { lang: "en", role: "learner", loaded: false };
 function loadPrefs() {
   if (prefs.loaded || typeof window === "undefined") return;
   prefs.loaded = true;
   prefs.lang = read("claros.lang", LANGS, "en");
   prefs.role = read("claros.role", ["learner", "expert"] as const, "learner");
-  prefs.theme = read("claros.theme", THEMES, "system");
 }
 const subscribe = (l: () => void) => {
   listeners.add(l);
@@ -66,32 +63,14 @@ const subscribe = (l: () => void) => {
 const emit = () => listeners.forEach((l) => l());
 const getLang = () => (loadPrefs(), prefs.lang);
 const getRole = () => (loadPrefs(), prefs.role);
-const getTheme = () => (loadPrefs(), prefs.theme);
-
-function applyTheme(theme: Theme) {
-  const dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  const c = document.documentElement.classList;
-  c.toggle("dark", dark);
-  c.toggle("light", !dark);
-}
 
 export function UiProvider({ children }: { children: React.ReactNode }) {
   const lang = useSyncExternalStore(subscribe, getLang, () => "en" as UiLang);
   const role = useSyncExternalStore(subscribe, getRole, () => "learner" as Role);
-  const theme = useSyncExternalStore(subscribe, getTheme, () => "system" as Theme);
 
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
-
-  useEffect(() => {
-    applyTheme(theme);
-    if (theme !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const on = () => applyTheme("system");
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, [theme]);
 
   const setLang = useCallback((l: UiLang) => {
     prefs.lang = l;
@@ -103,14 +82,15 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
     write("claros.role", r);
     emit();
   }, []);
-  const setTheme = useCallback((th: Theme) => {
-    prefs.theme = th;
-    write("claros.theme", th);
-    emit();
-  }, []);
   const t = useCallback((k: DictKey, vars?: Record<string, string | number>) => translate(lang, k, vars), [lang]);
 
-  const value = useMemo(() => ({ lang, setLang, role, setRole, theme, setTheme, t }), [lang, setLang, role, setRole, theme, setTheme, t]);
+  const tn = useCallback((k: PluralKey, n: number) => {
+    const cat = new Intl.PluralRules(lang).select(n);
+    const forms = PLURALS[lang]?.[k] ?? PLURALS.en[k]!;
+    return (forms[cat] ?? forms.other ?? PLURALS.en[k]!.other!).replaceAll("{n}", String(n));
+  }, [lang]);
+
+  const value = useMemo(() => ({ lang, setLang, role, setRole, t, tn }), [lang, setLang, role, setRole, t, tn]);
   return <UiCtx.Provider value={value}>{children}</UiCtx.Provider>;
 }
 

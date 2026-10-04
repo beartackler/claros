@@ -1,9 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Dark = explicit .dark on <html>, or system dark unless the user pinned .light */
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -77,48 +74,6 @@
   --ring: var(--claros);
   --overlay: rgb(11 11 15 / 0.55);
   --shadow: 4px 4px 0 0 var(--ink);
-}
-
-/* Dark: the notebook at night. Ink and paper swap; fills deepen so their labels stay legible. */
-:root.dark {
-  color-scheme: dark;
-  --paper: #15141a;
-  --paper-2: #1d1c24;
-  --card-bg: #23222b;
-  --ink: #f4efe3;
-  --ink-2: #b9b2a3;
-  --claros: #9b6bff;
-  --claros-ink: #0f0a1d;
-  --claros-soft: #2c2147;
-  --expert: #7cc4ff;
-  --expert-soft: #1b2a3a;
-  --ready: #4fd389;
-  --partial: #f2b733;
-  --missing: #ff7a70;
-  --danger: #ff8f84;
-  --on-fill: #0b0b0f;
-  --overlay: rgb(0 0 0 / 0.65);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    color-scheme: dark;
-    --paper: #15141a;
-    --paper-2: #1d1c24;
-    --card-bg: #23222b;
-    --ink: #f4efe3;
-    --ink-2: #b9b2a3;
-    --claros: #9b6bff;
-    --claros-ink: #0f0a1d;
-    --claros-soft: #2c2147;
-    --expert: #7cc4ff;
-    --expert-soft: #1b2a3a;
-    --ready: #4fd389;
-    --partial: #f2b733;
-    --missing: #ff7a70;
-    --danger: #ff8f84;
-    --on-fill: #0b0b0f;
-    --overlay: rgb(0 0 0 / 0.65);
-  }
 }
 
 @layer base {

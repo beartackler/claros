@@ -126,7 +126,8 @@ VISION_SYSTEM = (
     "Use the OCR lines (with [x,y,w,h] pixel boxes) as grounding for exact text and for field boxes; the "
     "image is the source of truth for structure (which text is a label, a value, a button, a dialog). "
     "Blurred regions are redacted personal data: report their value as \"[REDACTED]\". "
-    "app = product name if recognizable. view = short screen name, e.g. 'Purchase Invoice form', "
+    "app = product name only if its name or logo text is visible on screen; do not guess from look-alike products "
+    "(null if unsure). view = short screen name, e.g. 'Purchase Invoice form', "
     "'Purchase Invoice list'. entity_type = kind of record shown (e.g. 'Purchase Invoice', 'Ticket'); for a list "
     "view entity_id is null. entity_id = the open record's own identifier/number (usually in the header, title or "
     "record sidebar), NOT a reference number inside a field. status = the record's status badge next to the title "
@@ -356,6 +357,17 @@ class StateTracker:
         self.last_keyframe_id: Optional[str] = None
         self.current_key: str = ""
         self.decimal_sep: Optional[str] = None
+        # session-level app identity: the vision model names an unbranded app differently from frame to frame
+        # ("Zammad" / "Freshdesk" / "HelpScout"); one screen-share session is one app until a clear majority says otherwise
+        self.app_votes: dict[str, int] = {}
+
+    def session_app(self, current: Optional[str]) -> Optional[str]:
+        if not self.app_votes:
+            return current
+        best = max(self.app_votes.values())
+        if current and self.app_votes.get(current, 0) == best:
+            return current
+        return max(self.app_votes, key=lambda a: (self.app_votes[a], a == current))
 
     # ----- router -----
     def route(self, lines: list[OcrLine], dims: tuple[int, int], reason: Optional[str] = None
@@ -536,7 +548,7 @@ class StateTracker:
         conf = (0.6 + 0.35 * (vs.confidence if vs else 0)) * mean_conf if vs else 0.55 * mean_conf
         return ScreenState(
             seq=seq, t=t,
-            app=vs.app if vs else None,
+            app=self.session_app(vs.app if vs else None),
             view=(vs.view if vs else None) or heur.title,
             entity_type=(vs.entity_type if vs else None) or heur.entity_type,
             entity_id=heur.entity_id or (vs.entity_id if vs else None),
@@ -563,6 +575,8 @@ class StateTracker:
             log.info("dropping stale vision result seq=%s (applied %s)", seq, self.last_vision_seq)
             return None
         self.last_vision_seq = seq
+        if vs.app and vs.app.strip() and vs.app.strip().lower() not in ("null", "none", "unknown"):
+            self.app_votes[vs.app.strip()] = self.app_votes.get(vs.app.strip(), 0) + 1
         if vs.entity_id:
             vs.entity_id = vs.entity_id.strip() or None
             if vs.entity_id and ("REDACTED" in vs.entity_id or vs.entity_id.lower() in ("null", "none")):

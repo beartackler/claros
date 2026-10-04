@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, useState } from "react";
-import { Check, ChevronDown, Home, Languages, LibraryBig, LogOut, Menu, Monitor, Moon, Sun } from "lucide-react";
+import { Check, ChevronDown, Home, Languages, LibraryBig, LogOut, Menu, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EXPERT, LEA } from "@/lib/mock";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -13,13 +13,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuList } from "@/components/ui/navigation-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { LANGS, LANG_NAMES, THEMES, UiProvider, useUi, type DictKey, type Role, type Theme, type UiLang } from "./i18n";
+import { LANGS, LANG_NAMES, UiProvider, useUi, type DictKey, type Role, type UiLang } from "./i18n";
 import { ClarosDot, ExpertAvatar } from "./primitives";
 import { DebugPanel } from "./debug";
 
@@ -242,10 +241,9 @@ const PERSONA: Record<Role, { user: typeof LEA; sub: DictKey; label: DictKey }> 
   learner: { user: LEA, sub: "role.learner.sub", label: "role.learner" },
   expert: { user: EXPERT, sub: "role.expert.sub", label: "role.expert" },
 };
-const THEME_ICON: Record<Theme, typeof Sun> = { system: Monitor, light: Sun, dark: Moon };
 
 function RoleMenu() {
-  const { t, role, setRole, theme, setTheme } = useUi();
+  const { t, role, setRole } = useUi();
   const me = PERSONA[role];
   return (
     <DropdownMenu>
@@ -280,18 +278,6 @@ function RoleMenu() {
                   <span className="text-xs opacity-80">{t(p.sub)}</span>
                 </span>
                 {role === r ? <Check className="ml-1" aria-hidden /> : null}
-              </DropdownMenuRadioItem>
-            );
-          })}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
-          <DropdownMenuLabel className="text-xs text-ink-2">{t("theme.label")}</DropdownMenuLabel>
-          {THEMES.map((th) => {
-            const Icon = THEME_ICON[th];
-            return (
-              <DropdownMenuRadioItem key={th} value={th}>
-                <Icon aria-hidden /> {t(`theme.${th}` as DictKey)}
               </DropdownMenuRadioItem>
             );
           })}

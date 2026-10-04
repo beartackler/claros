@@ -2,8 +2,7 @@
 
 ## World
 Neobrutalist "apprentice's notebook". Paper-cream ground, ink 2px borders, hard offset shadows (no blur),
-6px radius. Dark mode is the same notebook at night: ink and paper swap, fills deepen so labels stay legible.
-Theme follows the system by default; the account menu pins Light/Dark (`claros.theme`, applied pre-paint in `layout.tsx`).
+6px radius. Light only (dark mode was dropped by product decision; no `prefers-color-scheme` handling).
 
 ## Tokens (`app/globals.css`)
 Claros palette is exposed as Tailwind colors: `paper paper-2 card ink ink-2 claros claros-soft claros-ink
@@ -14,7 +13,7 @@ registry components drop in without restyling.
 - **Violet (`claros`) = Claros is speaking / asking / summoned.** Walk-me-through, Answer by voice, intervention.
 - Coverage: `ready` green, `partial` amber (hatched), `missing` coral — always icon + word.
 - `expert` blue = an expert's own words and judgment calls.
-- Text on bright fills uses `on-fill` (never flips in dark).
+- Text on bright fills uses `on-fill`.
 
 ## Component layer (`components/ui`, neobrutalism.dev registry, Base UI — `render` prop, not asChild)
 Added from the registry: dropdown-menu, navigation-menu, sheet, drawer, breadcrumb, popover, hover-card,
@@ -28,7 +27,7 @@ collapsible, accordion, skeleton, empty, kbd. Extended:
 
 ## Shell (`components/claros/Shell.tsx`)
 Top bar: wordmark · primary nav (NavigationMenu: Home, Walk me through, Workflows; active = ink slab) ·
-language dropdown · role menu (avatar + name; Expert/Learner radio + theme). Phone: menu button opens a
+language dropdown · role menu (avatar + name; Expert/Learner radio). Phone: menu button opens a
 left Sheet with the nav. Inner pages get breadcrumbs (`crumbs` prop). Capture and debrief use **focus
 mode** (`focus` prop): wordmark, session label, language, Exit — no nav.
 Demo controls (force coverage) live only in a hidden panel shown with `?debug=1` (`debug.tsx`).
@@ -69,6 +68,14 @@ Demo controls (force coverage) live only in a hidden panel shown with `?debug=1`
   approval switch (expert). Prev/next step.
 - Mini-map: sticky thumbnail rail (desktop) / strip in the toolbar (phone), same order as the list,
   current step tracked by IntersectionObserver, click to jump.
+- Coverage card is computed from the map (`honestCoverage`): conflicted decisions/guardrails don't count as
+  confirmed, and a "Partial because" row lists disagreements, open questions, unapproved steps.
+- Open questions collapse a conflict's mirrored pair into one neutral line ("Anna: Hold; Marco: Submit… — waiting for
+  both to explain"); the "you do…" phrasing is used only when the viewing expert is one of them. Server text in another
+  language than the UI carries an "Original · EN" badge.
+- Near-duplicate guardrails on a step are merged by word overlap (`dedupeGuardrails`); chips show a ≤40-char short
+  title (`shortTitle`), full rule + action in the tooltip and panel.
+- Counts use plural rules (`tn()` + `PLURALS` in dict.ts, ru one/few/many). Junk requests ("test", <4 chars) are hidden.
 - `highlight_step` from the voice agent scrolls to and flashes the card and follows in an open panel.
 
 ## Learn, capture, debrief

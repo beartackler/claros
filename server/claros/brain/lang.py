@@ -33,13 +33,21 @@ def detect_lang(text: str, default: Optional[str] = None) -> Optional[str]:
         if re.search(r"[ñ¿¡]", t):
             return "es"
         return default
+    # "that's" counts as "that" (English contractions); a single foreign word with a diacritic ("Rückbuchung")
+    # inside an English sentence must not flip the reply language: the diacritic bonus only counts when the
+    # language also has marker words, otherwise it is a tie-breaker
+    words = words + [w.split("'")[0] for w in words if "'" in w]
     scores = {lg: sum(1 for w in words if w in ms) for lg, ms in _MARKERS.items()}
+
+    def bonus(lg: str) -> float:
+        return 2 if scores[lg] >= 1 else 0.5
+
     if re.search(r"[äöüß]", t):
-        scores["de"] += 2
+        scores["de"] += bonus("de")
     if re.search(r"[ñ¿¡]", t):
-        scores["es"] += 2
+        scores["es"] += bonus("es")
     if re.search(r"[çèêàù]|\b(c'est|j'ai|n'est|qu')", t):
-        scores["fr"] += 2
+        scores["fr"] += bonus("fr")
     best = max(scores, key=scores.get)
     ranked = sorted(scores.values(), reverse=True)
     if ranked[0] >= 2 and ranked[0] > ranked[1]:

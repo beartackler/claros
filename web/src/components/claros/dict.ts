@@ -21,10 +21,6 @@ export const en = {
   "role.switch": "Switch role",
 
   "lang.label": "Language",
-  "theme.label": "Theme",
-  "theme.system": "System",
-  "theme.light": "Light",
-  "theme.dark": "Dark",
 
   "crumb.home": "Home",
   "crumb.learn": "Walk me through",
@@ -274,6 +270,11 @@ export const en = {
   "debrief.published": "Published",
 
   /* work map */
+  "map.cov.why": "Partial because",
+  "map.cov.unapproved": "{n} not approved",
+  "map.conflict.neutral": "{positions} — waiting for both to explain.",
+  "q.original": "Original",
+  "q.original.hint": "Shown in the language it was asked in",
   "map.learnThis": "Learn this",
   "map.export": "Export",
   "map.export.skill": "SKILL.md for agents",
@@ -372,10 +373,6 @@ export const ru: Record<DictKey, string> = {
   "role.switch": "Сменить роль",
 
   "lang.label": "Язык",
-  "theme.label": "Тема",
-  "theme.system": "Как в системе",
-  "theme.light": "Светлая",
-  "theme.dark": "Тёмная",
 
   "crumb.home": "Главная",
   "crumb.learn": "Проведи меня",
@@ -448,7 +445,7 @@ export const ru: Record<DictKey, string> = {
   "home.teach.sub": "Работайте как обычно и проговаривайте. Claros спрашивает только в паузах.",
   "home.teach.cta": "Начать запись",
 
-  "wf.evidence": "Доказательства",
+  "wf.evidence": "Факты",
   "wf.judgments": "Решения",
   "wf.guardrails": "Правила",
   "wf.open": "Открытых вопросов: {n}",
@@ -617,6 +614,11 @@ export const ru: Record<DictKey, string> = {
   "debrief.publish.blocked": "Сначала отметьте все случаи",
   "debrief.published": "Опубликовано",
 
+  "map.cov.why": "Частично, потому что",
+  "map.cov.unapproved": "Не утверждено: {n}",
+  "map.conflict.neutral": "{positions} — ждём объяснения от обоих.",
+  "q.original": "Оригинал",
+  "q.original.hint": "Показано на языке, на котором задан вопрос",
   "map.learnThis": "Учиться",
   "map.export": "Экспорт",
   "map.export.skill": "SKILL.md для агентов",
@@ -695,7 +697,7 @@ export const ru: Record<DictKey, string> = {
 export const de: Dict = {
   "nav.home": "Start", "nav.learn": "Zeig's mir", "nav.workflows": "Abläufe", "nav.skip": "Zum Inhalt", "nav.menu": "Menü", "nav.primary": "Hauptmenü",
   "role.label": "Ansicht als", "role.learner": "Lernende:r", "role.expert": "Expert:in", "role.learner.sub": "Abläufe am eigenen Bildschirm lernen", "role.expert.sub": "Claros etwas beibringen, Fragen beantworten", "role.switch": "Rolle wechseln",
-  "lang.label": "Sprache", "theme.label": "Design", "theme.system": "System", "theme.light": "Hell", "theme.dark": "Dunkel",
+  "lang.label": "Sprache",
   "crumb.home": "Start", "crumb.learn": "Zeig's mir", "crumb.workflows": "Abläufe", "focus.capture": "Aufnahme", "focus.debrief": "Nachbesprechung", "focus.exit": "Beenden",
   "data.demo": "Demodaten", "data.demo.hint": "Claros-Server nicht erreichbar — Demodaten",
   "common.open": "Öffnen", "common.later": "Später", "common.close": "Schließen", "common.prev": "Vorheriger Schritt", "common.next": "Nächster Schritt", "common.undo": "Rückgängig", "common.all": "Alle",
@@ -716,7 +718,7 @@ export const de: Dict = {
 export const fr: Dict = {
   "nav.home": "Accueil", "nav.learn": "Guide-moi", "nav.workflows": "Processus", "nav.skip": "Aller au contenu", "nav.menu": "Menu", "nav.primary": "Principal",
   "role.label": "Vue", "role.learner": "Apprenant·e", "role.expert": "Expert·e", "role.learner.sub": "Apprendre sur son propre écran", "role.expert.sub": "Former Claros, répondre aux apprenants", "role.switch": "Changer de rôle",
-  "lang.label": "Langue", "theme.label": "Thème", "theme.system": "Système", "theme.light": "Clair", "theme.dark": "Sombre",
+  "lang.label": "Langue",
   "crumb.home": "Accueil", "crumb.learn": "Guide-moi", "crumb.workflows": "Processus", "focus.capture": "Enregistrement", "focus.debrief": "Débrief", "focus.exit": "Quitter",
   "data.demo": "Données démo", "data.demo.hint": "Serveur Claros injoignable — données démo",
   "common.open": "Ouvrir", "common.later": "Plus tard", "common.close": "Fermer", "common.prev": "Étape précédente", "common.next": "Étape suivante", "common.undo": "Annuler", "common.all": "Tous",
@@ -736,7 +738,7 @@ export const fr: Dict = {
 export const es: Dict = {
   "nav.home": "Inicio", "nav.learn": "Guíame", "nav.workflows": "Procesos", "nav.skip": "Ir al contenido", "nav.menu": "Menú", "nav.primary": "Principal",
   "role.label": "Viendo como", "role.learner": "Aprendiz", "role.expert": "Experto/a", "role.learner.sub": "Aprender en tu propia pantalla", "role.expert.sub": "Enseñar a Claros, responder dudas", "role.switch": "Cambiar rol",
-  "lang.label": "Idioma", "theme.label": "Tema", "theme.system": "Sistema", "theme.light": "Claro", "theme.dark": "Oscuro",
+  "lang.label": "Idioma",
   "crumb.home": "Inicio", "crumb.learn": "Guíame", "crumb.workflows": "Procesos", "focus.capture": "Grabación", "focus.debrief": "Repaso", "focus.exit": "Salir",
   "data.demo": "Datos demo", "data.demo.hint": "Servidor de Claros no disponible — datos demo",
   "common.open": "Abrir", "common.later": "Más tarde", "common.close": "Cerrar", "common.prev": "Paso anterior", "common.next": "Paso siguiente", "common.undo": "Deshacer", "common.all": "Todos",
@@ -751,4 +753,39 @@ export const es: Dict = {
   "capture.offrecord": "Fuera de registro", "debrief.publish": "Publicar mapa",
   "map.filter.all": "Todos", "map.filter.judgment": "Decisiones", "map.filter.guardrail": "Límites", "map.filter.conflict": "Conflictos", "map.filter.unconfirmed": "Sin confirmar",
   "chip.judgment": "Decisión", "chip.guardrail": "Límite", "chip.conflict": "Difieren", "chip.unconfirmed": "Sin confirmar", "map.anyOrder": "Cualquier orden", "map.open": "Abrir", "map.export": "Exportar", "map.learnThis": "Aprender",
+};
+
+/* Plurals (Intl.PluralRules categories). Use via tn(key, n). */
+type Forms = Partial<Record<Intl.LDMLPluralRule, string>>;
+export type PluralKey = "frames" | "steps" | "open" | "conflicts" | "experts";
+export const PLURALS: Record<string, Partial<Record<PluralKey, Forms>>> = {
+  en: {
+    frames: { one: "{n} frame", other: "{n} frames" },
+    steps: { one: "{n} step", other: "{n} steps" },
+    open: { one: "{n} open question", other: "{n} open questions" },
+    conflicts: { one: "{n} disagreement", other: "{n} disagreements" },
+    experts: { one: "{n} expert", other: "{n} experts" },
+  },
+  ru: {
+    frames: { one: "{n} кадр", few: "{n} кадра", many: "{n} кадров", other: "{n} кадра" },
+    steps: { one: "{n} шаг", few: "{n} шага", many: "{n} шагов", other: "{n} шага" },
+    open: { one: "{n} открытый вопрос", few: "{n} открытых вопроса", many: "{n} открытых вопросов", other: "{n} открытого вопроса" },
+    conflicts: { one: "{n} расхождение", few: "{n} расхождения", many: "{n} расхождений", other: "{n} расхождения" },
+    experts: { one: "{n} эксперт", few: "{n} эксперта", many: "{n} экспертов", other: "{n} эксперта" },
+  },
+  de: {
+    frames: { one: "{n} Bild", other: "{n} Bilder" },
+    steps: { one: "{n} Schritt", other: "{n} Schritte" },
+    open: { one: "{n} offene Frage", other: "{n} offene Fragen" },
+  },
+  fr: {
+    frames: { one: "{n} image", other: "{n} images" },
+    steps: { one: "{n} étape", other: "{n} étapes" },
+    open: { one: "{n} question ouverte", other: "{n} questions ouvertes" },
+  },
+  es: {
+    frames: { one: "{n} imagen", other: "{n} imágenes" },
+    steps: { one: "{n} paso", other: "{n} pasos" },
+    open: { one: "{n} pregunta abierta", other: "{n} preguntas abiertas" },
+  },
 };

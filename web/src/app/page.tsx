@@ -15,15 +15,16 @@ import {
   SourceNote,
   useResource,
 } from "@/components/claros/primitives";
-import { LEVEL_BG, MasteryStrip, RequestCard, RequestStatus, WorkflowCard } from "@/components/claros/cards";
-import { sortedSteps } from "@/components/claros/mapUtils";
+import { LEVEL_BG, MasteryStrip, RequestCard, RequestStatus, WorkflowCard, isJunkRequest, useHealth } from "@/components/claros/cards";
+import { openQuestions, sortedSteps, type OpenQuestion } from "@/components/claros/mapUtils";
+import { QuestionLine } from "@/components/claros/questions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { createSession, getMastery, getWorkflow, listRequests, listWorkflows, type Result } from "@/lib/api";
 import { EXPERT, LEA, type WorkflowSummary } from "@/lib/mock";
 import { mergeMastery } from "@/lib/localMastery";
-import type { MasteryNode, Unknown, WorkMap } from "@/lib/contracts";
+import type { MasteryNode, WorkMap } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 
 export default function HomePage() {
@@ -114,7 +115,7 @@ function RequestQueue() {
   const { t } = useUi();
   const reqs = useResource(listRequests, []);
   const sn = useSnoozed();
-  const all = [...(reqs.data ?? [])].sort((a, b) => b.created_at - a.created_at);
+  const all = [...(reqs.data ?? [])].filter((r) => !isJunkRequest(r)).sort((a, b) => b.created_at - a.created_at);
   const open = all.filter((r) => r.status === "open" && !sn.ids.includes(r.id));
   const inProgress = all.filter((r) => r.status === "accepted" || r.status === "recorded");
   const later = all.filter((r) => r.status === "open" && sn.ids.includes(r.id));
@@ -163,26 +164,17 @@ function RequestQueue() {
   );
 }
 
-type OpenQ = { u: Unknown; map: WorkMap; stepId?: string; stepTitle?: string };
+type OpenQ = { q: OpenQuestion; map: WorkMap };
 
 async function loadQuestions(): Promise<Result<OpenQ[]>> {
   const wf = await listWorkflows();
   const mine = wf.data.filter((w) => w.experts.some((e) => e.id === EXPERT.id));
   const pool = (mine.length ? mine : wf.data).slice(0, 8);
   const maps = await Promise.all(pool.map((w) => getWorkflow(w.workflow_id)));
-  const out: OpenQ[] = [];
-  for (const m of maps) {
-    const map = m.data;
-    const conflictStep = map.steps.find((s) => s.conflict);
-    for (const u of map.open_unknowns ?? []) {
-      // conflict questions are addressed to one expert ("X does A, you do B"); skip the ones about me
-      if (u.type === "conflict" && u.spoken_question?.startsWith(EXPERT.name)) continue;
-      const step = u.type === "conflict" ? conflictStep : undefined;
-      out.push({ u, map, stepId: step?.id, stepTitle: step?.title });
-    }
-  }
-  const rank = (q: OpenQ) => (q.u.type === "conflict" ? 0 : q.u.type === "coverage" ? 1 : 2);
-  return { data: out.sort((a, b) => rank(a) - rank(b) || b.u.priority - a.u.priority), source: wf.source };
+  const out: OpenQ[] = maps.flatMap((m) => openQuestions(m.data).map((q) => ({ q, map: m.data })));
+  const rank = (x: OpenQ) => (x.q.kind === "conflict" ? 0 : x.q.unknown.type === "coverage" ? 1 : 2);
+  const prio = (x: OpenQ) => (x.q.kind === "unknown" ? x.q.unknown.priority : 1);
+  return { data: out.sort((a, b) => rank(a) - rank(b) || prio(b) - prio(a)), source: wf.source };
 }
 
 function QuestionsForYou() {
@@ -190,9 +182,9 @@ function QuestionsForYou() {
   const router = useRouter();
   const qs = useResource(loadQuestions, []);
   const [busy, setBusy] = useState<string | null>(null);
-  const answer = async (q: OpenQ) => {
-    setBusy(q.u.id);
-    const s = await createSession({ mode: "debrief", user: EXPERT, lang, workflow_id: q.map.workflow_id });
+  const answer = async (x: OpenQ) => {
+    setBusy(x.q.id);
+    const s = await createSession({ mode: "debrief", user: EXPERT, lang, workflow_id: x.map.workflow_id });
     router.push(`/debrief/${s.data.session_id}`);
   };
   const items = qs.data ?? [];
@@ -207,27 +199,28 @@ function QuestionsForYou() {
         <EmptyState icon={<CircleHelp aria-hidden />}>{t("home.questions.empty")}</EmptyState>
       ) : (
         <ul className="space-y-3">
-          {items.slice(0, 5).map((q) => {
-            const conflict = q.u.type === "conflict";
-            const kindKey = `q.kind.${q.u.type}` as DictKey;
+          {items.slice(0, 5).map((x) => {
+            const conflict = x.q.kind === "conflict";
+            const type = x.q.kind === "conflict" ? "conflict" : x.q.unknown.type;
+            const key = `${x.map.workflow_id}-${x.q.id}`;
             return (
-              <li key={`${q.map.workflow_id}-${q.u.id}`} className={cn("rounded-base border-2 border-ink p-4", conflict ? "bg-partial/25 shadow-hard" : "bg-card")}>
+              <li key={key} className={cn("rounded-base border-2 border-ink p-4", conflict ? "bg-partial/25 shadow-hard" : "bg-card")}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={conflict ? "partial" : q.u.type === "coverage" ? "expert" : "neutral"}>
-                    {conflict ? <Split aria-hidden /> : q.u.type === "coverage" ? <UserRound aria-hidden /> : <CircleHelp aria-hidden />}
-                    {t(kindKey)}
+                  <Badge variant={conflict ? "partial" : type === "coverage" ? "expert" : "neutral"}>
+                    {conflict ? <Split aria-hidden /> : type === "coverage" ? <UserRound aria-hidden /> : <CircleHelp aria-hidden />}
+                    {t(`q.kind.${type}` as DictKey)}
                   </Badge>
-                  <span className="min-w-0 truncate text-xs font-semibold text-ink-2">{t("q.in", { name: q.map.name })}</span>
+                  <span className="min-w-0 truncate text-xs font-semibold text-ink-2">{t("q.in", { name: x.map.name })}</span>
                 </div>
-                <p className="mt-2 font-bold leading-snug">{q.u.spoken_question ?? q.u.hypothesis}</p>
-                {q.stepTitle ? <p className="mt-1 text-xs text-ink-2">{t("q.conflict.at", { step: q.stepTitle })}</p> : null}
+                <QuestionLine map={x.map} q={x.q} viewer={EXPERT} className="mt-2 font-bold leading-snug" />
+                {x.q.kind === "conflict" ? <p className="mt-1 text-xs text-ink-2">{t("q.conflict.at", { step: x.q.step.title })}</p> : null}
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button variant="claros" size="sm" onClick={() => answer(q)} loading={busy === q.u.id} disabled={busy != null && busy !== q.u.id}>
-                    {busy !== q.u.id ? <Mic aria-hidden /> : null}
+                  <Button variant="claros" size="sm" onClick={() => answer(x)} loading={busy === x.q.id} disabled={busy != null && busy !== x.q.id}>
+                    {busy !== x.q.id ? <Mic aria-hidden /> : null}
                     {t("q.answer")}
                   </Button>
                   <Link
-                    href={`/map/${encodeURIComponent(q.map.workflow_id)}${q.stepId ? `?step=${q.stepId}&focus=conflict` : ""}`}
+                    href={`/map/${encodeURIComponent(x.map.workflow_id)}${x.q.kind === "conflict" ? `?step=${x.q.step.id}&focus=conflict` : ""}`}
                     className={buttonVariants({ variant: "ghost", size: "sm" })}
                   >
                     {t("q.see")}
@@ -247,6 +240,7 @@ function ExpertWorkflows() {
   const wf = useResource(listWorkflows, []);
   const mine = (wf.data ?? []).filter((w) => w.experts.some((e) => e.id === EXPERT.id));
   const list = mine.length ? mine : wf.data ?? [];
+  const health = useHealth(list);
   return (
     <section aria-labelledby="your-wf">
       <SectionHeader
@@ -267,7 +261,7 @@ function ExpertWorkflows() {
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {list.map((w) => (
-            <WorkflowCard key={w.workflow_id} w={w} variant="expert" />
+            <WorkflowCard key={w.workflow_id} w={w} variant="expert" health={health[w.workflow_id]} />
           ))}
         </div>
       )}
@@ -388,6 +382,7 @@ function Library({ wf }: { wf: ReturnType<typeof useResource<WorkflowSummary[]>>
   const list = wf.data ?? [];
   const apps = [...new Set(list.flatMap((w) => w.apps))].sort();
   const shown = list.filter((w) => (app === "all" || w.apps.includes(app)) && (cov === "all" || w.coverage.status === cov));
+  const health = useHealth(list);
   const covs = (["ready", "partial", "missing"] as const).filter((c) => list.some((w) => w.coverage.status === c));
 
   return (
@@ -419,7 +414,7 @@ function Library({ wf }: { wf: ReturnType<typeof useResource<WorkflowSummary[]>>
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {shown.map((w) => (
-            <WorkflowCard key={w.workflow_id} w={w} />
+            <WorkflowCard key={w.workflow_id} w={w} health={health[w.workflow_id]} />
           ))}
         </div>
       )}
@@ -452,7 +447,7 @@ function FilterGroup({ label, value, onChange, options }: { label: string; value
 function MyRequests() {
   const { t } = useUi();
   const reqs = useResource(listRequests, []);
-  const mine = (reqs.data ?? []).filter((r) => r.requested_by.id === LEA.id).sort((a, b) => b.created_at - a.created_at);
+  const mine = (reqs.data ?? []).filter((r) => r.requested_by.id === LEA.id && !isJunkRequest(r)).sort((a, b) => b.created_at - a.created_at);
   return (
     <section aria-labelledby="myreq">
       <SectionHeader id="myreq" title={t("home.myreq.title")} count={mine.length} />

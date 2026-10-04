@@ -207,7 +207,7 @@ export function ExpertAvatar({ user, size = 28, index = 0, className }: { user: 
 export function AvatarStack({ users, size = 28, max = 4 }: { users: Pick<User, "name" | "id">[]; size?: number; max?: number }) {
   const shown = users.slice(0, max);
   return (
-    <span className="inline-flex -space-x-2">
+    <span className="inline-flex -space-x-1">
       {shown.map((u, i) => (
         <ExpertAvatar key={u.id} user={u} size={size} index={i} />
       ))}

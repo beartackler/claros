@@ -35,6 +35,7 @@ import {
 } from "@/components/claros/primitives";
 import { KIND, KindChip, type ChipKind } from "@/components/claros/chips";
 import { StepPanel, type Section } from "@/components/claros/StepDetail";
+import { QuestionLine } from "@/components/claros/questions";
 import {
   flatOrder,
   guardrailsFor,
@@ -45,6 +46,9 @@ import {
   matches,
   stepGroups,
   stepHighlight,
+  honestCoverage,
+  openQuestions,
+  shortTitle,
   type MapFilter,
 } from "@/components/claros/mapUtils";
 import { useLiveStore } from "@/components/claros/live";
@@ -284,8 +288,10 @@ function Connector() {
 /* ---------------- header ---------------- */
 
 function MapHeader({ map, source }: { map: WorkMap; source?: "live" | "mock" }) {
-  const { t, role, lang } = useUi();
+  const { t, tn, role, lang } = useUi();
   const router = useRouter();
+  const cov = honestCoverage(map);
+  const openCount = cov.open - cov.conflicts;
   const urls = exportUrls(map.workflow_id);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -368,22 +374,34 @@ function MapHeader({ map, source }: { map: WorkMap; source?: "live" | "mock" }) 
             <Check className="size-3.5" aria-hidden /> {approved}/{map.steps.length}
           </span>
         </div>
-        <Meter value={map.coverage.steps_with_evidence} label={t("map.evidence")} tone="ready" />
-        <Meter value={map.coverage.judgments_complete} label={t("map.judgments")} />
-        <Meter value={map.coverage.guardrails_complete} label={t("map.guardrails")} />
-        {map.coverage.open_unknowns || map.coverage.conflicts ? (
-          <p className="flex flex-wrap gap-x-4 gap-y-1 border-t-2 border-dashed border-ink/30 pt-3 text-xs font-bold">
-            {map.coverage.open_unknowns ? (
-              <span className="inline-flex items-center gap-1">
-                <CircleHelp className="size-3.5" aria-hidden /> {t("wf.open", { n: map.coverage.open_unknowns })}
-              </span>
-            ) : null}
-            {map.coverage.conflicts ? (
-              <span className="inline-flex items-center gap-1">
-                <Split className="size-3.5" aria-hidden /> {t("wf.conflicts", { n: map.coverage.conflicts })}
-              </span>
-            ) : null}
-          </p>
+        <Meter value={cov.evidence} label={t("map.evidence")} tone="ready" />
+        <Meter value={cov.explained} label={t("map.judgments")} />
+        <Meter value={cov.rulesOk} label={t("map.guardrails")} />
+        {map.coverage.status !== "ready" && (openCount || cov.conflicts || cov.unapproved) ? (
+          <div className="border-t-2 border-dashed border-ink/30 pt-3 text-xs font-bold">
+            <p className="mb-1.5 font-semibold text-ink-2">{t("map.cov.why")}</p>
+            <ul className="flex flex-wrap gap-1.5">
+              {cov.conflicts ? (
+                <li>
+                  <Badge variant="partial" className="text-on-fill">
+                    <Split aria-hidden /> {tn("conflicts", cov.conflicts)}
+                  </Badge>
+                </li>
+              ) : null}
+              {openCount ? (
+                <li>
+                  <Badge variant="neutral">
+                    <CircleHelp aria-hidden /> {tn("open", openCount)}
+                  </Badge>
+                </li>
+              ) : null}
+              {cov.unapproved ? (
+                <li>
+                  <Badge variant="dashed">{t("map.cov.unapproved", { n: cov.unapproved })}</Badge>
+                </li>
+              ) : null}
+            </ul>
+          </div>
         ) : null}
       </section>
     </header>
@@ -434,7 +452,7 @@ function StepCard({
   onOpen: (id: string, section?: Section) => void;
   compact?: boolean;
 }) {
-  const { t } = useUi();
+  const { t, tn } = useUi();
   const guards = guardrailsFor(map, s);
   const unconfirmed = isUnconfirmed(map, s);
   const where = [s.state_signature.app, s.state_signature.view].filter(Boolean).join(" · ");
@@ -456,7 +474,7 @@ function StepCard({
           aria-label={`${t("map.step", { n: s.order })}: ${s.title}. ${t("map.open")}`}
           className="absolute inset-0 z-[1] cursor-pointer rounded-[10px] focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-claros"
         />
-        <div className={cn("pointer-events-none relative grid gap-4 p-4 sm:p-5", !compact && "md:grid-cols-[minmax(0,1fr)_200px]")}>
+        <div className={cn("pointer-events-none relative grid items-start gap-4 p-4 sm:p-5", !compact && "md:grid-cols-[minmax(0,1fr)_168px]")}>
           <div className="flex min-w-0 gap-3.5">
             <span className="tnum grid size-11 shrink-0 place-items-center rounded-[6px] border-2 border-ink bg-ink font-mono text-lg font-black text-paper sm:size-12">{s.order}</span>
             <div className="min-w-0 flex-1">
@@ -464,28 +482,40 @@ function StepCard({
               {where ? <p className="mt-0.5 truncate text-xs font-semibold text-ink-2">{where}</p> : null}
               {s.decision?.description && !s.conflict ? <p className="mt-2 line-clamp-2 text-sm text-ink-2">{s.decision.description}</p> : null}
 
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {isJudgment(s) ? (
-                  <KindChip kind="judgment" onClick={() => onOpen(s.id, "decision")} title={s.decision?.description}>
-                    {t("chip.judgment")}
-                  </KindChip>
-                ) : null}
-                {guards.map((g) => (
-                  <KindChip key={g.id} kind="guardrail" onClick={() => onOpen(s.id, `guard-${g.id}`)} title={g.text} className="max-w-[min(100%,22rem)]">
-                    {t(("guard." + g.action) as DictKey)}: {g.text}
-                  </KindChip>
-                ))}
-                {s.conflict ? (
-                  <KindChip kind="conflict" onClick={() => onOpen(s.id, "conflict")}>
-                    {t("chip.conflict")}
-                  </KindChip>
-                ) : null}
-                {unconfirmed ? <KindChip kind="unconfirmed">{t("chip.unconfirmed")}</KindChip> : null}
-                {s.context_note_ids.length ? (
-                  <KindChip kind="notes" onClick={() => onOpen(s.id, "context")}>
-                    {t("chip.notes", { n: s.context_note_ids.length })}
-                  </KindChip>
-                ) : null}
+              {isJudgment(s) || guards.length || s.conflict || unconfirmed || s.context_note_ids.length ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {isJudgment(s) ? (
+                    <KindChip kind="judgment" onClick={() => onOpen(s.id, "decision")} title={s.decision?.description}>
+                      {t("chip.judgment")}
+                    </KindChip>
+                  ) : null}
+                  {guards.map((g) => (
+                    <KindChip key={g.id} kind="guardrail" onClick={() => onOpen(s.id, `guard-${g.id}`)} title={`${t(("guard." + g.action) as DictKey)}: ${g.text}`}>
+                      {shortTitle(g.text)}
+                    </KindChip>
+                  ))}
+                  {s.conflict ? (
+                    <KindChip kind="conflict" onClick={() => onOpen(s.id, "conflict")}>
+                      {t("chip.conflict")}
+                    </KindChip>
+                  ) : null}
+                  {unconfirmed ? <KindChip kind="unconfirmed">{t("chip.unconfirmed")}</KindChip> : null}
+                  {s.context_note_ids.length ? (
+                    <KindChip kind="notes" onClick={() => onOpen(s.id, "context")}>
+                      {t("chip.notes", { n: s.context_note_ids.length })}
+                    </KindChip>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 text-xs font-semibold text-ink-2">
+                  {s.experts.length ? <AvatarStack users={s.experts.map((id) => map.experts.find((e) => e.id === id) ?? { id, name: id })} size={22} /> : null}
+                  {s.moment?.keyframe_ids.length ? <span className="tnum">{tn("frames", s.moment.keyframe_ids.length)}</span> : null}
+                </span>
+                <span className="inline-flex items-center gap-1 text-sm font-extrabold transition-transform duration-150 group-hover:translate-x-0.5">
+                  {t("map.open")} <ChevronRight className="size-4" aria-hidden />
+                </span>
               </div>
             </div>
           </div>
@@ -494,17 +524,6 @@ function StepCard({
               <ScreenThumb keyframeId={s.moment?.keyframe_ids?.[0]} title={s.state_signature.view ?? ""} seed={s.order} highlight={stepHighlight(s)} />
             </div>
           ) : null}
-        </div>
-        <div className="pointer-events-none relative flex items-center justify-between gap-3 border-t-2 border-ink/15 px-4 py-2 sm:px-5">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-2">
-            {s.experts.length ? <AvatarStack users={s.experts.map((id) => map.experts.find((e) => e.id === id) ?? { id, name: id })} size={20} /> : null}
-            {s.moment?.keyframe_ids.length ? (
-              <span className="tnum">{t("map.frames", { n: s.moment.keyframe_ids.length })}</span>
-            ) : null}
-          </span>
-          <span className="inline-flex items-center gap-1 text-sm font-extrabold transition-transform duration-150 group-hover:translate-x-0.5">
-            {t("map.open")} <ChevronRight className="size-4" aria-hidden />
-          </span>
         </div>
       </article>
     </li>
@@ -608,22 +627,26 @@ function MiniMapStrip({ order, current, visible, onJump }: MiniProps) {
 /* ---------------- open questions ---------------- */
 
 function OpenQuestions({ map }: { map: WorkMap }) {
-  const { t } = useUi();
-  if (!map.open_unknowns.length) return null;
+  const { t, role } = useUi();
+  const qs = openQuestions(map);
+  if (!qs.length) return null;
   return (
     <section aria-labelledby="openq" className="mt-12 rounded-base border-2 border-dashed border-ink p-4 sm:p-5">
       <h2 id="openq" className="flex items-center gap-2 text-lg font-extrabold">
         <CircleHelp className="size-5" aria-hidden /> {t("map.openq.title")}
-        <span className="tnum inline-grid h-6 min-w-6 place-items-center rounded-full border-2 border-ink bg-ink px-1.5 text-xs font-black text-paper">{map.open_unknowns.length}</span>
+        <span className="tnum inline-grid h-6 min-w-6 place-items-center rounded-full border-2 border-ink bg-ink px-1.5 text-xs font-black text-paper">{qs.length}</span>
       </h2>
       <p className="mt-1 text-sm text-ink-2">{t("map.openq.sub")}</p>
       <ul className="mt-4 space-y-2">
-        {map.open_unknowns.map((u) => (
-          <li key={u.id} className="flex flex-wrap items-start gap-2 rounded-[4px] border-2 border-ink bg-card p-3 text-sm">
-            <Badge variant={u.type === "conflict" ? "partial" : "neutral"}>{t(`q.kind.${u.type}` as DictKey)}</Badge>
-            <span className="min-w-0 flex-1 font-semibold">{u.spoken_question ?? u.hypothesis}</span>
-          </li>
-        ))}
+        {qs.map((q) => {
+          const type = q.kind === "conflict" ? "conflict" : q.unknown.type;
+          return (
+            <li key={q.id} className="flex flex-wrap items-start gap-2 rounded-[4px] border-2 border-ink bg-card p-3 text-sm">
+              <Badge variant={type === "conflict" ? "partial" : "neutral"}>{t(`q.kind.${type}` as DictKey)}</Badge>
+              <QuestionLine map={map} q={q} viewer={role === "expert" ? EXPERT : null} className="min-w-0 flex-1 font-semibold" />
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

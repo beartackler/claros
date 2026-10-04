@@ -80,3 +80,17 @@ deps: scipy (optional; Hungarian step alignment in knowledge.merge — greedy fa
   until then — the lookup tool fails soft).
 - web-ui: pass `workflowName` to `useClarosVoice` if known; otherwise it comes from `/api/dialog/vars`.
 - brain/__init__.py: two additive lines register `dialog` (router + bus) — no behavior change in custom mode.
+
+## from web-ui (2026-10-03, polish pass)
+- knowledge/merge: near-duplicate guardrails survive the multi-expert merge when Jina embeddings are unavailable
+  (wf_ap_invoice step s2: g4 "Unknown or new supplier: stop and ask the controller…" + h2 "Unknown supplier: don't
+  process, ask the controller."). Please dedupe without Jina too (token overlap ≥0.6 + same `action` works; the UI does
+  this in `web/src/components/claros/mapUtils.ts#dedupeGuardrails` as a stopgap).
+- Guardrail: please add a short `title` (≤40 chars) — the UI derives one from the text before ":" until then.
+- Conflicts: one disagreement is stored as two mirrored `open_unknowns` ("X does A, you do B" per expert) and counted
+  twice in `coverage.open_unknowns`. Please count a conflict once and tag each unknown with the addressed `expert_id` (+ step id)
+  in `meta`, so the UI doesn't have to string-match.
+- `coverage.judgments_complete` / `guardrails_complete` read 1.0 while a judgment is in conflict; UI now computes honest
+  ratios from the map. Please exclude conflicted steps' decisions/guardrails server-side too.
+- Unknowns have no `lang`/`translations`; RU UI shows English questions with an "Original · EN" badge. Please translate
+  `spoken_question` like quotes (translations map).

@@ -4,19 +4,12 @@ import { Split } from "lucide-react";
 import type { Step, WorkMap } from "@/lib/contracts";
 import { useUi } from "./i18n";
 import { ExpertAvatar, QuoteBlock } from "./primitives";
-import { expertById, quotesFor } from "./mapUtils";
+import { expertById, positions, quotesFor } from "./mapUtils";
 
 /** "Experts differ here": both positions side by side, never silently picking one. */
 export function ConflictBanner({ map, step }: { map: WorkMap; step: Step }) {
   const { t } = useUi();
-  // Experts without an explicit variant hold the step's main decision (merge keeps one side as the decision).
-  const positions = [
-    ...step.experts
-      .filter((id) => !step.variants.some((v) => v.expert_id === id))
-      .slice(0, step.decision ? 1 : 0)
-      .map((id) => ({ expert_id: id, description: step.decision!.description, reason_quote_ids: step.decision!.reason_quote_ids })),
-    ...step.variants,
-  ];
+  const ps = positions(step);
   return (
     <div className="rounded-base border-2 border-ink bg-partial p-4 text-on-fill shadow-hard" role="note">
       <p className="flex items-center gap-2 text-lg font-black tracking-[-0.02em]">
@@ -24,7 +17,7 @@ export function ConflictBanner({ map, step }: { map: WorkMap; step: Step }) {
       </p>
       {step.conflict ? <p className="mt-1 text-sm font-semibold">{step.conflict}</p> : null}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {positions.map((v) => {
+        {ps.map((v) => {
           const ex = expertById(map, v.expert_id);
           const idx = Math.max(0, map.experts.findIndex((e) => e.id === v.expert_id));
           return (

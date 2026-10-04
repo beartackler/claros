@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, ArrowUpRight, Check, CircleHelp, Clock, Mic, Split } from "lucide-react";
 import type { CaptureRequest, MasteryNode } from "@/lib/contracts";
 import type { WorkflowSummary } from "@/lib/mock";
-import { acceptRequest } from "@/lib/api";
+import { acceptRequest, getWorkflow } from "@/lib/api";
+import { honestCoverage } from "./mapUtils";
 import { EXPERT } from "@/lib/mock";
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -20,8 +21,8 @@ function HealthBar({ value, label }: { value: number; label: string }) {
   const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
   return (
     <div className="min-w-0">
-      <div className="flex items-baseline justify-between gap-2 text-[11px] font-semibold text-ink-2">
-        <span className="truncate">{label}</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-[11px] font-semibold leading-tight text-ink-2">
+        <span>{label}</span>
         <span className="tnum font-mono text-ink">{pct}%</span>
       </div>
       <div className="mt-1 h-2 overflow-hidden rounded-[2px] border-2 border-ink bg-card" aria-hidden>
@@ -31,8 +32,28 @@ function HealthBar({ value, label }: { value: number; label: string }) {
   );
 }
 
-export function WorkflowCard({ w, variant = "learner" }: { w: WorkflowSummary; variant?: "learner" | "expert" }) {
-  const { t } = useUi();
+export type Health = ReturnType<typeof honestCoverage>;
+
+/** Honest per-workflow health, computed from the full maps (server ratios ignore conflicts). */
+export function useHealth(list: WorkflowSummary[] | undefined, enabled = true) {
+  const [h, setH] = useState<Record<string, Health>>({});
+  const ids = (list ?? []).map((w) => w.workflow_id).join(",");
+  useEffect(() => {
+    if (!enabled || !ids) return;
+    let alive = true;
+    Promise.all(ids.split(",").slice(0, 12).map(async (id) => [id, honestCoverage((await getWorkflow(id)).data)] as const)).then(
+      (r) => alive && setH(Object.fromEntries(r)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [ids, enabled]);
+  return h;
+}
+
+export function WorkflowCard({ w, variant = "learner", health }: { w: WorkflowSummary; variant?: "learner" | "expert"; health?: Health }) {
+  const { t, tn } = useUi();
+  const open = health ? health.open - health.conflicts : Math.max(0, w.coverage.open_unknowns - 2 * w.coverage.conflicts); // server stores one conflict as a mirrored pair
   const learnable = w.coverage.status !== "missing";
   return (
     <article className="group relative flex h-full flex-col rounded-base border-2 border-ink bg-card p-4 shadow-hard transition-[transform,box-shadow] duration-150 focus-within:-translate-x-px focus-within:-translate-y-px hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-lg sm:p-5">
@@ -51,9 +72,9 @@ export function WorkflowCard({ w, variant = "learner" }: { w: WorkflowSummary; v
 
       {variant === "expert" ? (
         <div className="mt-4 grid grid-cols-3 gap-3">
-          <HealthBar value={w.coverage.steps_with_evidence} label={t("wf.evidence")} />
-          <HealthBar value={w.coverage.judgments_complete} label={t("wf.judgments")} />
-          <HealthBar value={w.coverage.guardrails_complete} label={t("wf.guardrails")} />
+          <HealthBar value={health?.evidence ?? w.coverage.steps_with_evidence} label={t("wf.evidence")} />
+          <HealthBar value={health?.explained ?? w.coverage.judgments_complete} label={t("wf.judgments")} />
+          <HealthBar value={health?.rulesOk ?? w.coverage.guardrails_complete} label={t("wf.guardrails")} />
         </div>
       ) : null}
 
@@ -64,17 +85,17 @@ export function WorkflowCard({ w, variant = "learner" }: { w: WorkflowSummary; v
             <span className="max-w-[16ch] truncate">{w.experts.map((e) => e.name.split(" ")[0]).join(", ")}</span>
           </span>
         ) : null}
-        {w.step_count ? <span className="tnum">{t("common.steps", { n: w.step_count })}</span> : null}
-        {w.coverage.open_unknowns ? (
+        {w.step_count ? <span className="tnum">{tn("steps", w.step_count)}</span> : null}
+        {open ? (
           <span className="tnum inline-flex items-center gap-1">
             <CircleHelp className="size-3.5" aria-hidden />
-            {t("wf.open", { n: w.coverage.open_unknowns })}
+            {tn("open", open)}
           </span>
         ) : null}
         {w.coverage.conflicts ? (
           <span className="tnum inline-flex items-center gap-1">
             <Split className="size-3.5" aria-hidden />
-            {t("wf.conflicts", { n: w.coverage.conflicts })}
+            {tn("conflicts", w.coverage.conflicts)}
           </span>
         ) : null}
         <span className="ml-auto inline-flex items-center gap-2">
@@ -199,3 +220,9 @@ export function MasteryStrip({ levels, total }: { levels: MasteryNode["level"][]
     </div>
   );
 }
+
+/** Test/junk requests ("test", "x") never reach the queue. */
+export const isJunkRequest = (r: CaptureRequest) => {
+  const h = r.workflow_hint.trim();
+  return h.length < 4 || /^(test|testing|asdf|foo|tmp)\b/i.test(h);
+};

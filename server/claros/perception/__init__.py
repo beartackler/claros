@@ -54,6 +54,16 @@ def entity_fields(session_id: str) -> dict[str, dict]:
     return {k: {fk: f.model_dump(mode="json") for fk, f in m.items()} for k, m in p.tracker.entity_models.items()}
 
 
+def screen_text(session_id: str, max_chars: int = 2000) -> str:
+    """Visible text of the latest frame (OCR, PII already masked), top-to-bottom. Free text such as a customer's
+    message is not a labeled field, so ScreenState alone does not carry it."""
+    p = _PIPES.get(session_id)
+    lines = (p.tracker.prev_lines or []) if p else []
+    out = " | ".join(ln.text.strip() for ln in sorted(lines, key=lambda ln: (ln.bbox[1] // 12, ln.bbox[0]))
+                     if ln.text and ln.text.strip())
+    return out[:max_chars]
+
+
 async def _on_keyframe(sid: str, msg: dict) -> None:
     await get_pipeline(sid).on_keyframe(msg)
 
@@ -88,4 +98,4 @@ def register(bus: Any) -> None:
     log.info("perception registered")
 
 
-__all__ = ["register", "get_pipeline", "current_state", "entity_fields", "SessionPipeline"]
+__all__ = ["register", "get_pipeline", "current_state", "entity_fields", "screen_text", "SessionPipeline"]
