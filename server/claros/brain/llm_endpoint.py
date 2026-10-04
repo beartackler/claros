@@ -458,8 +458,26 @@ def apply_control(sid: str, action: str) -> None:
             pass
         lg.off_record = on
         gate.set_off_record(sid, on)
+        if on:
+            try:  # the request and the sentence right before it (≤5 s) are not kept
+                from claros.privacy import redact_before_off_record
+                redact_before_off_record(sid)
+            except Exception:  # noqa: BLE001
+                deps.log.exception("off-record redaction failed")
     elif action == "strike_that":
         lg.strike_last()
+        try:  # tombstone the last 30 s: utterances, screen events/states, keyframes, ledger items
+            from claros.privacy import strike
+            strike(sid)
+        except Exception:  # noqa: BLE001
+            deps.log.exception("strike failed")
+        if getattr(sess, "mode", None) == "debrief":
+            fn = deps.knowledge_attr("debrief.strike_recent")
+            if fn:
+                try:
+                    asyncio.get_running_loop().create_task(fn(sid))
+                except RuntimeError:
+                    pass
     elif action == "not_now":
         gate.snooze(sid)
     elif action == "end_task":

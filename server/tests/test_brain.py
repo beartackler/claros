@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from claros.brain import deps, intents, ledger as ledger_mod, llm_endpoint
+from claros.brain import deps, intents, lang as L, ledger as ledger_mod, llm_endpoint
 from claros.brain.gate import Gate, GateConfig, gate as GATE
 
 
@@ -321,7 +321,7 @@ def test_endpoint_session_from_system_prompt_and_russian(offline, client):
                     json={"stream": True, "messages": [
                         {"role": "system", "content": "Agent.\nclaros-session: ru1"},
                         {"role": "user", "content": "не записывай это"}]})
-    assert _content(_sse(r)) == "Не записываю."
+    assert _content(_sse(r)) == L.phrase("off_record", "ru")
     assert offline.get_session("ru1").off_record is True
     assert any(m[2].get("action") == "off_record_on" for m in offline.sent if m[1] == "ws.out")
 

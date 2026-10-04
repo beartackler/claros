@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from . import deps
+from . import deps, lang as L
 from .gate import gate
 from .ledger import get_ledger, ledgers
 from .llm_endpoint import announce_debrief, apply_control, interventions, router as _llm_router
@@ -62,6 +62,8 @@ def register(bus: Any) -> None:
                 await get_ledger(sid).emit()
             if a == "end_task":
                 await announce_debrief(sid)
+            if a == "off_record_off":  # Resume tap (the mic was muted while off the record)
+                await dialog.say(sid, L.phrase("on_record", deps.session_lang(sid)), "ack")
 
     async def on_hello(sid: str, p: Any) -> None:
         s = deps.get_session(sid)

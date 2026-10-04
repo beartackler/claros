@@ -31,7 +31,7 @@ from claros.models import (
 from . import _deps as d
 from .common import (
     PRIOR_VARS,
-    OPEN_STATUSES, checks_pass, eval_predicate, guardrail_by_id, load_map, ordered_steps, predicate_vars, save_map,
+    OPEN_STATUSES, checks_pass, eval_predicate, well_formed, guardrail_by_id, load_map, ordered_steps, predicate_vars, save_map,
     step_by_id,
 )
 
@@ -801,6 +801,8 @@ async def apply_correction(wm: WorkMap, text: str, lang: str, quote_id: Optional
         new = p.get("new")
         if f == "predicate" and isinstance(new, str):
             new = d.parse_json(new)
+        if f == "predicate" and new is not None and not valid_patch_predicate(wm, old, new, text):
+            continue  # malformed / unobservable vars / literals the expert never said
         if old == new:
             continue
         try:
@@ -1063,7 +1065,7 @@ def valid_patch_predicate(wm: WorkMap, old: Any, new: Any, answer: str) -> bool:
     """Vars must be observable; every string literal must be in the old predicate or in the expert's words."""
     if new is None:
         return True
-    if not isinstance(new, dict):
+    if not isinstance(new, dict) or not well_formed(new):
         return False
     vs = predicate_vars(new)
     if not vs or any(v not in _allowed_vars(wm) and not v.startswith("doc.") for v in vs):
@@ -1310,8 +1312,8 @@ async def _rule_from_answer(wm: WorkMap, u: Unknown, text: str, q: Quote, ev: Mo
     u.extracted_rule = ExtractedRule(**{k: (str(rule[k]) if rule.get(k) is not None else None)
                                         for k in ("condition", "threshold", "action", "escalate_to")})
     pred = rule.get("predicate") if isinstance(rule.get("predicate"), dict) else None
-    if pred and not all(v in wm.canonical_vars or v.startswith("doc.") or v in PRIOR_VARS
-                        for v in predicate_vars(pred)):
+    if pred and (not well_formed(pred) or not all(v in wm.canonical_vars or v.startswith("doc.") or v in PRIOR_VARS
+                                                  for v in predicate_vars(pred))):
         rule["predicate"] = None  # unobservable vars would never evaluate on a learner screen
     dup = _similar_guardrail(wm, rule.get("guardrail_text") or "", text) if rule.get("guardrail_text") else None
     if dup is not None:  # same rule restated (e.g. "the controller, Frank, approves UK invoices")
@@ -1375,3 +1377,33 @@ async def on_hello(session_id: str, payload: Any) -> None:
     if isinstance(payload, dict) and payload.get("mode") == "debrief" and payload.get("workflow_id"):
         if session_id not in _states:
             start(session_id, payload["workflow_id"])
+
+
+async def strike_recent(session_id: str, window_s: float = 30.0) -> int:
+    """"Strike that" during a debrief: answers given in the last `window_s` seconds leave the map (their quotes are
+    unlinked from steps/guardrails/unknowns and the questions reopen). Returns the number of quotes removed."""
+    st = _states.get(session_id)
+    wm = load_map(st.workflow_id) if st else None
+    if wm is None:
+        return 0
+    since = d.now_ms() - window_s * 1000
+    gone = {q.id for q in wm.quotes if q.session_id == session_id and q.source == "debrief" and q.t >= since}
+    if not gone:
+        return 0
+    wm.quotes = [q for q in wm.quotes if q.id not in gone]
+    for g in wm.guardrails:
+        g.quote_ids = [x for x in g.quote_ids if x not in gone]
+        g.evidence = [m for m in g.evidence if not set(m.utterance_ids) & gone]
+    wm.guardrails = [g for g in wm.guardrails if g.quote_ids]  # a rule only the struck answer stated is gone too
+    keep = {g.id for g in wm.guardrails}
+    for s in wm.steps:
+        s.guardrail_ids = [x for x in s.guardrail_ids if x in keep]
+        if s.decision:
+            s.decision.reason_quote_ids = [x for x in s.decision.reason_quote_ids if x not in gone]
+        for v in s.variants:
+            v.reason_quote_ids = [x for x in v.reason_quote_ids if x not in gone]
+    for u in wm.open_unknowns:
+        if set(u.answer_utterance_ids) & gone:
+            u.status, u.resolution, u.extracted_rule, u.answer_utterance_ids = "open", None, None, []
+    await save_map(wm, session_id)
+    return len(gone)

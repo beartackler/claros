@@ -19,7 +19,7 @@ from claros.models import (
 
 from . import _deps as d
 from .common import (
-    OPEN_STATUSES, PRIOR_VARS, compute_coverage, eval_predicate, load_map, moment_ok, new_unknown, predicate_vars,
+    OPEN_STATUSES, PRIOR_VARS, compute_coverage, well_formed, eval_predicate, load_map, moment_ok, new_unknown, predicate_vars,
     save_map, validate_evidence,
 )
 
@@ -51,9 +51,14 @@ def replay(session_id: str) -> Replay:
     r = Replay(session_id)
     off = False
     unknowns: dict[str, Unknown] = {}
-    for e in d.st_call("iter_log", session_id, default=[]) or []:
+    entries = list(d.st_call("iter_log", session_id, default=[]) or [])
+    # "strike that" tombstones the last 30 s in the log (claros.privacy); older logs only have the control row
+    tombstoned = any((e.get("kind") or "") == "privacy.struck" for e in entries)
+    for e in entries:
         kind = (e.get("kind") or "").lower()
         p = e.get("payload")
+        if kind.startswith("struck:") or kind.startswith("privacy."):
+            continue
         try:
             if "control" in kind and isinstance(p, dict):
                 a = p.get("action")
@@ -61,7 +66,7 @@ def replay(session_id: str) -> Replay:
                     off = True
                 elif a == "off_record_off":
                     off = False
-                elif a == "strike_that":
+                elif a == "strike_that" and not tombstoned:
                     for i in range(len(r.utterances) - 1, -1, -1):
                         if r.utterances[i].get("role", "user") == "user":
                             r.utterances.pop(i)
@@ -141,6 +146,8 @@ def timeline(r: Replay, max_lines: int = 500) -> str:
     for u in r.utterances:
         rows.append((u["t"], f"SAY {u['id']} ({u['role']}, {u.get('lang') or '?'}): {u['text']}"))
     for u in r.unknowns:
+        if u.status == "dropped":
+            continue
         rows.append((u.created_t, f"LEDGER {u.id} {u.type}/{u.scope} status={u.status} q={u.spoken_question!r} "
                                   f"answer={u.resolution!r} rule={u.extracted_rule.model_dump() if u.extracted_rule else None}"))
     rows.sort(key=lambda x: x[0])
@@ -772,7 +779,8 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     # predicates: every var must map to a label that was actually on screen, else the guardrail is fuzzy
     # (a predicate over "item.is_equipment" can never be evaluated on a learner's screen and would never fire)
     observable = observable_vars(wm, r)
-    derived = {k[:-5] + suf for k in observable if k.endswith("_date") for suf in ("_month", "_year")}
+    derived = {base + suf for k in observable if k.endswith("_date") for base in (k[:-5], k)
+               for suf in ("_month", "_year")}
     if _has_roles(observable):
         derived |= set(PRIOR_VARS)  # session memory (records seen earlier) is evaluable at runtime
     for g in wm.guardrails:
@@ -786,6 +794,8 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
                 eval_predicate(g.predicate, probe)
             except Exception:  # noqa: BLE001
                 bad = bad or ["<invalid>"]
+            if not well_formed(g.predicate):
+                bad = bad or ["<malformed json-logic>"]
             if not bad and tautological(g.predicate, wm):
                 bad = ["<var compared with a var read from the same on-screen label>"]
             if bad:

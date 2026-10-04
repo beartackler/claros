@@ -257,9 +257,9 @@ def canonical_vars_from_state(state: ScreenState, wm: WorkMap) -> dict[str, Any]
                     out[canon] = dt[1] if canon.endswith("_month") else dt[0]
             if canon.endswith("_date"):
                 dt = parse_date(f.normalized if isinstance(f.normalized, str) else f.value)
-                if dt:
-                    out[canon[:-5] + "_month"] = dt[1]
-                    out[canon[:-5] + "_year"] = dt[0]
+                if dt:  # both "<x>_month" and "<x>_date_month" spellings (the builder LLM writes either)
+                    out[canon[:-5] + "_month"] = out[canon + "_month"] = dt[1]
+                    out[canon[:-5] + "_year"] = out[canon + "_year"] = dt[0]
     for k, v in (("doc.status", state.status), ("doc.entity_type", state.entity_type), ("doc.view", state.view),
                  ("doc.app", state.app)):
         if v is not None:
@@ -500,6 +500,34 @@ def _eq(a: Any, b: Any) -> bool:
     if na is not None and nb is not None:
         return na == nb
     return a == b
+
+
+_OPS = {"and", "or", "!", "!!", "==", "===", "!=", "!==", ">", ">=", "<", "<=", "in", "var", "if", "+", "-", "*",
+        "/", "min", "max", "missing", "cat", "substr"}
+
+
+def well_formed(p: Any) -> bool:
+    """Strict json-logic shape check: one known operator per object, list args (var/!/!! may take a scalar).
+    eval_predicate swallows errors, so a malformed patch (e.g. {"<": {...}, ":null},{": null}) would otherwise be
+    stored as a guardrail that never fires."""
+    if isinstance(p, (str, int, float, bool)) or p is None:
+        return True
+    if isinstance(p, list):
+        return all(well_formed(x) for x in p)
+    if not isinstance(p, dict) or len(p) != 1:
+        return False
+    op, args = next(iter(p.items()))
+    if op not in _OPS:
+        return False
+    if op == "var":
+        return isinstance(args, (str, list)) and (not isinstance(args, list) or (args and isinstance(args[0], str)))
+    if op in ("!", "!!") and not isinstance(args, list):
+        return well_formed(args)
+    if not isinstance(args, list) or not args:
+        return False
+    if op in ("==", "===", "!=", "!==", ">", ">=", "<", "<=", "in") and len(args) not in (2, 3):
+        return False
+    return all(well_formed(x) for x in args)
 
 
 def eval_predicate(pred: dict[str, Any], vars_: dict[str, Any]) -> Optional[bool]:
