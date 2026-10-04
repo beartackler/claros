@@ -41,6 +41,7 @@ case "$cmd" in
     bexec "bench --site $SITE restore $GOLD --db-root-username root --db-root-password '$DB_ROOT_PW' && \
            bench --site $SITE clear-cache"
     echo "restored $SITE to golden snapshot"
+    python3 grid_prefs.py || echo "(grid column prefs not applied; ERPNext still usable)"
     ;;
   list)
     bexec "ls -la $IN 2>/dev/null || echo '(none in volume)'"; ls -la "$HOST_DIR" 2>/dev/null || true
