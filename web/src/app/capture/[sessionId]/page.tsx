@@ -144,13 +144,12 @@ function useDemoDrip(enabled: boolean) {
 function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture: Live["capture"]; voice: Live["voice"] }) {
   const { t } = useUi();
   const router = useRouter();
-  const wsStatus = useLiveStore((s) => s.wsStatus);
   const liveEvents = useLiveStore((s) => s.events);
   const ledger = useLiveStore((s) => s.ledger);
   const offRecord = useLiveStore((s) => s.offRecord);
   const phase = useLiveStore((s) => s.phase);
   const caption = useLiveStore((s) => s.caption);
-  const demo = wsStatus !== "open" && liveEvents.length === 0;
+  const demo = useSearchParams().get("demo") === "1" && liveEvents.length === 0; // only an explicit review flag, never on a dropped socket
   const orb = useOrbState();
   const pip = usePip();
 

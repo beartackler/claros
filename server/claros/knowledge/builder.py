@@ -1089,13 +1089,40 @@ async def publish_expert_map(wm: WorkMap, session_id: Optional[str] = None) -> W
     return await save_map(wm, session_id)
 
 
+def _mark_session(sess: Any, map_status: str, workflow_id: Optional[str] = None) -> None:
+    """The debrief page waits on these: which map this capture became (never 'the latest map')."""
+    if sess is None or getattr(sess, "extra", None) is None:
+        return
+    sess.extra["map_status"] = map_status
+    if workflow_id:
+        sess.workflow_id = workflow_id
+    try:
+        from claros.session import sessions  # type: ignore
+        if getattr(sess, "id", None) and sessions.get(sess.id) is sess:
+            sessions.save(sess)
+    except Exception:  # noqa: BLE001
+        d.log.debug("session save failed", exc_info=True)
+
+
 async def on_session_ended(session_id: str, payload: Any) -> None:
     mode = (payload or {}).get("mode") if isinstance(payload, dict) else None
     if mode is None:
         mode = getattr(d.get_session(session_id), "mode", None)
     if mode != "capture":
         return
-    wm = await build_map(session_id)
+    sess = d.get_session(session_id)
+    r = replay(session_id)
+    if not r.expert_utts and len(r.events) < 3:  # nothing was shown or said on the record: no map, say so
+        _mark_session(sess, map_status="empty")
+        await d.send(session_id, {"type": "status", "level": "info", "text": "Nothing was recorded, so there is no map."})
+        return
+    _mark_session(sess, map_status="building")
+    try:
+        wm = await build_map(session_id)
+    except Exception:
+        _mark_session(sess, map_status="failed")
+        raise
+    _mark_session(sess, map_status="ready", workflow_id=wm.workflow_id)
     await d.send(session_id, {"type": "status", "level": "info",
                               "text": f"Work map built: {len(wm.steps)} steps, {len(wm.guardrails)} guardrails, "
                                       f"{len(wm.open_unknowns)} open questions."})

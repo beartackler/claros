@@ -3,7 +3,7 @@
  * Document Picture-in-Picture helpers. The PiP window only renders UI (portal);
  * the ElevenLabs session, mic and capture all stay in the opener tab.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 interface DocumentPictureInPicture {
@@ -66,6 +66,14 @@ export function usePip() {
     pipWindow?.close();
     setPipWindow(null);
   }, [pipWindow]);
+
+  // The pop-out belongs to the page that opened it: leaving capture/learning (or ending it) closes it,
+  // otherwise Chrome keeps an empty always-on-top window around.
+  const ref = useRef<Window | null>(null);
+  useEffect(() => {
+    ref.current = pipWindow;
+  }, [pipWindow]);
+  useEffect(() => () => ref.current?.close(), []);
 
   return { supported, pipWindow, open, close };
 }

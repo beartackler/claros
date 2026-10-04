@@ -11,7 +11,7 @@ import { ArrowRight, Check, Mic, PencilLine, SkipForward } from "lucide-react";
 import { Shell } from "@/components/claros/Shell";
 import { useUi, type DictKey } from "@/components/claros/i18n";
 import { LookedUpList, WhyTag, useLatestWhy, useLookedUp } from "@/components/claros/Evidence";
-import { ClarosDot, ErrorState, Loading, SourceNote, useResource } from "@/components/claros/primitives";
+import { ClarosDot, EmptyState, ErrorState, Loading, SourceNote, useResource } from "@/components/claros/primitives";
 import { ZoomShot } from "@/components/claros/Lightbox";
 import { sortedSteps, stepHighlight } from "@/components/claros/mapUtils";
 import { useJoinSession, useLive, useLiveStore } from "@/components/claros/live";
@@ -23,6 +23,7 @@ import type { Step, Unknown, WorkMap } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 
 type Stage = "questions" | "teachback" | "publish";
+const EMPTY = "__empty__";
 type Voice = ReturnType<typeof useLive>["voice"];
 
 export default function DebriefPage() {
@@ -37,15 +38,31 @@ function Debrief() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const { t, lang } = useUi();
   const res = useResource(async () => {
-    const sess = await getSession(sessionId);
-    const wid = sess.source === "live" && sess.data.workflow_id ? sess.data.workflow_id : await latestWorkflowId();
-    return getWorkflow(wid);
+    // Wait for THIS capture's map (the server builds it after Done) — never fall back to another map.
+    const t0 = Date.now();
+    for (;;) {
+      const sess = await getSession(sessionId);
+      if (sess.source !== "live") return getWorkflow(await latestWorkflowId()); // offline demo only
+      const { workflow_id: wid, extra } = sess.data;
+      const status = extra?.map_status;
+      if (status === "empty") throw new Error(EMPTY);
+      if (status === "failed") throw new Error("The map couldn't be built.");
+      if (wid && (status === "ready" || (!status && Date.now() - t0 > 8000))) return getWorkflow(wid);
+      if (Date.now() - t0 > 180_000) throw new Error("The map is taking too long to build.");
+      await new Promise((r) => setTimeout(r, 1500));
+    }
   }, [sessionId]);
   useJoinSession(res.data ? sessionId : null, "debrief", EXPERT, lang, res.data?.workflow_id);
   const { voice } = useLive(sessionId, "debrief", lang, EXPERT.name);
   const [stage, setStage] = useState<Stage>("questions");
 
-  if (res.loading) return <Loading rows={3} />;
+  if (res.loading) return <Loading label={t("db.building")} rows={3} />;
+  if (res.error === EMPTY)
+    return (
+      <EmptyState action={<Link href="/" className={buttonVariants({ variant: "primary", size: "lg" })}>{t("db.empty.cta")}</Link>}>
+        <p className="text-2xl font-bold">{t("db.empty")}</p>
+      </EmptyState>
+    );
   if (res.error || !res.data) return <ErrorState message={res.error} onRetry={res.retry} />;
   const map = res.data;
 
@@ -58,7 +75,7 @@ function Debrief() {
           <Stepper stage={stage} />
         </div>
       </div>
-      {stage === "questions" && <Questions map={map} demo={res.source === "mock" || !map.open_unknowns.length} voice={voice} onDone={() => setStage("teachback")} />}
+      {stage === "questions" && <Questions map={map} demo={res.source === "mock"} voice={voice} onDone={() => setStage("teachback")} />}
       {stage === "teachback" && <TeachBack map={map} voice={voice} onDone={() => setStage("publish")} />}
       {stage === "publish" && <Publish map={map} />}
       <span className="sr-only">{t("debrief.title")}</span>

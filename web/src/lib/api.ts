@@ -179,7 +179,8 @@ export function createSession(body: {
   );
 }
 
-export type SessionInfo = { id: string; mode: string; workflow_id?: string | null; lang?: string };
+export type SessionInfo = { id: string; mode: string; workflow_id?: string | null; lang?: string; ended?: boolean;
+  extra?: { map_status?: "building" | "ready" | "empty" | "failed" } };
 export function getSession(id: string): Promise<Result<SessionInfo>> {
   return withFallback(
     () => req<SessionInfo>(`/api/sessions/${encodeURIComponent(id)}`),
