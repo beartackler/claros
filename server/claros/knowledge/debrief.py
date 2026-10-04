@@ -851,6 +851,8 @@ async def apply_correction(wm: WorkMap, text: str, lang: str, quote_id: Optional
         new = p.get("new")
         if f == "predicate" and isinstance(new, str):
             new = d.parse_json(new)
+        if f == "owner" and (not isinstance(new, str) or len(new.split()) > 5 or re.search(r"[:—(;]", new)):
+            continue  # an owner is a person or role ("Frank, the controller"), never a note
         if f == "predicate" and (new is None or not valid_patch_predicate(wm, old, new, text)):
             continue  # malformed / unobservable vars / unsaid literals; a correction never disables a check (e2e:
             # "maintenance stays an expense" nulled the capex predicate) — the refinement lives in the rule text
@@ -1371,6 +1373,15 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
     return t("done", lang)
 
 
+def _stated_by(rule_text: str, answer: str) -> bool:
+    """A new rule must come from the expert's OWN words, not from Claros's question that a bare "yes" confirmed
+    (e2e: "Yes, that's how I do it." to "Do foreign-currency invoices need an extra check?" became a guardrail)."""
+    from .builder import token_ground
+    if len(_toks(answer)) < 4:
+        return False
+    return bool(token_ground(rule_text, [{"id": "a", "text": answer, "role": "user"}]))
+
+
 async def _rule_from_answer(wm: WorkMap, u: Unknown, text: str, q: Quote, ev: Moment, eid: str) -> None:
     """A live leftover / gap answer may state a new rule: restated rules are merged, new ones become guardrails."""
     rule = await _extract_rule(u, text, wm)
@@ -1396,7 +1407,8 @@ async def _rule_from_answer(wm: WorkMap, u: Unknown, text: str, q: Quote, ev: Mo
         dup.quote_ids = list(dict.fromkeys(dup.quote_ids + [q.id]))
         if rule.get("escalate_to") and not dup.owner:
             dup.owner = rule["escalate_to"]
-    elif rule.get("guardrail_text") and not guardrail_by_id(wm, u.entity or ""):
+    elif rule.get("guardrail_text") and not guardrail_by_id(wm, u.entity or "") and \
+            _stated_by(rule["guardrail_text"], text):
         g = Guardrail(id=d.new_id("g"), text=rule["guardrail_text"], quote_ids=[q.id],
                       predicate=rule.get("predicate") if isinstance(rule.get("predicate"), dict) else None,
                       evidence=[ev], experts=[eid],

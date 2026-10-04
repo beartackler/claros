@@ -144,12 +144,15 @@ def debrief_reply(text: str) -> str:
             return "Yes, correct."
         return ("No, that one must be stopped — it's a guardrail case." if want else
                 "No, that's fine to book normally, no guardrail applies there.")
-    if re.search(r"is (that|this) right\??\s*$|did i get (it|that) right|how it works\??\s*$|confirm", low) \
-            and len(low.split()) > 40:
-        return TEACHBACK_CORRECTION if not _corrected.get("done") else "Yes, that's how it works."
-    if re.search(r"now:|now says|changed|anything else|is that how it works|is it right now", low):
+    if re.search(r"now:|now says|anything else, or|is it right now", low):  # diff readback after the correction
         _corrected["done"] = True
         return "Yes, that's how it works."
+    if re.search(r"is (that|this) right\??\s*$|did i get (it|that) right|how it works\??\s*$|confirm", low) \
+            and len(low.split()) > 40:
+        if _corrected.get("done"):
+            return "Yes, that's how it works."
+        _corrected["done"] = True
+        return TEACHBACK_CORRECTION
     for pat, ans in DEBRIEF_KB:
         if re.search(pat, low):
             return ans

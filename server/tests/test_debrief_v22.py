@@ -184,3 +184,10 @@ def test_topic_of_matches_leftover_to_rule_by_wording():
     a = Unknown(id="a", type="deliberate", spoken_question="Do you hold same-amount repeats from that supplier too?")
     b = Unknown(id="b", type="why", entity="gd", spoken_question="What tells you it's a double bill?")
     assert debrief.topic_of(wm, a) == debrief.topic_of(wm, b) == "gd"
+
+
+def test_new_rule_needs_the_experts_own_words():
+    from claros.knowledge.debrief import _stated_by
+    assert not _stated_by("Foreign-currency invoices require an extra check before booking.", "Yes, that's how I do it.")
+    assert _stated_by("Unknown supplier: stop and ask the controller",
+                      "If I don't know the supplier, I stop and ask the controller before booking anything.")
