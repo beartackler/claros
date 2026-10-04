@@ -22,3 +22,45 @@ export function shuffle<T>(arr: T[], seed: number): T[] {
   }
   return a;
 }
+
+/* ---------- Work Map model: ordered groups (partial order) + typed items per step ---------- */
+
+export type StepGroup = { depth: number; steps: Step[] };
+
+/** Longest-path depth over `after` edges. Steps sharing a depth can happen in any order. */
+export function stepGroups(m: WorkMap): StepGroup[] {
+  const steps = sortedSteps(m);
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const depth = new Map<string, number>();
+  const d = (s: Step, guard = 0): number => {
+    if (depth.has(s.id)) return depth.get(s.id)!;
+    const v = guard > 64 ? 0 : Math.max(-1, ...s.after.map((a) => (byId.get(a) ? d(byId.get(a)!, guard + 1) : -1))) + 1;
+    depth.set(s.id, v);
+    return v;
+  };
+  steps.forEach((s) => d(s));
+  const groups: StepGroup[] = [];
+  steps.forEach((s) => {
+    const k = depth.get(s.id)!;
+    const g = groups.find((x) => x.depth === k);
+    if (g) g.steps.push(s);
+    else groups.push({ depth: k, steps: [s] });
+  });
+  return groups.sort((a, b) => a.depth - b.depth);
+}
+
+/** Display order = group order, then step order inside a group. Mini-map and list both use this. */
+export const flatOrder = (groups: StepGroup[]) => groups.flatMap((g) => g.steps);
+
+export type MapFilter = "all" | "judgment" | "guardrail" | "conflict" | "unconfirmed";
+export const isJudgment = (s: Step) => s.decision?.kind === "judgment";
+export const hasGuardrail = (s: Step) => s.guardrail_ids.length > 0;
+export const hasConflict = (s: Step) => Boolean(s.conflict);
+export const isUnconfirmed = (m: WorkMap, s: Step) => !s.approved || guardrailsFor(m, s).some((g) => !g.approved);
+export function matches(m: WorkMap, s: Step, f: MapFilter) {
+  if (f === "judgment") return isJudgment(s);
+  if (f === "guardrail") return hasGuardrail(s);
+  if (f === "conflict") return hasConflict(s);
+  if (f === "unconfirmed") return isUnconfirmed(m, s);
+  return true;
+}

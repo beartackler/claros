@@ -28,12 +28,14 @@ export type WorkflowSummary = {
   coverage: WorkMap["coverage"];
   experts: User[];
   onet_code?: string;
+  onet_task?: string | null;
+  step_count?: number;
   updated_at: number;
 };
 
 const now = Date.now();
 export const MOCK_WORKFLOWS: WorkflowSummary[] = [
-  { workflow_id: MOCK_MAP.workflow_id, name: MOCK_MAP.name, apps: MOCK_MAP.apps, coverage: MOCK_MAP.coverage, experts: MOCK_MAP.experts, onet_code: MOCK_MAP.onet?.occupation_code, updated_at: now - 3_600_000 },
+  { workflow_id: MOCK_MAP.workflow_id, name: MOCK_MAP.name, apps: MOCK_MAP.apps, coverage: MOCK_MAP.coverage, experts: MOCK_MAP.experts, onet_code: MOCK_MAP.onet?.occupation_code, onet_task: MOCK_MAP.onet?.task, step_count: MOCK_MAP.steps.length, updated_at: now - 3_600_000 },
 ];
 
 export const MOCK_REQUESTS: CaptureRequest[] = [

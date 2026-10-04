@@ -228,6 +228,7 @@ export interface CaptureRequest {
   onet?: OnetMatch | null;
   status: "open" | "accepted" | "recorded" | "done";
   created_at: number;
+  workflow_id?: string | null;
 }
 
 export interface MasteryNode {

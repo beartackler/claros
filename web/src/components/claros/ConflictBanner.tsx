@@ -1,11 +1,12 @@
 "use client";
 
-import { Users } from "lucide-react";
+import { Split } from "lucide-react";
 import type { Step, WorkMap } from "@/lib/contracts";
 import { useUi } from "./i18n";
 import { ExpertAvatar, QuoteBlock } from "./primitives";
-import { expertById, firstName, quotesFor } from "./mapUtils";
+import { expertById, quotesFor } from "./mapUtils";
 
+/** "Experts differ here": both positions side by side, never silently picking one. */
 export function ConflictBanner({ map, step }: { map: WorkMap; step: Step }) {
   const { t } = useUi();
   // Experts without an explicit variant hold the step's main decision (merge keeps one side as the decision).
@@ -17,17 +18,19 @@ export function ConflictBanner({ map, step }: { map: WorkMap; step: Step }) {
     ...step.variants,
   ];
   return (
-    <div className="rounded-[6px] border-2 border-[var(--ink)] bg-[var(--partial)] p-4 shadow-[var(--hard)]" role="note">
+    <div className="rounded-base border-2 border-ink bg-partial p-4 text-on-fill shadow-hard" role="note">
       <p className="flex items-center gap-2 text-lg font-black tracking-[-0.02em]">
-        <Users className="size-5" aria-hidden /> {t("learn.conflict.title")}
+        <Split className="size-5" aria-hidden /> {t("learn.conflict.title")}
       </p>
+      {step.conflict ? <p className="mt-1 text-sm font-semibold">{step.conflict}</p> : null}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {positions.map((v, i) => {
+        {positions.map((v) => {
           const ex = expertById(map, v.expert_id);
+          const idx = Math.max(0, map.experts.findIndex((e) => e.id === v.expert_id));
           return (
-            <div key={v.expert_id} className="rounded-[4px] border-2 border-[var(--ink)] bg-white p-3">
+            <div key={v.expert_id} className="rounded-[4px] border-2 border-ink bg-card p-3 text-ink">
               <p className="flex items-center gap-2 text-sm font-extrabold">
-                <ExpertAvatar user={ex} size={22} index={i} /> {firstName(ex.name)}
+                <ExpertAvatar user={ex} size={24} index={idx} /> {ex.name}
               </p>
               <p className="mt-1.5 text-sm font-semibold">{v.description}</p>
               {quotesFor(map, v.reason_quote_ids).map((q) => (
@@ -43,4 +46,3 @@ export function ConflictBanner({ map, step }: { map: WorkMap; step: Step }) {
     </div>
   );
 }
-

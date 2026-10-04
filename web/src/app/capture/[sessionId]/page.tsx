@@ -2,24 +2,14 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Ban,
-  BookmarkPlus,
-  Check,
-  CircleDot,
-  Eye,
-  EyeOff,
-  HelpCircle,
-  Mic,
-  MicOff,
-  MonitorUp,
-  Square,
-} from "lucide-react";
+import { Ban, BookmarkPlus, Check, CircleDot, Eye, EyeOff, HelpCircle, Mic, MicOff, MonitorUp, Square } from "lucide-react";
 import { Shell } from "@/components/claros/Shell";
 import { LANGS, LANG_NAMES, useUi, type DictKey, type UiLang } from "@/components/claros/i18n";
-import { ClarosDot, ClarosSays, EmptyState, Meter, Panel, SectionTitle } from "@/components/claros/primitives";
+import { ClarosDot, ClarosSays, EmptyState, Meter, Panel, SectionHeader } from "@/components/claros/primitives";
 import { sendControl, useJoinSession, useLive, useLiveStore, useMicCheck } from "@/components/claros/live";
 import { ClarosCompanion } from "@/voice/ClarosCompanion";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { endSession } from "@/lib/api";
 import { EXPERT, MOCK_EVENTS, MOCK_UNKNOWNS } from "@/lib/mock";
 import type { ScreenEvent, Unknown } from "@/lib/contracts";
@@ -28,8 +18,9 @@ import { cn } from "@/lib/utils";
 const BUDGET = 5;
 
 export default function CapturePage() {
+  const { sessionId } = useParams<{ sessionId: string }>();
   return (
-    <Shell wide>
+    <Shell wide focus={{ label: "focus.capture", detail: sessionId }}>
       <Capture />
     </Shell>
   );
@@ -40,6 +31,11 @@ function Capture() {
   const { lang } = useUi();
   const [speakLang, setSpeakLang] = useState<UiLang>(lang);
   const [live, setLive] = useState(false);
+  // follow the UI language until recording starts (prefs hydrate after first render)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!live) setSpeakLang(lang);
+  }, [lang, live]);
   useJoinSession(live ? sessionId : null, "capture", EXPERT, speakLang);
   const { capture, voice } = useLive(live ? sessionId : null, "capture", speakLang, EXPERT.name);
 
@@ -79,56 +75,54 @@ function Preflight(p: {
     <div className="mx-auto max-w-4xl">
       <ClarosSays>
         <h1 className="text-4xl font-black leading-[0.95] tracking-[-0.04em]">{t("capture.preflight.title")}</h1>
-        <p className="mt-3 max-w-[56ch] text-[var(--ink-2)]">{t("capture.preflight.sub")}</p>
+        <p className="mt-3 max-w-[56ch] text-ink-2">{t("capture.preflight.sub")}</p>
       </ClarosSays>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <Panel className="p-4">
-          <p className="flex items-center gap-2 font-extrabold">
+          <h2 className="flex items-center gap-2 font-extrabold">
             <Mic className="size-5" aria-hidden /> {t("capture.preflight.mic")}
-          </p>
+          </h2>
           <div className="mt-3 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={mic.check}
-              className={cn("h-10 rounded-[4px] border-2 border-[var(--ink)] px-3 text-sm font-bold", mic.state === "ok" ? "bg-[var(--ready)]" : "bg-white hover:bg-[var(--paper-2)]")}
-            >
+            <Button variant={mic.state === "ok" ? "outline" : "secondary"} size="sm" onClick={mic.check} loading={mic.state === "checking"} className={cn(mic.state === "ok" && "bg-ready text-on-fill hover:bg-ready")}>
               {mic.state === "ok" ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <Check className="size-4" aria-hidden /> {t("capture.preflight.mic.ok")}
-                </span>
+                <>
+                  <Check aria-hidden /> {t("capture.preflight.mic.ok")}
+                </>
               ) : (
                 t("capture.preflight.mic.test")
               )}
-            </button>
-            <div className="h-3 flex-1 rounded-[3px] border-2 border-[var(--ink)] bg-white" aria-hidden>
-              <div className="h-full bg-[var(--claros)] transition-[width] duration-75" style={{ width: `${Math.round(mic.level * 100)}%` }} />
+            </Button>
+            <div className="h-3 flex-1 overflow-hidden rounded-[3px] border-2 border-ink bg-card" aria-hidden>
+              <div className="h-full bg-claros transition-[width] duration-75" style={{ width: `${Math.round(mic.level * 100)}%` }} />
             </div>
           </div>
-          {mic.state === "denied" ? <p className="mt-2 text-sm font-semibold text-[#9b1c1c]">{t("capture.preflight.mic.denied")}</p> : null}
+          {mic.state === "denied" ? <p className="mt-2 text-sm font-semibold text-danger">{t("capture.preflight.mic.denied")}</p> : null}
         </Panel>
 
         <Panel className="p-4">
-          <p className="flex items-center gap-2 font-extrabold">
+          <h2 className="flex items-center gap-2 font-extrabold">
             <MonitorUp className="size-5" aria-hidden /> {t("capture.preflight.window")}
-          </p>
-          <p className="mt-1 text-sm text-[var(--ink-2)]">{t("capture.preflight.window.sub")}</p>
-          <button
-            type="button"
-            onClick={p.onShare}
-            className={cn("mt-3 h-10 rounded-[4px] border-2 border-[var(--ink)] px-3 text-sm font-bold", p.sharing ? "bg-[var(--ready)]" : "bg-white hover:bg-[var(--paper-2)]")}
-          >
-            {p.sharing ? `✓ ${p.surface}` : t("learn.invoke.share")}
-          </button>
-          {p.sharing && p.surface === "monitor" ? (
-            <p className="mt-2 text-sm font-bold">↑ {t("capture.preflight.window")}</p>
-          ) : null}
+          </h2>
+          <p className="mt-1 text-sm text-ink-2">{t("capture.preflight.window.sub")}</p>
+          <Button variant={p.sharing ? "outline" : "secondary"} size="sm" onClick={p.onShare} className={cn("mt-3", p.sharing && "bg-ready text-on-fill hover:bg-ready")}>
+            {p.sharing ? (
+              <>
+                <Check aria-hidden /> {p.surface}
+              </>
+            ) : (
+              <>
+                <MonitorUp aria-hidden /> {t("learn.invoke.share")}
+              </>
+            )}
+          </Button>
+          {p.sharing && p.surface === "monitor" ? <p className="mt-2 text-sm font-bold text-danger">{t("capture.preflight.monitor")}</p> : null}
         </Panel>
 
         <Panel className="p-4">
-          <p className="flex items-center gap-2 font-extrabold">
+          <h2 className="flex items-center gap-2 font-extrabold">
             <Eye className="size-5" aria-hidden /> {t("capture.preflight.captured")}
-          </p>
+          </h2>
           <ul className="mt-2 space-y-1.5 text-sm">
             {list("capture.preflight.captured.list").map((x) => (
               <li key={x} className="flex gap-2">
@@ -138,9 +132,9 @@ function Preflight(p: {
           </ul>
         </Panel>
         <Panel tone="ink" className="p-4">
-          <p className="flex items-center gap-2 font-extrabold">
+          <h2 className="flex items-center gap-2 font-extrabold">
             <EyeOff className="size-5" aria-hidden /> {t("capture.preflight.never")}
-          </p>
+          </h2>
           <ul className="mt-2 space-y-1.5 text-sm">
             {list("capture.preflight.never.list").map((x) => (
               <li key={x} className="flex gap-2">
@@ -151,10 +145,10 @@ function Preflight(p: {
         </Panel>
       </div>
 
-      <div className="mt-6 flex flex-col gap-4 rounded-[6px] border-2 border-[var(--ink)] bg-white p-4 shadow-[var(--hard)] sm:flex-row sm:items-center">
+      <div className="mt-6 flex flex-col gap-4 rounded-base border-2 border-ink bg-card p-4 shadow-hard sm:flex-row sm:items-center">
         <label className="flex items-center gap-2 text-sm font-bold">
           {t("capture.preflight.lang")}
-          <select value={p.speakLang} onChange={(e) => p.setSpeakLang(e.target.value as UiLang)} className="h-9 rounded-[4px] border-2 border-[var(--ink)] bg-white px-2">
+          <select value={p.speakLang} onChange={(e) => p.setSpeakLang(e.target.value as UiLang)} className="h-9 rounded-[4px] border-2 border-ink bg-card px-2 text-ink">
             {LANGS.map((l) => (
               <option key={l} value={l}>
                 {LANG_NAMES[l]}
@@ -166,14 +160,9 @@ function Preflight(p: {
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-5 accent-[var(--claros)]" />
           {t("capture.preflight.consent")}
         </label>
-        <button
-          type="button"
-          disabled={!consent}
-          onClick={p.onStart}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-[5px] border-2 border-[var(--ink)] bg-[var(--claros)] px-6 font-black text-white shadow-[var(--hard)] transition-[transform,box-shadow] enabled:hover:translate-x-1 enabled:hover:translate-y-1 enabled:hover:shadow-none disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <CircleDot className="size-5" aria-hidden /> {t("capture.preflight.start")}
-        </button>
+        <Button variant="claros" size="lg" disabled={!consent} onClick={p.onStart}>
+          <CircleDot aria-hidden /> {t("capture.preflight.start")}
+        </Button>
       </div>
     </div>
   );
@@ -220,9 +209,7 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
   }, [ledger?.top]);
 
   const events: ScreenEvent[] = demo ? MOCK_EVENTS.slice(0, drip) : liveEvents;
-  const unknowns: Unknown[] = demo
-    ? MOCK_UNKNOWNS.filter((u) => u.about_event_ids.some((id) => events.some((e) => e.id === id)))
-    : Object.values(seen);
+  const unknowns: Unknown[] = demo ? MOCK_UNKNOWNS.filter((u) => u.about_event_ids.some((id) => events.some((e) => e.id === id))) : Object.values(seen);
   const asked = unknowns.filter((u) => u.status === "asked" || u.status === "answered");
   const saved = demo ? unknowns.filter((u) => u.status === "deferred").length : ledger?.saved_for_later ?? 0;
   const [inspect, setInspect] = useState<string | null>(null);
@@ -246,8 +233,10 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
     }
   };
 
+  const [ending, setEnding] = useState(false);
   const finish = async () => {
     // keep the voice session alive: the same conversation continues into the debrief
+    setEnding(true);
     capture.stop();
     await endSession(sessionId);
     router.push(`/debrief/${sessionId}`);
@@ -261,66 +250,60 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
   return (
     <div className="relative">
       {/* status strip */}
-      <div className={cn("mb-5 flex flex-wrap items-center gap-3 rounded-[6px] border-2 border-[var(--ink)] p-3 shadow-[var(--hard)]", offRecord ? "bg-[var(--ink)] text-[var(--paper)]" : "bg-white")}>
+      <div className={cn("mb-5 flex flex-wrap items-center gap-3 rounded-base border-2 border-ink p-3 shadow-hard", offRecord ? "bg-ink text-paper" : "bg-card")}>
         <span className={cn("inline-flex items-center gap-2 font-extrabold", offRecord && "opacity-80")}>
-          <span className={cn("size-3 rounded-full border-2", offRecord ? "border-[var(--paper)]" : "border-[var(--ink)] bg-[#e5332a] motion-safe:animate-pulse")} aria-hidden />
+          <span className={cn("size-3 rounded-full border-2", offRecord ? "border-paper" : "border-ink bg-missing motion-safe:animate-pulse")} aria-hidden />
           {offRecord ? t("capture.offrecord.on") : t("capture.live")}
         </span>
         <span className="tnum font-mono text-sm">{mmss}</span>
-        <span className="font-mono text-xs opacity-70">{sessionId}</span>
         <div className="ml-auto flex flex-wrap gap-2">
-          <button
-            type="button"
+          <Button
+            variant={voice.status === "connected" ? "claros" : "outline"}
+            size="sm"
             onClick={() => (voice.status === "connected" ? voice.end() : voice.start().catch(() => {}))}
             aria-pressed={voice.status === "connected"}
-            className={cn("inline-flex h-10 items-center gap-2 rounded-[4px] border-2 px-3 text-sm font-bold", offRecord ? "border-[var(--paper)]" : "border-[var(--ink)]", voice.status === "connected" ? "bg-[var(--claros)] text-white" : "")}
+            className={cn(offRecord && voice.status !== "connected" && "border-paper bg-transparent text-paper hover:bg-paper/10")}
           >
-            {voice.status === "connected" ? <Mic className="size-4" aria-hidden /> : <MicOff className="size-4" aria-hidden />}
+            {voice.status === "connected" ? <Mic aria-hidden /> : <MicOff aria-hidden />}
             {t("capture.voice")}
-          </button>
-          <button
-            type="button"
-            onClick={finish}
-            className={cn("inline-flex h-10 items-center gap-2 rounded-[4px] border-2 px-3 text-sm font-bold", offRecord ? "border-[var(--paper)] bg-[var(--paper)] text-[var(--ink)]" : "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]")}
-          >
-            <Square className="size-4" aria-hidden /> {t("capture.end")}
-          </button>
+          </Button>
+          <Button variant="primary" size="sm" onClick={finish} loading={ending} className={cn(offRecord && "border-paper bg-paper text-ink")}>
+            {!ending ? <Square aria-hidden /> : null} {t("capture.end")}
+          </Button>
         </div>
       </div>
 
       {caption && !offRecord ? (
-        <div className="claros-enter mb-5 rounded-[6px] border-2 border-[var(--ink)] bg-[var(--claros)] p-3 text-white shadow-[var(--hard)]" aria-live="polite">
+        <div className="claros-enter mb-5 rounded-base border-2 border-ink bg-claros p-3 text-claros-ink shadow-hard" aria-live="polite">
           <ClarosSays speaking={agentMode === "speaking"}>
             <p className="pt-0.5 font-bold">{caption}</p>
           </ClarosSays>
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <section aria-labelledby="nb">
-          <SectionTitle aside={demo ? <span className="font-mono text-[11px] font-semibold">{t("data.demo")}</span> : null}>
-            <span id="nb">{t("capture.notebook")}</span>
-          </SectionTitle>
+          <SectionHeader id="nb" level={3} title={t("capture.notebook")} aside={demo ? <Badge variant="dashed" className="font-mono text-[11px]">{t("data.demo")}</Badge> : null} />
           <Panel className={cn("p-0", offRecord && "opacity-40")}>
-            <p className="border-b-2 border-[var(--ink)] px-4 py-2 text-xs font-bold uppercase tracking-wide">{t("capture.events")}</p>
+            <p className="border-b-2 border-ink px-4 py-2 text-sm font-bold">{t("capture.events")}</p>
             {events.length === 0 ? (
               <div className="p-4">
                 <EmptyState>{t("capture.empty.events")}</EmptyState>
               </div>
             ) : (
-              <ol ref={feedRef} className="scroll-thin max-h-[52vh] divide-y-2 divide-dashed divide-[var(--ink)]/30 overflow-y-auto" aria-live="polite">
+              <ol ref={feedRef} className="max-h-[52vh] divide-y-2 divide-dashed divide-ink/25 overflow-y-auto" aria-live="polite">
                 {events.map((e) => {
                   const qs = unknowns.filter((u) => u.about_event_ids.includes(e.id));
                   return (
                     <li key={e.id} className="claros-enter px-4 py-3">
                       <div className="flex items-start gap-3">
-                        <span className="tnum mt-0.5 w-12 shrink-0 font-mono text-xs text-[var(--ink-2)]">{fmtT(e.t)}</span>
-                        <span className="mt-0.5 shrink-0 rounded-[3px] border-2 border-[var(--ink)] bg-[var(--paper-2)] px-1.5 font-mono text-[10px] font-bold uppercase">{e.kind}</span>
+                        <span className="tnum mt-0.5 w-12 shrink-0 font-mono text-xs text-ink-2">{fmtT(e.t)}</span>
+                        <Badge variant="tag" className="mt-0.5 uppercase">{e.kind}</Badge>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold leading-snug">{e.summary}</p>
                           {e.old || e.new ? (
                             <p className="mt-1 font-mono text-xs">
-                              <span className="line-through decoration-2">{e.old}</span> → <span className="bg-[var(--claros-soft)] px-1 font-bold">{e.new}</span>
+                              <span className="text-ink-2 line-through decoration-2">{e.old}</span> → <span className="rounded-[2px] bg-claros-soft px-1 font-bold">{e.new}</span>
                             </p>
                           ) : null}
                           {qs.length ? (
@@ -343,29 +326,33 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
         <aside className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Panel className="p-3">
-              <p className="text-xs font-bold uppercase tracking-wide">{t("capture.asked")}</p>
+              <p className="text-xs font-bold">{t("capture.asked")}</p>
               <p className="tnum mt-1 text-4xl font-black">{asked.length}</p>
             </Panel>
             <Panel tone="paper" className="p-3">
-              <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide">
+              <p className="flex items-center gap-1 text-xs font-bold">
                 <BookmarkPlus className="size-3.5" aria-hidden /> {t("capture.saved")}
               </p>
-              <p key={saved} className="ledger-tick tnum mt-1 text-4xl font-black">{saved}</p>
+              <p key={saved} className="ledger-tick tnum mt-1 text-4xl font-black">
+                {saved}
+              </p>
             </Panel>
           </div>
-          <p className="-mt-2 text-xs text-[var(--ink-2)]">{t("capture.saved.sub")}</p>
+          <p className="-mt-2 text-xs text-ink-2">{t("capture.saved.sub")}</p>
 
           <Panel className="p-3">
             <Meter value={asked.length / BUDGET} tone="claros" label={`${t("capture.budget")} · ${t("capture.budget.sub", { used: asked.length, max: BUDGET })}`} />
           </Panel>
 
-          <Panel className="border-[var(--claros)] p-4 shadow-[var(--hard-claros)]">
+          <div className="rounded-base border-2 border-claros bg-card p-4 shadow-claros">
             <p className="flex items-center gap-2 font-extrabold">
-              <HelpCircle className="size-5 text-[var(--claros)]" aria-hidden /> {t("capture.why")}
+              <HelpCircle className="size-5 text-claros" aria-hidden /> {t("capture.why")}
             </p>
-            {inspected ? <WhyInspector u={inspected} /> : (
+            {inspected ? (
+              <WhyInspector u={inspected} />
+            ) : (
               <>
-                <p className="mt-2 text-sm text-[var(--ink-2)]">{t("capture.why.none")}</p>
+                <p className="mt-2 text-sm text-ink-2">{t("capture.why.none")}</p>
                 {unknowns.length ? (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {unknowns.map((u) => (
@@ -375,16 +362,15 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
                 ) : null}
               </>
             )}
-          </Panel>
-
+          </div>
 
           <button
             type="button"
             onClick={toggleOff}
             aria-pressed={offRecord}
             className={cn(
-              "flex w-full items-center justify-center gap-3 rounded-[8px] border-[3px] border-[var(--ink)] py-6 text-2xl font-black tracking-[-0.02em] shadow-[var(--hard-lg)] transition-[transform,box-shadow] hover:translate-x-1.5 hover:translate-y-1.5 hover:shadow-none",
-              offRecord ? "bg-[var(--paper)] text-[var(--ink)]" : "bg-[var(--ink)] text-[var(--paper)]",
+              "flex w-full items-center justify-center gap-3 rounded-[10px] border-[3px] border-ink py-6 text-2xl font-black tracking-[-0.02em] shadow-hard-lg transition-[transform,box-shadow] duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0_0_var(--ink)] active:translate-x-1.5 active:translate-y-1.5 active:shadow-none",
+              offRecord ? "bg-paper text-ink" : "bg-ink text-paper",
             )}
           >
             {offRecord ? <Eye className="size-7" aria-hidden /> : <EyeOff className="size-7" aria-hidden />}
@@ -403,12 +389,12 @@ function fmtT(ms: number) {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  asked: "bg-[var(--claros)] text-white",
-  answered: "bg-[var(--claros)] text-white",
-  deferred: "bg-[var(--paper-2)]",
-  resolved: "bg-white border-dashed",
-  open: "bg-white",
-  dropped: "bg-white opacity-60",
+  asked: "bg-claros text-claros-ink",
+  answered: "bg-claros text-claros-ink",
+  deferred: "bg-paper-2",
+  resolved: "bg-card border-dashed",
+  open: "bg-card",
+  dropped: "bg-card opacity-60",
 };
 
 function UnknownPill({ u, active, onClick }: { u: Unknown; active: boolean; onClick: () => void }) {
@@ -418,7 +404,11 @@ function UnknownPill({ u, active, onClick }: { u: Unknown; active: boolean; onCl
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={cn("inline-flex max-w-full items-center gap-1.5 rounded-[3px] border-2 border-[var(--ink)] px-2 py-0.5 text-xs font-bold", STATUS_STYLE[u.status], active && "outline-3 outline-offset-1 outline-[var(--claros)]")}
+      className={cn(
+        "inline-flex max-w-full items-center gap-1.5 rounded-[4px] border-2 border-ink px-2 py-0.5 text-xs font-bold transition-transform duration-150 hover:-translate-y-px",
+        STATUS_STYLE[u.status],
+        active && "outline-3 outline-offset-1 outline-claros",
+      )}
     >
       {u.status === "asked" ? <ClarosDot size={10} /> : null}
       <span className="truncate">{u.spoken_question ?? u.entity ?? u.type}</span>
@@ -439,28 +429,30 @@ function WhyInspector({ u }: { u: Unknown }) {
     <dl className="mt-3 space-y-2.5 text-sm">
       {u.spoken_question ? <p className="font-bold">“{u.spoken_question}”</p> : null}
       <div className="flex justify-between gap-3">
-        <dt className="font-semibold text-[var(--ink-2)]">{t("capture.why.scope")}</dt>
-        <dd className={cn("rounded-[3px] border-2 border-[var(--ink)] px-1.5 text-xs font-bold", costsExpert ? "bg-[var(--expert)]" : "bg-[var(--paper-2)]")}>{t(("scope." + u.scope) as DictKey)}</dd>
+        <dt className="font-semibold text-ink-2">{t("capture.why.scope")}</dt>
+        <dd>
+          <Badge variant={costsExpert ? "expert" : "tag"}>{t(("scope." + u.scope) as DictKey)}</Badge>
+        </dd>
       </div>
       {u.hypothesis ? (
         <div>
-          <dt className="font-semibold text-[var(--ink-2)]">{t("capture.why.hypothesis")}</dt>
+          <dt className="font-semibold text-ink-2">{t("capture.why.hypothesis")}</dt>
           <dd className="mt-0.5">
             {u.hypothesis} <span className="tnum font-mono text-xs">({Math.round((u.hypothesis_confidence ?? 0) * 100)}%)</span>
           </dd>
         </div>
       ) : null}
       <div>
-        <dt className="mb-1 font-semibold text-[var(--ink-2)]">{t("capture.why.priority")}</dt>
+        <dt className="mb-1 font-semibold text-ink-2">{t("capture.why.priority")}</dt>
         <dd>
           <Meter value={u.priority} label={u.type} tone="claros" />
         </dd>
       </div>
       <div>
-        <dt className="font-semibold text-[var(--ink-2)]">{t("capture.why.gate")}</dt>
+        <dt className="font-semibold text-ink-2">{t("capture.why.gate")}</dt>
         <dd className="mt-0.5 font-mono text-xs">{gate}</dd>
       </div>
-      {u.resolution ? <p className="rounded-[3px] border-2 border-dashed border-[var(--ink)] p-2 text-xs">{u.resolution}</p> : null}
+      {u.resolution ? <p className="rounded-[3px] border-2 border-dashed border-ink p-2 text-xs">{u.resolution}</p> : null}
     </dl>
   );
 }

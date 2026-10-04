@@ -67,6 +67,8 @@ function toSummary(w: Partial<WorkMap> & Partial<WorkflowSummary>): WorkflowSumm
     coverage: w.coverage || { status: "missing", steps_with_evidence: 0, judgments_complete: 0, guardrails_complete: 0, open_unknowns: 0, conflicts: 0 },
     experts: w.experts || [],
     onet_code: w.onet?.occupation_code || w.onet_code,
+    onet_task: w.onet?.task ?? w.onet_task ?? null,
+    step_count: typeof (w as { steps?: unknown }).steps === "number" ? ((w as { steps?: number }).steps as number) : Array.isArray(w.steps) ? w.steps.length : w.step_count,
     updated_at: toMs(w.updated_at ?? (w as { created_at?: number }).created_at) ?? 0,
   };
 }

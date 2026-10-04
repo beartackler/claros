@@ -1,97 +1,218 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* Dark = explicit .dark on <html>, or system dark unless the user pinned .light */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* neobrutalism.dev registry tokens → Claros world */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
   --color-main: var(--main);
   --color-secondary-background: var(--secondary-background);
   --color-main-foreground: var(--main-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
   --color-overlay: var(--overlay);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
+
+  /* Claros palette as utilities: bg-paper, text-ink, border-ink, bg-claros … */
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-card: var(--card-bg);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-claros: var(--claros);
+  --color-claros-ink: var(--claros-ink);
+  --color-claros-soft: var(--claros-soft);
+  --color-expert: var(--expert);
+  --color-expert-soft: var(--expert-soft);
+  --color-ready: var(--ready);
+  --color-partial: var(--partial);
+  --color-missing: var(--missing);
+  --color-danger: var(--danger);
+  --color-on-fill: var(--on-fill);
+
   --spacing-boxShadowX: 4px;
   --spacing-boxShadowY: 4px;
   --spacing-reverseBoxShadowX: -4px;
   --spacing-reverseBoxShadowY: -4px;
-  --radius-base: 5px;
+  --radius-base: 6px;
   --font-weight-base: 500;
-  --font-weight-heading: 700;
+  --font-weight-heading: 800;
   --shadow-shadow: var(--shadow);
-  --animate-marquee: marquee 5s linear infinite;
-  --animate-marquee2: marquee2 5s linear infinite;
-  --color-chart-active-dot: var(--chart-active-dot);
-  --shadow: var(--shadow);
-  @keyframes marquee {
-  0% {
-    transform: translateX(0%);
-    }
-  100% {
-    transform: translateX(-100%);
-    }
-  }
-  @keyframes marquee2 {
-  0% {
-    transform: translateX(100%);
-    }
-  100% {
-    transform: translateX(0%);
-    }
-  }
+  --shadow-hard-sm: 2px 2px 0 0 var(--ink);
+  --shadow-hard: 4px 4px 0 0 var(--ink);
+  --shadow-hard-lg: 6px 6px 0 0 var(--ink);
+  --shadow-claros: 6px 6px 0 0 var(--claros);
 }
 
 :root {
-  --background: hsl(214, 95%, 93%);
-  --secondary-background: oklch(100% 0 0);
-  --main: hsl(217, 100%, 66%);
-  --ring: oklch(0% 0 0);
-  --foreground: oklch(0% 0 0);
-  --main-foreground: oklch(0% 0 0);
-  --border: oklch(0% 0 0);
-  --overlay: oklch(0% 0 0 / 0.8);
-  --shadow: 4px 4px 0px 0px var(--border);
-  --chart-1: #5294FF;
-  --chart-2: #FF4D50;
-  --chart-3: #FACC00;
-  --chart-4: #05E17A;
-  --chart-5: #7A83FF;
-  --chart-active-dot: #000;
+  color-scheme: light;
+  --paper: #fbf6ea;
+  --paper-2: #f1e9d6;
+  --card-bg: #ffffff;
+  --ink: #0b0b0f;
+  --ink-2: #4a463e;
+  --claros: #6d28d9;
+  --claros-ink: #ffffff;
+  --claros-soft: #ede4ff;
+  --expert: #a5d8ff;
+  --expert-soft: #e6f3ff;
+  --ready: #6ee7a0;
+  --partial: #ffc94a;
+  --missing: #ff8a80;
+  --danger: #b42318;
+  /* text on bright fills (coverage chips, expert blue) never flips */
+  --on-fill: #0b0b0f;
+
+  --background: var(--paper);
+  --secondary-background: var(--card-bg);
+  --foreground: var(--ink);
+  --main: var(--ink);
+  --main-foreground: var(--paper);
+  --border: var(--ink);
+  --ring: var(--claros);
+  --overlay: rgb(11 11 15 / 0.55);
+  --shadow: 4px 4px 0 0 var(--ink);
+}
+
+/* Dark: the notebook at night. Ink and paper swap; fills deepen so their labels stay legible. */
+:root.dark {
+  color-scheme: dark;
+  --paper: #15141a;
+  --paper-2: #1d1c24;
+  --card-bg: #23222b;
+  --ink: #f4efe3;
+  --ink-2: #b9b2a3;
+  --claros: #9b6bff;
+  --claros-ink: #0f0a1d;
+  --claros-soft: #2c2147;
+  --expert: #7cc4ff;
+  --expert-soft: #1b2a3a;
+  --ready: #4fd389;
+  --partial: #f2b733;
+  --missing: #ff7a70;
+  --danger: #ff8f84;
+  --on-fill: #0b0b0f;
+  --overlay: rgb(0 0 0 / 0.65);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+    --paper: #15141a;
+    --paper-2: #1d1c24;
+    --card-bg: #23222b;
+    --ink: #f4efe3;
+    --ink-2: #b9b2a3;
+    --claros: #9b6bff;
+    --claros-ink: #0f0a1d;
+    --claros-soft: #2c2147;
+    --expert: #7cc4ff;
+    --expert-soft: #1b2a3a;
+    --ready: #4fd389;
+    --partial: #f2b733;
+    --missing: #ff7a70;
+    --danger: #ff8f84;
+    --on-fill: #0b0b0f;
+    --overlay: rgb(0 0 0 / 0.65);
+  }
 }
 
 @layer base {
+  html {
+    background: var(--paper);
+  }
   body {
     font-weight: var(--font-weight-base);
     color: var(--foreground);
+    background: var(--paper);
+    -webkit-tap-highlight-color: transparent;
   }
   h1, h2, h3, h4, h5, h6 {
     font-weight: var(--font-weight-heading);
+    text-wrap: balance;
+  }
+  ::selection {
+    background: var(--claros);
+    color: var(--claros-ink);
+  }
+  :focus-visible {
+    outline: 3px solid var(--claros);
+    outline-offset: 2px;
+  }
+  input, textarea {
+    caret-color: var(--claros);
+  }
+  a {
+    text-underline-offset: 4px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink) var(--paper-2);
   }
 }
-  body, .scrollbar {
-    --sb-track-color: #ffffff;
-    --sb-thumb-color: #000000;
-}
-  .scrollbar::-webkit-scrollbar {
-    width: 16px;
-}
-  .scrollbar::-webkit-scrollbar-track {
-    background: var(--sb-track-color);
-}
-  .scrollbar::-webkit-scrollbar-thumb {
-    background: var(--sb-thumb-color);
+
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
-@supports not selector(::-webkit-scrollbar) {
-  .scrollbar {
-    scrollbar-color: var(--sb-thumb-color) var(--sb-track-color);
+/* "not confirmed yet" hatch */
+.hatch {
+  background-image: repeating-linear-gradient(-45deg, transparent 0 8px, color-mix(in srgb, var(--ink) 12%, transparent) 8px 10px);
+}
+.hatch-partial {
+  background-color: color-mix(in srgb, var(--partial) 30%, var(--card-bg));
+  background-image: repeating-linear-gradient(-45deg, transparent 0 8px, color-mix(in srgb, var(--ink) 14%, transparent) 8px 10px);
+}
+
+/* Claros orb: breathing when speaking */
+@keyframes claros-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@keyframes claros-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--claros) 55%, transparent); }
+  100% { box-shadow: 0 0 0 18px color-mix(in srgb, var(--claros) 0%, transparent); }
+}
+.orb-speaking {
+  animation: claros-breathe 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite, claros-ring 1.6s ease-out infinite;
+}
+@keyframes claros-in {
+  from { transform: translate(6px, 6px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+.claros-enter {
+  animation: claros-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes ledger-tick {
+  0% { transform: translateY(-30%); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+.ledger-tick {
+  animation: ledger-tick 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* step card flashes when Claros points at it (highlight_step) */
+@keyframes claros-point {
+  0% { box-shadow: 0 0 0 0 var(--claros); }
+  40% { box-shadow: 0 0 0 6px var(--claros); }
+  100% { box-shadow: 6px 6px 0 0 var(--claros); }
+}
+.claros-point {
+  animation: claros-point 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-speaking,
+  .claros-enter,
+  .ledger-tick,
+  .claros-point {
+    animation: none !important;
+  }
+  *, *::before, *::after {
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }
