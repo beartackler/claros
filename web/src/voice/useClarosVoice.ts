@@ -123,7 +123,9 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       set({ voiceStatus: status === "connected" ? "connected" : status === "connecting" ? "connecting" : "disconnected" });
     },
     onError: (message) => {
-      set({ voiceStatus: "error" });
+      voiceMark(`error: ${message}`);
+      // non-fatal errors arrive while the call is up; only a call that never connected has failed
+      if (statusRef.current !== "connected") set({ voiceStatus: "error" });
       useClaros.getState().pushServer({ type: "status", level: "error", text: `voice: ${message}` });
     },
     onModeChange: ({ mode: m }) => {

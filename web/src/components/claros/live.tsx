@@ -166,7 +166,7 @@ function ReconnectLabel() {
 }
 
 /** Resolve when the voice agent is connected (true) or failed / timed out (false). */
-export function waitVoice(timeoutMs = 15_000): Promise<boolean> {
+export function waitVoice(timeoutMs = 25_000): Promise<boolean> {
   return new Promise((resolve) => {
     let done = false;
     const finish = (v: boolean) => {
@@ -179,7 +179,6 @@ export function waitVoice(timeoutMs = 15_000): Promise<boolean> {
     const check = () => {
       const v = useClaros.getState().voiceStatus;
       if (v === "connected") finish(true);
-      else if (v === "error") finish(false);
     };
     const unsub = useClaros.subscribe(check);
     const timer = setTimeout(() => finish(useClaros.getState().voiceStatus === "connected"), timeoutMs);

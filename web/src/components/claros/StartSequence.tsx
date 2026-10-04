@@ -5,13 +5,14 @@
  *   1 Share your app window  →  2 Allow microphone  →  3 Claros greets you (voice)
  * Each step shows waiting / in progress / done / blocked-with-the-fix. Voice is the product: no typed path.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppWindow, Check, CloudOff, EyeOff, Loader2, Mic, RotateCw, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useUi, type DictKey } from "./i18n";
 import { ClarosDot } from "./primitives";
 import { useServerStatus } from "./live";
+import { useClaros } from "@/voice/store";
 
 type Key = "share" | "mic" | "greet";
 type S = "idle" | "active" | "done" | "denied" | "warn";
@@ -57,6 +58,17 @@ export function StartSequence({
     setSt((s) => ({ ...s, [k]: v }));
     setWhy((x) => ({ ...x, [k]: w }));
   };
+  // the voice can connect after the wait gave up (slow network, a transient error): then just carry on
+  const greetFailed = st.greet === "denied";
+  useEffect(() => {
+    if (!greetFailed) return;
+    return useClaros.subscribe((c) => {
+      if (c.voiceStatus !== "connected") return;
+      setSt((s) => ({ ...s, greet: "done" }));
+      setWhy((x) => ({ ...x, greet: undefined }));
+      onDone();
+    });
+  }, [greetFailed]); // eslint-disable-line react-hooks/exhaustive-deps
   const started = Object.values(st).some((v) => v !== "idle");
   const busy = Object.values(st).some((v) => v === "active");
 
