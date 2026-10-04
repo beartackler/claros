@@ -164,3 +164,44 @@ way is `correct`. Kinds: `predict` (judgment step), `check` (learner already pas
 `confirm_step` (step match score < 0.7 → "Are you on this step?"; yes → predict), `diverge` (entered a step without its
 prerequisite → "on purpose?"; yes → novel case: map unknown + capture request for the expert). 3 dismissals → "just
 watch" (said once). A hard stop on the nudge's step closes it as `implicit_incorrect`.
+
+## v2.2 additions (2026-10-04)
+### "How Claros decided" (judge-visible evidence for the Apprentice Test)
+- `say` / `ask` messages gain optional `why: {when: string, signals: {silence_ms, screen_settled_ms, typing: bool, boundary?: string}, what: string, scope: "company"|"personal_judgment"}`
+  e.g. when "pause after Save · 2.1 s quiet", what "you changed a pre-filled value".
+- New ws.out `looked_up {unknown_summary, answer, source: {kind: "app_docs"|"onet"|"general", title, url?}}` — Claros answered something itself instead of asking the expert.
+- New ws.out `signals {typing, speaking, screen: "changing"|"settled"|"away", gate: "quiet"|"ready"|"asking"}` (≤2/s) for the live indicator.
+### Agents (descoped 2026-10-04)
+MCP = internal plumbing: optional ElevenLabs MCP tool for Claros's own guardrail lookup during Teach (claros_lookup webhook remains). SKILL.md = a simple export (stretch goal), one item in the Work Map Export menu. No agent-kit UI, no /check panel. "People first, then agents" belongs to the moonshot slide, not the product flow.
+
+### v2.2 as implemented (server, 2026-10-04)
+- `ask.why` = `{when: "pause after Save · 1.2 s quiet", signals: {silence_ms, screen_settled_ms, typing, boundary:
+  "save"|"submit"|"list"|null}, what: "you changed a pre-filled value" | "you put a record on hold" | "you sent it for
+  approval" | "an amount near a round limit" | "no stop rule heard yet" | …, scope}`. Live `ask.text` is action-first
+  plain speech ("You changed the expense head to Plants and Machineries — what made you do that?"), ≤22 words.
+- `signals {typing, speaking, screen, gate}`: on change only, ≤2/s, 5 s heartbeat, capture + debrief sessions.
+- `looked_up {unknown_id, unknown_summary, answer (≤300), source: {kind: app_docs|onet|general, title, url?}}`.
+- **Not built (scope cut by the user):** `GET /api/workflows/{id}/agent-kit`, `POST /api/workflows/{id}/check`.
+  `GET /api/export/{id}.skill.md` stays (Agent-Skill frontmatter `name`/`description`, guardrails as STOP conditions with
+  quotes, how to call the MCP `check_action`). MCP at `/mcp` is Streamable HTTP (stateless, JSON responses), SSE at
+  `/mcp/sse`; tools `get_workflow`, `find_guardrails`, `check_action`, `quote`. ElevenLabs MCP registration is blocked
+  on this account (`convai_mcp_servers_disabled`), so `claros_lookup` stays the agent's lookup tool.
+- ElevenLabs agent auth is ON: clients must start sessions with `GET /api/el/token` (conversationToken) or
+  `/api/el/signed-url`; a bare agent_id connect is rejected.
+- Debrief (no exam): ≥3 questions not answered live (conflicts addressed to this expert → never-answered live items →
+  rules it is unsure about → unseen cases), one per rule/step, learner-originated items capped at 1 and asked last;
+  teach-back ≤140 words with `[[step:id]]` segments (`say kind=teachback, step_id`); a correction reads back only the
+  changed sentences; explicit confirm publishes. Anything still unanswered becomes `deferred` + `meta.needs_second_run`
+  (coverage partial = "needs a second run"), never a list.
+- Unknown.meta keys: `origin: builder|debrief|merge|learner`, `probe: scope|threshold|kind|owner|fuzzy`, `var`,
+  `literal`, `label`, `gap: reason`, conflict: `ask_expert_id/_name, other_expert_id/_name, other_did, other_why,
+  this_did, step_title`, `needs_second_run`. One conflict unknown per disagreement (addressed to the newest expert).
+- Off the record / strike that: voice "off the record" (5 langs) → `control off_record_on` + say "Off the record — I'm
+  not watching or listening. Tap Resume when you're ready."; user utterances of the previous 5 s are redacted. Resume is
+  only the client's `control off_record_off` → say "Back on the record.". `strike_that` tombstones the last 30 s in the
+  log (`struck:<kind>`), deletes those keyframes, drops ledger items and (in a debrief) the answers given; the map
+  builder/debrief skip tombstones.
+- Voice clips: `hello.consent.voice_clips`; `POST /api/sessions/{sid}/clips {event_id, t_start, t_end, mime, audio_b64}`;
+  `GET /api/clips/{name}`; `Quote.audio_clip` and `intervene.quote_original.audio_clip` (see REQUESTS.md).
+- Matching: `POST /api/workflows/lookup` takes `session_id` (server reads that session's latest screen); requests
+  merge (`requested_by_all`, `count`, `merged`), published maps close matching requests, accept → `second_run`.
