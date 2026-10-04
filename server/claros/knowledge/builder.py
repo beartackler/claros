@@ -427,6 +427,7 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     derived = {k[:-5] + suf for k in observable if k.endswith("_date") for suf in ("_month", "_year")}
     for g in wm.guardrails:
         if g.predicate:
+            g.predicate = _numeric_literals(g.predicate)
             vs = predicate_vars(g.predicate)
             probe = {v: 1 for v in vs}
             bad = [v for v in vs if v not in observable | derived and not v.startswith("doc.")]
@@ -494,6 +495,17 @@ async def _same_expert_workflow(wm: WorkMap, expert_id: str, threshold: float = 
     i = max(range(len(mine)), key=lambda k: sims[k])
     d.log.info("same-expert workflow match %s sim=%.3f", mine[i].workflow_id, sims[i])
     return mine[i].workflow_id if sims[i] >= threshold else None
+
+
+def _numeric_literals(p: Any) -> Any:
+    """{">": [{"var": "line.amount"}, "5000"]} → 5000 (string thresholds break boundary probes / exam cases)."""
+    if isinstance(p, dict):
+        return {k: ([float(x) if isinstance(x, str) and re.fullmatch(r"-?\d+(\.\d+)?", x) and k in
+                     (">", ">=", "<", "<=") else _numeric_literals(x) for x in v] if isinstance(v, list)
+                    else _numeric_literals(v)) for k, v in p.items()}
+    if isinstance(p, list):
+        return [_numeric_literals(x) for x in p]
+    return p
 
 
 def _before_after(r: Replay) -> list[tuple[ScreenState, ScreenState]]:

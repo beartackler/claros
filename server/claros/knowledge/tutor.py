@@ -317,8 +317,13 @@ async def _check_fuzzy(st: TutorState, wm: WorkMap, ent: str) -> list[Guardrail]
         if key in st.fuzzy_checked:
             continue
         st.fuzzy_checked.add(key)
-        label, conf = await d.decide(f"Does the current screen situation trigger this rule: “{g.text}”?",
-                                     context=stext, options=["violation", "ok"])
+        # strict: every condition of the rule must be visible on THIS screen; "cannot tell" is not a violation
+        # (e2e: a December double-billing rule fired on an October equipment invoice with the loose prompt)
+        label, conf = await d.decide(
+            f"Rule: “{g.text}”. Does the screen below show evidence that EVERY condition of this rule holds for "
+            f"the open record (supplier, dates, amounts, accounts as stated)? Answer violation only if all "
+            f"conditions are visibly met; cannot_tell if anything is missing; ok if a condition is clearly not met.",
+            context=stext, options=["violation", "ok", "cannot_tell"])
         if label and str(label).lower().startswith(("violation", "yes", "true")) and conf >= CONFIG["fuzzy_threshold"]:
             hits.append(g)
     return hits
