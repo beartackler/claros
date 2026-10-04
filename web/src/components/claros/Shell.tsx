@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Home, Languages, LibraryBig, LogOut, Menu } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Gauge, Home, Languages, LibraryBig, LogOut, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EXPERT, LEA } from "@/lib/mock";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuList } from "@/components/ui/navigation-menu";
@@ -29,20 +31,23 @@ export function Shell({
   children,
   back,
   focus,
+  app,
 }: {
   children: React.ReactNode;
   /** inner pages: one back link under the top bar (may depend on the role) */
   back?: Back | ((role: Role) => Back);
   /** focused mode (capture, debrief, live session): minimal chrome, no nav */
   focus?: { label: DictKey; detail?: React.ReactNode };
+  /** app layout on ≥1024px: the page fills the viewport and never scrolls; panes scroll inside */
+  app?: boolean;
 }) {
   return (
     <UiProvider>
       <LightboxProvider>
         <div className="flex min-h-dvh flex-col bg-paper text-ink">
           {focus ? <FocusBar label={focus.label} detail={focus.detail} /> : <TopBar />}
-          <main id="main" className={cn(CONTAINER, "flex-1 pb-24")}>
-            {back ? <BackLink back={back} /> : <div className="h-8 sm:h-12" />}
+          <main id="main" className={cn(CONTAINER, "flex-1 pb-24", app && "lg:flex lg:h-[calc(100dvh-74px)] lg:flex-none lg:flex-col lg:overflow-hidden lg:pb-0")}>
+            {back ? <BackLink back={back} /> : <div className={app ? "h-6 shrink-0" : "h-8 sm:h-12"} />}
             {children}
           </main>
           <DebugPanel />
@@ -230,7 +235,7 @@ const PERSONA: Record<Role, { user: typeof LEA; sub: DictKey; label: DictKey }> 
 };
 
 function RoleMenu() {
-  const { t, role, setRole } = useUi();
+  const { t, role, setRole, evidence, setEvidence } = useUi();
   const me = PERSONA[role];
   return (
     <DropdownMenu>
@@ -269,6 +274,10 @@ function RoleMenu() {
             );
           })}
         </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem checked={evidence} onCheckedChange={(v) => setEvidence(Boolean(v))} closeOnClick={false}>
+          <Gauge aria-hidden /> {t("ev.toggle")}
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

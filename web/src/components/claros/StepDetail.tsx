@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, CircleDashed, X } from "lucide-react";
 import type { ContextNote, Step, WorkMap } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { useUi, type DictKey } from "./i18n";
@@ -13,7 +12,7 @@ import { ExpertAvatar, QuoteBlock, useMediaQuery } from "./primitives";
 import { ConflictNote } from "./ConflictBanner";
 import { ShotStrip } from "./Lightbox";
 import { KindChip } from "./chips";
-import { expertById, guardrailsFor, isJudgment, quotesFor, stepHighlight } from "./mapUtils";
+import { expertById, firstName, guardrailsFor, isJudgment, positions, quotesFor, stepHighlight } from "./mapUtils";
 
 /** Where to land inside the panel: "decision" | "conflict" | "context" | `guard-${id}` */
 export type Section = string | null;
@@ -28,7 +27,6 @@ export function StepPanel({
   onOpenChange,
   onPrev,
   onNext,
-  onApprove,
 }: {
   map: WorkMap;
   step: Step | null;
@@ -39,12 +37,11 @@ export function StepPanel({
   onOpenChange: (o: boolean) => void;
   onPrev?: () => void;
   onNext?: () => void;
-  onApprove: (id: string, v: boolean) => void;
 }) {
   const desktop = useMediaQuery("(min-width: 768px)");
   if (!step) return null;
   const body = (
-    <PanelBody map={map} step={step} index={index} total={total} section={section} onClose={() => onOpenChange(false)} onPrev={onPrev} onNext={onNext} onApprove={onApprove} desktop={desktop} />
+    <PanelBody map={map} step={step} index={index} total={total} section={section} onClose={() => onOpenChange(false)} onPrev={onPrev} onNext={onNext} desktop={desktop} />
   );
   if (desktop)
     return (
@@ -70,7 +67,6 @@ function PanelBody({
   onClose,
   onPrev,
   onNext,
-  onApprove,
   desktop,
 }: {
   map: WorkMap;
@@ -81,7 +77,6 @@ function PanelBody({
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
-  onApprove: (id: string, v: boolean) => void;
   desktop: boolean;
 }) {
   const { t } = useUi();
@@ -135,7 +130,7 @@ function PanelBody({
         </div>
       </header>
       <div ref={scroller} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5">
-        <StepDetail map={map} step={step} flash={flash} onApprove={(v) => onApprove(step.id, v)} />
+        <StepDetail map={map} step={step} flash={flash} />
         {onNext ? (
           <Button variant="secondary" size="lg" className="mt-8 w-full justify-between" onClick={onNext}>
             {t("common.next")} <ArrowRight />
@@ -171,9 +166,12 @@ function citation(n: ContextNote, general: string) {
   return { label: n.source === "llm" ? general : n.source, href: undefined };
 }
 
-export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step: Step; flash: Section; onApprove: (v: boolean) => void }) {
-  const { t, role } = useUi();
-  const reasons = quotesFor(map, step.decision?.reason_quote_ids);
+export function StepDetail({ map, step, flash }: { map: WorkMap; step: Step; flash: Section }) {
+  const { t } = useUi();
+  // each quote once: conflict positions → decision → guardrails ("Anna's words ↑" when already shown)
+  const shown = new Set<string>(step.conflict ? positions(step).flatMap((p) => p.reason_quote_ids) : []);
+  const reasons = quotesFor(map, step.decision?.reason_quote_ids).filter((q) => !shown.has(q.id));
+  reasons.forEach((q) => shown.add(q.id));
   const guards = guardrailsFor(map, step);
   const notes = step.context_note_ids.map((id) => map.context_notes.find((n) => n.id === id)).filter(Boolean) as ContextNote[];
   const frames = (step.moment?.keyframe_ids ?? []).map((id, i, all) => ({
@@ -200,6 +198,12 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
         </div>
       </Block>
 
+      {!step.approved && !step.conflict ? (
+        <p className="hatch-partial flex items-center gap-2.5 rounded-base border-2 border-dashed border-ink p-3 text-lg font-bold">
+          <CircleDashed className="size-5 shrink-0" aria-hidden /> {t("map.notConfirmedYet")}
+        </p>
+      ) : null}
+
       {step.conflict ? (
         <Block id="conflict" flash={flash}>
           <ConflictNote map={map} step={step} detailed />
@@ -209,12 +213,8 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
       {step.decision && !step.conflict ? (
         <Block id="decision" flash={flash} title={isJudgment(step) ? <KindChip kind="judgment" size="sm">{t("chip.judgment")}</KindChip> : t("map.decision")}>
           <p className="text-2xl font-extrabold leading-snug tracking-[-0.02em]">{step.decision.description}</p>
-          {step.decision.from_value || step.decision.to_value ? (
-            <p className="mt-3 flex flex-wrap items-center gap-2 font-mono text-lg">
-              {step.decision.from_value ? <span className="text-ink-2 line-through decoration-2">{step.decision.from_value}</span> : null}
-              <ArrowRight className="size-5" aria-hidden />
-              <span className="rounded-[3px] bg-claros-soft px-1.5 font-bold">{step.decision.to_value}</span>
-            </p>
+          {step.decision.from_value && step.decision.to_value ? (
+            <p className="mt-3 text-lg">{t("map.fromTo", { from: step.decision.from_value, to: step.decision.to_value })}</p>
           ) : null}
           {step.decision.counterfactual ? (
             <p className="mt-3 text-lg">
@@ -224,7 +224,9 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
           {reasons.length ? (
             <div className="mt-4 space-y-3">
               {reasons.map((q) => (
-                <QuoteBlock key={q.id} quote={q} />
+                <div key={q.id} id={`q-${q.id}`} className="scroll-mt-4">
+                  <QuoteBlock quote={q} />
+                </div>
               ))}
             </div>
           ) : null}
@@ -244,15 +246,21 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
                   {g.owner ? <span>· {t("map.owner")}: {g.owner}</span> : null}
                 </p>
                 <p className="mt-2 text-lg font-semibold leading-snug">{g.text}</p>
-                {role === "expert" && g.predicate ? (
-                  <code className="mt-3 block overflow-x-auto rounded-[3px] bg-paper/10 p-2 font-mono text-xs">{JSON.stringify(g.predicate)}</code>
-                ) : null}
               </div>
-              {quotesFor(map, g.quote_ids).map((q) => (
-                <div key={q.id} className="mt-2">
-                  <QuoteBlock quote={q} compact />
-                </div>
-              ))}
+              {quotesFor(map, g.quote_ids).map((q) =>
+                shown.has(q.id) ? (
+                  <a key={q.id} href={`#q-${q.id}`} className="mt-2 inline-flex items-center gap-1.5 text-base font-bold text-ink-2 underline decoration-2 underline-offset-4 hover:text-ink">
+                    {t("map.wordsUp", { name: firstName(q.speaker) })}
+                  </a>
+                ) : (
+                  (shown.add(q.id),
+                  (
+                    <div key={q.id} id={`q-${q.id}`} className="mt-2 scroll-mt-4">
+                      <QuoteBlock quote={q} compact />
+                    </div>
+                  ))
+                ),
+              )}
             </Block>
           ))}
         </div>
@@ -282,12 +290,6 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
         </Block>
       ) : null}
 
-      {role === "expert" ? (
-        <label className="flex items-center justify-between gap-3 rounded-base border-2 border-ink bg-card p-4 text-lg font-bold">
-          {t("map.approve")}
-          <Switch checked={step.approved} onCheckedChange={(v) => onApprove(Boolean(v))} aria-label={t("map.approve")} />
-        </label>
-      ) : null}
     </div>
   );
 }

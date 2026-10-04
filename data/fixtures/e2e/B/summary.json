@@ -1,127 +1,298 @@
 {
-  "session_id": "s_f69df28f34d4",
+  "session_id": "s_e7c397047833",
   "frames": [],
   "turns": [
     {
-      "t": 1791078972986.672,
-      "sent": "Okay, let's do it.",
-      "text": "Got it. Who confirms with the supplier before a held duplicate is released?",
+      "t": 1791096437395.52,
+      "sent": "⟦say:debrief-4|Who confirms a held invoice, and what un-holds it?⟧",
+      "text": "Who confirms a held invoice, and what un-holds it?",
       "tool": null,
-      "ttft_ms": 2445,
-      "total_ms": 2445,
+      "ttft_ms": 0.0,
+      "total_ms": 3371,
+      "kind": "debrief"
+    },
+    {
+      "t": 1791096450650.2678,
+      "sent": "Any supplier: if the amount matches an invoice we already paid, put it on hold and ask the supplier. I release it myself once they confirm it's not a duplicate.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
       "kind": "user"
     },
     {
-      "t": 1791078975733.1729,
-      "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "text": "Got it. Looks like: Threshold applies per equipment item line — is that your rule?",
+      "t": 1791096453795.4402,
+      "sent": "⟦say:debrief-5|Got it. You sent that invoice for a second approval — why does it need two?⟧",
+      "text": "Got it. You sent that invoice for a second approval — why does it need two?",
       "tool": null,
-      "ttft_ms": 1917,
-      "total_ms": 1917,
+      "ttft_ms": 0.0,
+      "total_ms": 5681,
+      "kind": "debrief"
+    },
+    {
+      "t": 1791096467692.9888,
+      "sent": "Every invoice of the UK company goes to Frank, the controller, for second approval.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
       "kind": "user"
     },
     {
-      "t": 1791078977951.5322,
-      "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "text": "Got it. Here's my teach-back:  I open a supplier invoice and review its line classification.  For capital-equipment lines, I choose the expense head based on the item's capital nature, not the pre-filled default — reclassifying to Plants and Machineries with the Production cost center, never small tools, per the capitalization threshold.  Then I save the corrected invoice.  Next I screen the queue for repeat billing from known suppliers.  On suspect invoices, I treat a same-amount invoice from a known repeat-biller as a suspected duplicate, not a normal bill.  I place it on hold and save, waiting for supplier confirmation before proceeding.  I also identify invoices from the UK subsidiary needing controller sign-off.  These get escalated to Pending Second Approval rather than being booked. Is that right?",
+      "t": 1791096470833.457,
+      "sent": "⟦say:debrief-6|Got it. When is Production the right cost center versus the default one?⟧",
+      "text": "Got it. When is Production the right cost center versus the default one?",
       "tool": null,
-      "ttft_ms": 3594,
-      "total_ms": 3595,
+      "ttft_ms": 0.0,
+      "total_ms": 4691,
+      "kind": "debrief"
+    },
+    {
+      "t": 1791096483834.097,
+      "sent": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
       "kind": "user"
     },
     {
-      "t": 1791078981847.1072,
-      "sent": "Yes, that's right.",
-      "text": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account. I would: block and explain — Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools (85% sure). Right?",
+      "t": 1791096486899.774,
+      "sent": "⟦say:debrief-7|Got it. You changed the expense head from Tools and Small Equipment to Plants and Machineries. What on the invoice tells you it counts as capex?⟧",
+      "text": "Got it. You changed the expense head from Tools and Small Equipment to Plants and Machineries. What on the invoice tells you it counts as capex?",
       "tool": null,
-      "ttft_ms": 120,
-      "total_ms": 121,
+      "ttft_ms": 0.0,
+      "total_ms": 8981,
+      "kind": "debrief"
+    },
+    {
+      "t": 1791096504188.253,
+      "sent": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
       "kind": "user"
     },
     {
-      "t": 1791078982269.486,
-      "sent": "Yes, correct.",
-      "text": "Got it. Case 2: Posting Date * = 12. I would: proceed normally, no guardrail applies (70% sure). Right?",
+      "t": 1791096508898.424,
+      "sent": "⟦say:teachback-8-0|Got it.⟧",
+      "text": "Got it.",
       "tool": null,
-      "ttft_ms": 114,
-      "total_ms": 114,
+      "ttft_ms": 0.0,
+      "total_ms": 1061,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096509959.699,
+      "sent": "⟦say:teachback-8-1|I open the supplier invoice and review what it's for.⟧",
+      "text": "I open the supplier invoice and review what it's for.",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 3701,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096513660.9622,
+      "sent": "⟦say:teachback-8-2|If the equipment is over 5,000, that's capex per Erika — so I change the Expense Head from the default small-tools account to Plants and Machineries, never small tools.⟧",
+      "text": "If the equipment is over 5,000, that's capex per Erika — so I change the Expense Head from the default small-tools account to Plants and Machineries, never small tools.",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 9971,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096523632.3,
+      "sent": "⟦say:teachback-8-3|I also switch the Cost Center from Administration to Production to match.⟧",
+      "text": "I also switch the Cost Center from Administration to Production to match.",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 4361,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096527993.595,
+      "sent": "⟦say:teachback-8-4|I save the corrected invoice,⟧",
+      "text": "I save the corrected invoice,",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 2051,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096530044.936,
+      "sent": "⟦say:teachback-8-5|then return to the list and pick the next item.⟧",
+      "text": "then return to the list and pick the next item.",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 3701,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096533746.2412,
+      "sent": "⟦say:teachback-8-6|For the suspect invoice, I compare it against earlier invoices from the same supplier;⟧",
+      "text": "For the suspect invoice, I compare it against earlier invoices from the same supplier;",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 5021,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096538767.581,
+      "sent": "⟦say:teachback-8-7|if the amount matches one already paid, Erika says this supplier double-bills every December, so I put it On Hold instead of booking it,⟧",
+      "text": "if the amount matches one already paid, Erika says this supplier double-bills every December, so I put it On Hold instead of booking it,",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 8321,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096547088.9092,
+      "sent": "⟦say:teachback-8-8|and save so the hold sticks.⟧",
+      "text": "and save so the hold sticks.",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 2381,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096549470.211,
+      "sent": "⟦say:teachback-8-9|Finally, for the subsidiary invoice I identify which company it's from;⟧",
+      "text": "Finally, for the subsidiary invoice I identify which company it's from;",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 4031,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096553501.528,
+      "sent": "⟦say:teachback-8-10|anything from the UK subsidiary needs second approval from the controller before booking. Is that how it works?⟧",
+      "text": "anything from the UK subsidiary needs second approval from the controller before booking. Is that how it works?",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 6341,
+      "kind": "teachback"
+    },
+    {
+      "t": 1791096568786.4229,
+      "sent": "One detail: maintenance and repairs stay an expense even above 5,000 — only new equipment is capex.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
       "kind": "user"
     },
     {
-      "t": 1791078982684.7832,
-      "sent": "Yes, correct.",
-      "text": "Got it. Case 3: Company = Ltd account. I would: stop and ask — Any invoice from the UK subsidiary requires a second approval from the controller before it is booked (85% sure). Right?",
+      "t": 1791096571166.802,
+      "sent": "⟦say:debrief-9|Got it — the rule now says: New equipment with an amount over 5,000 is capex: it must never be booked to small tools — use Plants and Machineries with the Production cost center. Maintenance and repairs stay an expense even above 5,000. Anything else, or is that how it works?⟧",
+      "text": "Got it — the rule now says: New equipment with an amount over 5,000 is capex: it must never be booked to small tools — use Plants and Machineries with the Production cost center. Maintenance and repairs stay an expense even above 5,000. Anything else, or is that how it works?",
       "tool": null,
-      "ttft_ms": 212,
-      "total_ms": 212,
+      "ttft_ms": 0.0,
+      "total_ms": 12001,
+      "kind": "debrief"
+    },
+    {
+      "t": 1791096588547.1501,
+      "sent": "Yes, that's how it works.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
       "kind": "user"
     },
     {
-      "t": 1791078983198.2131,
-      "sent": "Yes, correct.",
-      "text": "Got it. That's everything. The map is published for learners.",
+      "t": 1791096589366.4482,
+      "sent": "⟦say:debrief-10|That's everything. The map is published for learners.⟧",
+      "text": "That's everything. The map is published for learners.",
       "tool": null,
-      "ttft_ms": 115,
-      "total_ms": 116,
-      "kind": "user"
+      "ttft_ms": 0.0,
+      "total_ms": 3041,
+      "kind": "debrief"
     }
   ],
-  "map_build_s": 19.6,
+  "map_build_s": 67.7,
   "built": {
     "type": "status",
     "level": "info",
-    "text": "Work map built: 8 steps, 3 guardrails, 2 open questions.",
-    "_at": 1791078971669.926
+    "text": "Work map built: 10 steps, 3 guardrails, 5 open questions.",
+    "_at": 1791096434752.646
   },
   "debrief": [
     {
-      "say": "Okay, let's do it.",
-      "reply": "Got it. Who confirms with the supplier before a held duplicate is released?",
-      "tool": null,
-      "ttft_ms": 2445,
-      "total_ms": 2445
+      "claros": "Who confirms a held invoice, and what un-holds it?",
+      "kinds": [
+        "debrief"
+      ],
+      "steps": [],
+      "expert": "Any supplier: if the amount matches an invoice we already paid, put it on hold and ask the supplier. I release it myself once they confirm it's not a duplicate."
     },
     {
-      "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "reply": "Got it. Looks like: Threshold applies per equipment item line — is that your rule?",
-      "tool": null,
-      "ttft_ms": 1917,
-      "total_ms": 1917
+      "claros": "Got it. You sent that invoice for a second approval — why does it need two?",
+      "kinds": [
+        "debrief"
+      ],
+      "steps": [],
+      "expert": "Every invoice of the UK company goes to Frank, the controller, for second approval."
     },
     {
-      "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "reply": "Got it. Here's my teach-back:  I open a supplier invoice and review its line classification.  For capital-equipment lines, I choose the expense head based on the item's capital nature, not the pre-filled default — reclassifying to Plants and Machineries with the Production cost center, never small tools, per the capitalization threshold.  Then I save the corrected invoice.  Next I screen the queue for repeat billing from known suppliers.  On suspect invoices, I treat a same-amount invoice from a known repeat-biller as a suspected duplicate, not a normal bill.  I place it on hold and save, waiting for supplier confirmation before proceeding.  I also identify invoices from the UK subsidiary needing controller sign-off.  These get escalated to Pending Second Approval rather than being booked. Is that right?",
-      "tool": null,
-      "ttft_ms": 3594,
-      "total_ms": 3595
+      "claros": "Got it. When is Production the right cost center versus the default one?",
+      "kinds": [
+        "debrief"
+      ],
+      "steps": [],
+      "expert": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center."
     },
     {
-      "say": "Yes, that's right.",
-      "reply": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account. I would: block and explain — Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools (85% sure). Right?",
-      "tool": null,
-      "ttft_ms": 120,
-      "total_ms": 121
+      "claros": "Got it. You changed the expense head from Tools and Small Equipment to Plants and Machineries. What on the invoice tells you it counts as capex?",
+      "kinds": [
+        "debrief"
+      ],
+      "steps": [],
+      "expert": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center."
     },
     {
-      "say": "Yes, correct.",
-      "reply": "Got it. Case 2: Posting Date * = 12. I would: proceed normally, no guardrail applies (70% sure). Right?",
-      "tool": null,
-      "ttft_ms": 114,
-      "total_ms": 114
+      "claros": "Got it. I open the supplier invoice and review what it's for. If the equipment is over 5,000, that's capex per Erika — so I change the Expense Head from the default small-tools account to Plants and Machineries, never small tools. I also switch the Cost Center from Administration to Production to match. I save the corrected invoice, then return to the list and pick the next item. For the suspect invoice, I compare it against earlier invoices from the same supplier; if the amount matches one already paid, Erika says this supplier double-bills every December, so I put it On Hold instead of booking it, and save so the hold sticks. Finally, for the subsidiary invoice I identify which company it's from; anything from the UK subsidiary needs second approval from the controller before booking. Is that how it works?",
+      "kinds": [
+        "teachback",
+        "teachback",
+        "teachback",
+        "teachback",
+        "teachback",
+        "teachback",
+        "teachback",
+        "teachback",
+        "teachback",
+        "teachback",
+        "teachback"
+      ],
+      "steps": [
+        "s1",
+        "s2",
+        "s3",
+        "s4",
+        "s5",
+        "s6",
+        "s7",
+        "s8",
+        "s9",
+        "s10"
+      ],
+      "expert": "One detail: maintenance and repairs stay an expense even above 5,000 — only new equipment is capex."
     },
     {
-      "say": "Yes, correct.",
-      "reply": "Got it. Case 3: Company = Ltd account. I would: stop and ask — Any invoice from the UK subsidiary requires a second approval from the controller before it is booked (85% sure). Right?",
-      "tool": null,
-      "ttft_ms": 212,
-      "total_ms": 212
+      "claros": "Got it — the rule now says: New equipment with an amount over 5,000 is capex: it must never be booked to small tools — use Plants and Machineries with the Production cost center. Maintenance and repairs stay an expense even above 5,000. Anything else, or is that how it works?",
+      "kinds": [
+        "debrief"
+      ],
+      "steps": [],
+      "expert": "Yes, that's how it works."
     },
     {
-      "say": "Yes, correct.",
-      "reply": "Got it. That's everything. The map is published for learners.",
-      "tool": null,
-      "ttft_ms": 115,
-      "total_ms": 116
+      "claros": "That's everything. The map is published for learners.",
+      "kinds": [
+        "debrief"
+      ],
+      "steps": []
     }
   ],
   "coverage": {
@@ -132,5 +303,160 @@
     "open_unknowns": 0,
     "conflicts": 0
   },
-  "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e"
+  "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae",
+  "spoken": [
+    {
+      "at": 1791096440766.8281,
+      "type": "say",
+      "kind": "debrief",
+      "id": "debrief-4",
+      "text": "Who confirms a held invoice, and what un-holds it?",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096459476.741,
+      "type": "say",
+      "kind": "debrief",
+      "id": "debrief-5",
+      "text": "Got it. You sent that invoice for a second approval — why does it need two?",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096475524.1511,
+      "type": "say",
+      "kind": "debrief",
+      "id": "debrief-6",
+      "text": "Got it. When is Production the right cost center versus the default one?",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096495880.6519,
+      "type": "say",
+      "kind": "debrief",
+      "id": "debrief-7",
+      "text": "Got it. You changed the expense head from Tools and Small Equipment to Plants and Machineries. What on the invoice tells you it counts as capex?",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096509959.6748,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-0",
+      "text": "Got it.",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096513660.94,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-1",
+      "text": "I open the supplier invoice and review what it's for.",
+      "step_id": "s1",
+      "why": null
+    },
+    {
+      "at": 1791096523632.268,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-2",
+      "text": "If the equipment is over 5,000, that's capex per Erika — so I change the Expense Head from the default small-tools account to Plants and Machineries, never small tools.",
+      "step_id": "s2",
+      "why": null
+    },
+    {
+      "at": 1791096527993.572,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-3",
+      "text": "I also switch the Cost Center from Administration to Production to match.",
+      "step_id": "s3",
+      "why": null
+    },
+    {
+      "at": 1791096530044.9028,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-4",
+      "text": "I save the corrected invoice,",
+      "step_id": "s4",
+      "why": null
+    },
+    {
+      "at": 1791096533746.2102,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-5",
+      "text": "then return to the list and pick the next item.",
+      "step_id": "s5",
+      "why": null
+    },
+    {
+      "at": 1791096538767.5562,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-6",
+      "text": "For the suspect invoice, I compare it against earlier invoices from the same supplier;",
+      "step_id": "s6",
+      "why": null
+    },
+    {
+      "at": 1791096547088.877,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-7",
+      "text": "if the amount matches one already paid, Erika says this supplier double-bills every December, so I put it On Hold instead of booking it,",
+      "step_id": "s7",
+      "why": null
+    },
+    {
+      "at": 1791096549470.18,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-8",
+      "text": "and save so the hold sticks.",
+      "step_id": "s8",
+      "why": null
+    },
+    {
+      "at": 1791096553501.497,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-9",
+      "text": "Finally, for the subsidiary invoice I identify which company it's from;",
+      "step_id": "s9",
+      "why": null
+    },
+    {
+      "at": 1791096559842.8481,
+      "type": "say",
+      "kind": "teachback",
+      "id": "teachback-8-10",
+      "text": "anything from the UK subsidiary needs second approval from the controller before booking. Is that how it works?",
+      "step_id": "s10",
+      "why": null
+    },
+    {
+      "at": 1791096583168.142,
+      "type": "say",
+      "kind": "debrief",
+      "id": "debrief-9",
+      "text": "Got it — the rule now says: New equipment with an amount over 5,000 is capex: it must never be booked to small tools — use Plants and Machineries with the Production cost center. Maintenance and repairs stay an expense even above 5,000. Anything else, or is that how it works?",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096592407.706,
+      "type": "say",
+      "kind": "debrief",
+      "id": "debrief-10",
+      "text": "That's everything. The map is published for learners.",
+      "step_id": null,
+      "why": null
+    }
+  ]
 }

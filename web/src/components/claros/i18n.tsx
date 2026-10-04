@@ -18,6 +18,9 @@ type Ctx = {
   setLang: (l: UiLang) => void;
   role: Role;
   setRole: (r: Role) => void;
+  /** judge / demo mode: show "How Claros decided" evidence (off by default) */
+  evidence: boolean;
+  setEvidence: (on: boolean) => void;
   t: (k: DictKey, vars?: Record<string, string | number>) => string;
   /** plural-aware count label ("1 frame", "5 кадров") */
   tn: (k: PluralKey, n: number) => string;
@@ -49,12 +52,22 @@ export function translate(lang: UiLang, k: DictKey, vars?: Record<string, string
 
 // Tiny external store so prefs survive client navigation without flicker and hydrate safely.
 const listeners = new Set<() => void>();
-const prefs: { lang: UiLang; role: Role; loaded: boolean } = { lang: "en", role: "learner", loaded: false };
+const prefs: { lang: UiLang; role: Role; evidence: "on" | "off"; loaded: boolean } = { lang: "en", role: "learner", evidence: "off", loaded: false };
 function loadPrefs() {
   if (prefs.loaded || typeof window === "undefined") return;
   prefs.loaded = true;
   prefs.lang = read("claros.lang", LANGS, "en");
   prefs.role = read("claros.role", ["learner", "expert"] as const, "learner");
+  prefs.evidence = read("claros.evidence", ["on", "off"] as const, "off");
+  try {
+    const j = new URLSearchParams(window.location.search).get("judge");
+    if (j === "1" || j === "0") {
+      prefs.evidence = j === "1" ? "on" : "off";
+      write("claros.evidence", prefs.evidence);
+    }
+  } catch {
+    /* no window */
+  }
 }
 const subscribe = (l: () => void) => {
   listeners.add(l);
@@ -63,10 +76,12 @@ const subscribe = (l: () => void) => {
 const emit = () => listeners.forEach((l) => l());
 const getLang = () => (loadPrefs(), prefs.lang);
 const getRole = () => (loadPrefs(), prefs.role);
+const getEvidence = () => (loadPrefs(), prefs.evidence);
 
 export function UiProvider({ children }: { children: React.ReactNode }) {
   const lang = useSyncExternalStore(subscribe, getLang, () => "en" as UiLang);
   const role = useSyncExternalStore(subscribe, getRole, () => "learner" as Role);
+  const evidence = useSyncExternalStore(subscribe, getEvidence, () => "off" as const) === "on";
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -82,6 +97,11 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
     write("claros.role", r);
     emit();
   }, []);
+  const setEvidence = useCallback((on: boolean) => {
+    prefs.evidence = on ? "on" : "off";
+    write("claros.evidence", prefs.evidence);
+    emit();
+  }, []);
   const t = useCallback((k: DictKey, vars?: Record<string, string | number>) => translate(lang, k, vars), [lang]);
 
   const tn = useCallback((k: PluralKey, n: number) => {
@@ -90,7 +110,7 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
     return (forms[cat] ?? forms.other ?? PLURALS.en[k]!.other!).replaceAll("{n}", String(n));
   }, [lang]);
 
-  const value = useMemo(() => ({ lang, setLang, role, setRole, t, tn }), [lang, setLang, role, setRole, t, tn]);
+  const value = useMemo(() => ({ lang, setLang, role, setRole, evidence, setEvidence, t, tn }), [lang, setLang, role, setRole, evidence, setEvidence, t, tn]);
   return <UiCtx.Provider value={value}>{children}</UiCtx.Provider>;
 }
 

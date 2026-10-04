@@ -146,15 +146,41 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
   convRef.current = conv;
   const connected = () => statusRef.current === "connected";
 
-  // ---- off-record = mic muted + control message ----
+  // ---- off the record (honest): OFF by voice or tap; BACK ON only by tapping Resume ----
+  // Off: Claros says so, mic muted, frames stop (capture checks the store). The muted mic can't hear
+  // "back on the record", so the only way back is the Resume button (page, PiP orb, or R key).
+  const enqueueRef = useRef<(m: SayMsg) => void>(() => {});
+  const announceOff = useCallback(() => {
+    sayQueue.current = sayQueue.current.filter((m) => m.id.startsWith("offrec-"));
+    enqueueRef.current({ type: "say", id: `offrec-off-${Date.now()}`, text: offRecordLine(lang, "off"), kind: "ack" });
+  }, [lang]);
   const setOffRecord = useCallback(
     (on: boolean) => {
+      if (useClaros.getState().offRecord === on) return;
       set({ offRecord: on });
       try { convRef.current.setMuted(on); } catch {}
       sendControl(on ? "off_record_on" : "off_record_off");
+      if (on) announceOff();
+      else enqueueRef.current({ type: "say", id: `offrec-on-${Date.now()}`, text: offRecordLine(lang, "on"), kind: "ack" });
     },
-    [set],
+    [set, announceOff, lang],
   );
+  /** "Strike that": the server deletes the last 30 s. */
+  const strikeThat = useCallback(() => sendControl("strike_that"), []);
+  // one spoken reminder after 3 min off the record, then at most every 5 min
+  useEffect(() => {
+    if (!offRecord) return;
+    let iv: ReturnType<typeof setInterval> | null = null;
+    const remind = () => enqueueRef.current({ type: "say", id: `offrec-still-${Date.now()}`, text: offRecordLine(lang, "still"), kind: "ack" });
+    const first = setTimeout(() => {
+      remind();
+      iv = setInterval(remind, 5 * 60_000);
+    }, 3 * 60_000);
+    return () => {
+      clearTimeout(first);
+      if (iv) clearInterval(iv);
+    };
+  }, [offRecord, lang]);
   useEffect(() => {
     if (connected()) {
       try { convRef.current.setMuted(offRecord); } catch {}
@@ -171,6 +197,11 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     if (agentModeRef.current === "speaking" || vadSpeaking.current || now_ - lastQuietT.current < SAY_QUIET_MS) {
       sayTimer.current = setTimeout(pump, 300);
       return;
+    }
+    // off the record: only the off-record notices may be spoken
+    if (useClaros.getState().offRecord) {
+      sayQueue.current = sayQueue.current.filter((x) => x.id.startsWith("offrec-"));
+      if (!sayQueue.current.length) return;
     }
     const m = sayQueue.current.shift()!;
     sayInFlight.current = { id: m.id, t: now_, spoke: false };
@@ -189,6 +220,10 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     if (sayQueue.current.length > 20) sayQueue.current.splice(0, sayQueue.current.length - 20);
     pump();
   }, [pump]);
+
+  useEffect(() => {
+    enqueueRef.current = enqueueSay;
+  }, [enqueueSay]);
 
   const dropSay = useCallback((pred: (m: SayMsg) => boolean) => {
     sayQueue.current = sayQueue.current.filter((m) => !pred(m));
@@ -217,8 +252,13 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
         }),
         // brain-originated control (expert said it by voice): store already mirrors it; don't echo back
         s.on("control", (m) => {
-          if (m.action === "off_record_on" || m.action === "off_record_off") {
-            try { convRef.current.setMuted(m.action === "off_record_on"); } catch {}
+          // said by voice → brain → control: mute + say so. "off_record_off" by voice can't happen (mic is muted).
+          if (m.action === "off_record_on") {
+            try { convRef.current.setMuted(true); } catch {}
+            announceOff();
+          }
+          if (m.action === "off_record_off") {
+            try { convRef.current.setMuted(false); } catch {}
           }
           if (m.action === "end_task") {
             try { convRef.current.endSession(); } catch {}
@@ -234,7 +274,7 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       offChange();
       offs.forEach((f) => f());
     };
-  }, [enqueueSay, dropSay]);
+  }, [enqueueSay, dropSay, announceOff]);
 
   // ---- user is working → keep the agent from barging in ----
   useEffect(
@@ -267,11 +307,8 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       setOffRecordRef.current(true);
       return "off record";
     },
-    go_on_record: () => {
-      useClaros.getState().pushTool("go_on_record", {});
-      setOffRecordRef.current(false);
-      return "on record";
-    },
+    // never resume by voice: the person must tap Resume (honest off-the-record)
+    go_on_record: () => "Still off the record. Ask them to tap Resume.",
     open_map: (p: ClientToolParams["open_map"]) => {
       useClaros.getState().pushTool("open_map", p);
       return "ok";
@@ -354,6 +391,7 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     isMuted: conv.isMuted,
     offRecord,
     setOffRecord,
+    strikeThat,
     start,
     end,
     sendText: (text: string) => conv.sendUserMessage(text),
@@ -365,3 +403,15 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
 }
 
 export type ClarosVoice = ReturnType<typeof useClarosVoice>;
+
+/** What Claros says around off the record (localized; spoken verbatim through the say queue). */
+const OFF_LINES: Record<string, Record<"off" | "on" | "still", string>> = {
+  en: { off: "Off the record — I'm not watching or listening. Tap Resume when you're ready.", on: "Back on the record.", still: "Still off the record — tap Resume when you're ready." },
+  ru: { off: "Не для записи — я не смотрю и не слушаю. Нажмите «Продолжить», когда будете готовы.", on: "Снова записываю.", still: "Всё ещё не для записи — нажмите «Продолжить», когда будете готовы." },
+  de: { off: "Nicht für die Aufzeichnung — ich schaue und höre nicht zu. Tippe auf Fortsetzen, wenn du so weit bist.", on: "Wieder auf Aufnahme.", still: "Immer noch nicht für die Aufzeichnung — tippe auf Fortsetzen, wenn du so weit bist." },
+  fr: { off: "Hors enregistrement — je ne regarde ni n'écoute. Touchez Reprendre quand vous êtes prêt.", on: "On reprend l'enregistrement.", still: "Toujours hors enregistrement — touchez Reprendre quand vous êtes prêt." },
+  es: { off: "Fuera de grabación — no miro ni escucho. Toca Reanudar cuando estés listo.", on: "Volvemos a grabar.", still: "Sigue fuera de grabación — toca Reanudar cuando estés listo." },
+};
+export function offRecordLine(lang: string, k: "off" | "on" | "still") {
+  return (OFF_LINES[(lang || "en").slice(0, 2)] ?? OFF_LINES.en)[k];
+}

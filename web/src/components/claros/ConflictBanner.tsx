@@ -35,7 +35,7 @@ export function ConflictNote({ map, step, detailed }: { map: WorkMap; step: Step
                 </p>
                 <p className="mt-2 text-lg font-semibold leading-snug">{v.description}</p>
                 {quotesFor(map, v.reason_quote_ids).map((q) => (
-                  <div key={q.id} className="mt-3">
+                  <div key={q.id} id={`q-${q.id}`} className="mt-3 scroll-mt-4">
                     <QuoteBlock quote={q} compact />
                   </div>
                 ))}

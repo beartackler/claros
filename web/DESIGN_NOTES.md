@@ -1,88 +1,87 @@
-# Claros web UI — design notes
+# Claros web UI — design notes (v2)
+
+Source of truth: `docs/PRODUCT.md` v2 / v2.1 and `docs/CONTRACTS.md` (v2.1 nudges, v2.2 evidence).
+Desktop first (1440 / 1920). Light only. Big type, few words, one obvious primary action per screen.
 
 ## World
-Neobrutalist "apprentice's notebook". Paper-cream ground, ink 2px borders, hard offset shadows (no blur),
-6px radius. Light only (dark mode was dropped by product decision; no `prefers-color-scheme` handling).
+Neobrutalist "apprentice's notebook": paper-cream ground, ink 2px borders, hard offset shadows, 6px radius.
+Violet (`claros`) = Claros is speaking / asking / summoned. `expert` blue = an expert's own words.
+`ready` green / hatched amber = Ready / Needs a second run (one map status, never "open questions").
 
-## Tokens (`app/globals.css`)
-Claros palette is exposed as Tailwind colors: `paper paper-2 card ink ink-2 claros claros-soft claros-ink
-expert expert-soft ready partial missing danger on-fill`, shadows `shadow-hard-sm / hard / hard-lg / claros`.
-The neobrutalism.dev registry tokens (`--main`, `--background`, `--border`…) are mapped onto these, so
-registry components drop in without restyling.
+## Type
+`globals.css` remaps the Tailwind scale: body 18px (`text-base`), `text-sm` 16, `text-xs` 13, headings
+up to 96px. Captions over instructions; every paragraph is one short line or gone.
 
-- **Violet (`claros`) = Claros is speaking / asking / summoned.** Walk-me-through, Answer by voice, intervention.
-- Coverage: `ready` green, `partial` amber (hatched), `missing` coral — always icon + word.
-- `expert` blue = an expert's own words and judgment calls.
-- Text on bright fills uses `on-fill`.
+## Pressables (neobrutalism.dev default)
+`.press` (globals.css): a slab sits on a hard shadow and presses DOWN by the shadow size on hover and
+`:active` — never lifts. Open menus (`data-popup-open`), toggled (`aria-pressed`) and current items stay
+pressed in. Sizes: `.press-sm` 2px, `.press` 4px, `.press-lg` 6px, `.press-xl` 8px. Cards with a
+stretched link/button use `.press-within`. Used by every Button variant, chips, step cards, filters,
+dropdown/select triggers, Resume, lightbox controls.
 
-## Component layer (`components/ui`, neobrutalism.dev registry, Base UI — `render` prop, not asChild)
-Added from the registry: dropdown-menu, navigation-menu, sheet, drawer, breadcrumb, popover, hover-card,
-collapsible, accordion, skeleton, empty, kbd. Extended:
-- **Button** hierarchy: `primary` (ink slab, violet shadow) · `claros` (summons Claros only) · `secondary`
-  (card + shadow) · `outline` · `ghost` · `destructive` · `link`; sizes xs→xl + icon sizes; `loading` prop
-  (spinner, aria-busy, blocks clicks). Hover lifts 1px, press sinks into the shadow, focus = 3px violet ring,
-  disabled = flat 45%. Legacy `default/neutral` kept for `voice/` and `/dev`.
-- **Badge** variants: ready / partial / missing / expert / claros / ink / tag (mono, for app + O*NET data) / dashed.
-- Dropdowns, tooltips get hard shadows; inputs get violet focus + AA placeholder.
+## Components (structural, from `src/components/ui`, Base UI `render` prop)
+Button, Badge (status, steps, request stages), Card (map + request cards), Avatar (ExpertAvatar),
+Input, Textarea, Select (speak language), DropdownMenu (language, role, Export), Sheet/Drawer (step
+detail < 1024px, mobile nav), Tooltip, Toast, Switch, Label — all retuned to the Claros tokens
+(ink borders, card bg, hard shadows, 16–18px text). The lightbox is the one custom overlay (media
+viewer with shared-element zoom; keyboard + focus trap built in).
 
-## Shell (`components/claros/Shell.tsx`)
-Top bar: wordmark · primary nav (NavigationMenu: Home, Walk me through, Workflows; active = ink slab) ·
-language dropdown · role menu (avatar + name; Expert/Learner radio). Phone: menu button opens a
-left Sheet with the nav. Inner pages get breadcrumbs (`crumbs` prop). Capture and debrief use **focus
-mode** (`focus` prop): wordmark, session label, language, Exit — no nav.
-Demo controls (force coverage) live only in a hidden panel shown with `?debug=1` (`debug.tsx`).
+## Layout
+Fluid container up to 1600px (`CONTAINER` in Shell), 40px gutters on desktop. Two panes everywhere it
+helps: homes, start sequence, live views, debrief, Work Map.
 
-## Information architecture
-`/inbox` redirects to `/`. Role decides Home.
+## Journeys
+- **Shell**: role switch in the user menu; each role sees only its own nav (Expert: Home, Work maps;
+  Learner: none — Home is the session). The same menu holds the judge toggle "Show how Claros decided".
+- **Start** (`StartSequence`): ONE "Start" → 1 Share your app window → 2 Allow microphone → 3 Claros
+  greets you (voice). Visible per-step states: waiting / in progress / done / blocked-with-the-fix:
+  picker cancelled, macOS Screen Recording blocked (restart hint), whole screen or a tab (pick again /
+  continue), mic blocked (browser + macOS steps), no mic, voice didn't connect, server waking / offline.
+  Privacy in two short lines above the button. No typed path — voice is the product.
+- **Expert home**: giant "Show Claros how you work" slab → "Learners are waiting on" (their screen
+  moment, one-tap Record it) → "Your work maps" (big thumbnail + Ready / Needs a second run).
+- **Capture**: status row (recording, timer, question dots, Pop out, Strike that, Off the record,
+  Done — debrief) → big orb + live captions → three lines of what Claros noticed. Phase routing to
+  debrief unchanged.
+- **Off the record (honest)**: off by voice or tap; back ONLY by Resume (page, PiP orb, or R). Claros
+  says so when going off, mutes, frames stop, dark orb, ResumeBar; reminder after 3 min, then every 5.
+  "Strike that" → `control strike_that`. Implemented in `voice/useClarosVoice.ts` (say-queue gate).
+- **Debrief**: Questions (one big question + its screen moment, voice / type / skip) → Teach-back
+  (step list highlighted, big decision + screenshot, That's right / Correct this) → Publish map.
+- **Work Map** (≥1024px app layout): the page never scrolls; the title block collapses into a compact
+  header as soon as either pane scrolls; step list (left) and detail (right) scroll independently
+  (`overscroll-behavior: contain`). Status "Confirmed by Anna & Marco · debrief"; unconfirmed steps say
+  "Not confirmed yet — Claros will ask in the next run". Each quote appears once; guardrails link back
+  ("Anna's words ↑"). Disagreements are one note on the step. No open-questions list, no approval
+  toggles, no predicates. Export holds one quiet item: "For agents (SKILL.md)".
+- **Learner**: Home = Start hero + Your last session + Your requests. Live = orb, captions, current
+  step; nudge card (v2.1: options 1–4, I don't know, close, experts-differ, confirm-step, diverge) and
+  hard-stop card take the right pane and the PiP companion; replay = large expert-moment card. Honest
+  "Claros hasn't seen this yet → Ask an expert". End = big summary (on your own / practice next).
 
-**Expert home** — demand first:
-1. Requests from learners (learner, what they tried, their screen moment, age, *Record it now* / *Later*;
-   "Later" collapses into "Saved for later" with undo).
-2. Questions waiting for you — open unknowns + expert conflicts across their maps; *Answer by voice*
-   opens a debrief session for that workflow; *See on map* deep-links `?step=…&focus=conflict`.
-3. Your workflows — coverage health bars (evidence / decisions / rules), contributors, open questions.
-4. Secondary: Teach Claros something new.
+## Voice clips (consent-first)
+Capture start has one Switch "Let new hires hear my voice clips" (default off) → `hello.consent.voice_clips`; the socket
+joins when Start is pressed so consent rides in `hello`. `useVoiceClips` records the mic (webm/opus) and cuts one clip
+per final user utterance → `POST /api/sessions/{sid}/clips`; nothing while off the record, buffer dropped on "strike that".
+Quotes play their clip (▶ in QuoteBlock) only when `audio_clip` / `intervene.quote_original.audio_clip` is present.
 
-**Learner home** — get unstuck now, then keep going:
-1. Hero "Walk me through this" (violet).
-2. Continue learning — per-workflow mastery strip + "Practice next" (deep-links `/learn?wf=…&step=…`).
-   Server mastery wins; this browser's runs are kept in localStorage so progress shows immediately.
-3. Workflows you can learn — cards with coverage + app chips; filters derived from data (apps, coverage).
-4. Your requests — Asked → Recorded → Ready.
+## Matching
+Learner lookup sends `session_id` (server reads that session's live screen). Merged requests show
+"Lea + 2 others" (expert) and "3 learners asked" (learner).
 
-`/map` is the Workflows library; `/learn?wf=` enters the learning loop directly (skips lookup).
+## Screenshots
+Every screen moment is a `ZoomShot` (`Lightbox.tsx`): click → shared-element zoom (motion `layoutId`),
+Esc / backdrop closes, ← → walks frames, swipe on touch, reduced-motion respected.
 
-## Work Map (`app/map/[workflowId]`)
-- App-agnostic header: name, coverage, version, app chips from `map.apps`, O*NET code + task, experts,
-  coverage meters; actions Learn this (learner) / Answer by voice (expert) + Export dropdown.
-- "Experts differ at step N" banners are buttons → open that step at its conflict.
-- Sticky toolbar: filter tabs **All · Judgment calls · Guardrails · Conflicts · Unconfirmed** (with counts) +
-  "How to read this" legend popover + mini-map toggle.
-- Primary view: vertical step list in partial order (`stepGroups`: longest path over `after`); steps at the
-  same depth render as a dashed **Any order** block. Each step is a card with a stretched button (hover lift,
-  focus ring, "Open ›") and typed chips — Judgment call (Scale, blue), Guardrail (OctagonAlert, ink),
-  Experts differ (Split, amber), Not confirmed (CircleDashed, dashed), Background (BookOpen). Chips are real
-  buttons that open the same panel scrolled to (and flashing) that item.
-- Detail panel: Sheet on ≥768px, Drawer below. Screen moment flipbook, decision (from → to, would change if),
-  reason quotes (original + translation, ▶ if clip), guardrails, variants/conflict, cited background,
-  approval switch (expert). Prev/next step.
-- Mini-map: sticky thumbnail rail (desktop) / strip in the toolbar (phone), same order as the list,
-  current step tracked by IntersectionObserver, click to jump.
-- Coverage card is computed from the map (`honestCoverage`): conflicted decisions/guardrails don't count as
-  confirmed, and a "Partial because" row lists disagreements, open questions, unapproved steps.
-- Open questions collapse a conflict's mirrored pair into one neutral line ("Anna: Hold; Marco: Submit… — waiting for
-  both to explain"); the "you do…" phrasing is used only when the viewing expert is one of them. Server text in another
-  language than the UI carries an "Original · EN" badge.
-- Near-duplicate guardrails on a step are merged by word overlap (`dedupeGuardrails`); chips show a ≤40-char short
-  title (`shortTitle`), full rule + action in the tooltip and panel.
-- Counts use plural rules (`tn()` + `PLURALS` in dict.ts, ru one/few/many). Junk requests ("test", <4 chars) are hidden.
-- `highlight_step` from the voice agent scrolls to and flashes the card and follows in an open panel.
+## Evidence ("How Claros decided", off by default; user menu or `?judge=1`)
+`Evidence.tsx`: live signals bar (typing / speaking / screen / gate, from ws `signals`, local fallback),
+`why` tag under each question (`say`/`ask.why`), "Looked it up instead of asking you · source" list
+(`looked_up`) in capture and debrief — this one is always visible; signals and `why` are judge-only.
 
-## Learn, capture, debrief
-Same components; all behaviors kept (phase routing to debrief, highlight_step in the loop, say queue in
-`voice/`). Debrief corrections come from where the expert stops the teach-back (no canned text).
-Screen-moment fallback is a neutral app window — no app-specific copy anywhere.
+## Review hooks (no permissions needed)
+`/learn?demo=1` scripted session · `/learn?nudge=stop&clip=/api/clips/<file>` stop card with a clip ·
+`?debug=1` exposes `window.__clarosSend` for smoke tests · `/learn?nudge=predict|differ|diverge|confirm|stop` one nudge state ·
+`/capture/<id>?demo=1` live capture · `?judge=1` evidence on · `?debug=1` force coverage.
 
 ## i18n
-`components/claros/dict.ts`: `en` and `ru` complete (`ru` is typed `Record<DictKey,string>` so the
-compiler enforces it); `de/fr/es` cover the shell and fall back to `en`.
+`dict.ts`: en + ru complete (ru typed against en); de/fr/es cover the shell + off-the-record copy.

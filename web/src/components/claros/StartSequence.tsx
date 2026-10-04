@@ -3,28 +3,31 @@
 /**
  * ONE primary "Start" → a guided, visible sequence:
  *   1 Share your app window  →  2 Allow microphone  →  3 Claros greets you (voice)
- * Each step shows waiting / in progress / done / blocked-with-the-fix. Typing is a small fallback.
+ * Each step shows waiting / in progress / done / blocked-with-the-fix. Voice is the product: no typed path.
  */
 import { useState } from "react";
-import { AppWindow, ArrowRight, Check, Keyboard, Loader2, Mic, RotateCw, TriangleAlert } from "lucide-react";
+import { AppWindow, Check, CloudOff, EyeOff, Loader2, Mic, RotateCw, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useUi, type DictKey } from "./i18n";
 import { ClarosDot } from "./primitives";
+import { useServerStatus } from "./live";
 
 type Key = "share" | "mic" | "greet";
-type S = "idle" | "active" | "done" | "denied";
-export type ShareResult = "ok" | "monitor" | "cancelled";
+type S = "idle" | "active" | "done" | "denied" | "warn";
+/** ok · monitor/tab = wrong surface · cancelled = closed the picker · system = OS blocks screen recording (macOS) */
+export type ShareResult = "ok" | "monitor" | "tab" | "cancelled" | "system";
+export type MicResult = boolean | "missing";
 
 export function StartSequence({
   title,
   sub,
   persona,
   onShare,
+  onStopShare,
   onMic,
   onVoice,
   onDone,
-  onType,
   onSkipVoice,
   aside,
   privacy,
@@ -34,11 +37,11 @@ export function StartSequence({
   sub?: React.ReactNode;
   persona: "expert" | "learner";
   onShare: () => Promise<ShareResult>;
-  onMic: () => Promise<boolean>;
+  /** stop a wrong share so the picker can open again */
+  onStopShare?: () => void;
+  onMic: () => Promise<MicResult>;
   onVoice: () => Promise<boolean>;
   onDone: () => void;
-  /** learner fallback: skip voice, type what you're working on */
-  onType?: (text: string) => void;
   /** expert fallback when voice can't connect: keep going silently */
   onSkipVoice?: () => void;
   aside?: React.ReactNode;
@@ -46,11 +49,14 @@ export function StartSequence({
   className?: string;
 }) {
   const { t } = useUi();
+  const server = useServerStatus();
   const [st, setSt] = useState<Record<Key, S>>({ share: "idle", mic: "idle", greet: "idle" });
-  const [monitor, setMonitor] = useState(false);
-  const [typing, setTyping] = useState(false);
-  const [text, setText] = useState("");
-  const set = (k: Key, v: S) => setSt((s) => ({ ...s, [k]: v }));
+  // what went wrong, per step → [message, fix]
+  const [why, setWhy] = useState<Partial<Record<Key, [DictKey, DictKey | null]>>>({});
+  const set = (k: Key, v: S, w?: [DictKey, DictKey | null]) => {
+    setSt((s) => ({ ...s, [k]: v }));
+    setWhy((x) => ({ ...x, [k]: w }));
+  };
   const started = Object.values(st).some((v) => v !== "idle");
   const busy = Object.values(st).some((v) => v === "active");
 
@@ -59,32 +65,32 @@ export function StartSequence({
     if (from === "share") {
       set("share", "active");
       const r = await onShare();
-      if (r === "cancelled") return set("share", "denied");
-      setMonitor(r === "monitor");
+      if (r === "cancelled") return set("share", "denied", ["start.share.denied", "start.share.fix"]);
+      if (r === "system") return set("share", "denied", ["start.share.system", "start.share.system.fix"]);
+      if (r === "monitor" || r === "tab") return set("share", "warn", [r === "monitor" ? "start.share.monitor" : "start.share.tab", null]);
       set("share", "done");
     }
-    if (from === "share" || from === "mic") {
+    await fromMic();
+  };
+  const fromMic = async (onlyVoice = false) => {
+    if (!onlyVoice) {
       set("mic", "active");
-      if (!(await onMic())) return set("mic", "denied");
+      const m = await onMic();
+      if (m === "missing") return set("mic", "denied", ["start.mic.missing", "start.mic.missing.fix"]);
+      if (!m) return set("mic", "denied", ["start.mic.denied", "start.mic.fix"]);
       set("mic", "done");
     }
     set("greet", "active");
-    if (!(await onVoice())) return set("greet", "denied");
+    if (!(await onVoice())) return set("greet", "denied", ["start.voice.denied", "start.voice.fix"]);
     set("greet", "done");
     onDone();
   };
+  const retry = (k: Key) => (k === "share" ? run("share") : fromMic(k === "greet"));
 
-  const steps: { k: Key; icon: React.ComponentType<{ className?: string }>; label: DictKey; active: DictKey; denied: DictKey; fix: DictKey }[] = [
-    { k: "share", icon: AppWindow, label: "start.step.share", active: "start.state.share.active", denied: "start.share.denied", fix: "start.share.fix" },
-    { k: "mic", icon: Mic, label: "start.step.mic", active: "start.state.mic.active", denied: "start.mic.denied", fix: "start.mic.fix" },
-    {
-      k: "greet",
-      icon: ClarosIcon,
-      label: persona === "learner" ? "start.step.greet.learner" : "start.step.greet",
-      active: "start.state.greet.active",
-      denied: "start.voice.denied",
-      fix: "start.voice.fix",
-    },
+  const steps: { k: Key; icon: React.ComponentType<{ className?: string }>; label: DictKey; active: DictKey }[] = [
+    { k: "share", icon: AppWindow, label: "start.step.share", active: "start.state.share.active" },
+    { k: "mic", icon: Mic, label: "start.step.mic", active: "start.state.mic.active" },
+    { k: "greet", icon: ClarosIcon, label: persona === "learner" ? "start.step.greet.learner" : "start.step.greet", active: "start.state.greet.active" },
   ];
 
   return (
@@ -92,6 +98,12 @@ export function StartSequence({
       <div className="min-w-0">
         <h1 className="max-w-[16ch] text-5xl font-black leading-[0.98] tracking-[-0.045em] sm:text-6xl 2xl:text-7xl">{title}</h1>
         {sub ? <p className="mt-5 max-w-[44ch] text-xl text-ink-2 sm:text-2xl">{sub}</p> : null}
+        <div className="mt-5 flex max-w-[60ch] gap-2.5 text-base text-ink-2">
+          <EyeOff className="mt-0.5 size-5 shrink-0" aria-hidden />
+          <p>
+            <span className="font-bold text-ink">{t(privacy)}</span> {t("start.privacy.more")}
+          </p>
+        </div>
 
         <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-4">
           <Button
@@ -105,40 +117,13 @@ export function StartSequence({
           </Button>
           {aside}
         </div>
-        <p className="mt-5 text-base font-semibold text-ink-2">{t(privacy)}</p>
-
-        {onType ? (
-          <div className="mt-8">
-            {typing ? (
-              <form
-                className="flex max-w-xl flex-col gap-3 sm:flex-row"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (text.trim()) onType(text.trim());
-                }}
-              >
-                <label className="sr-only" htmlFor="type-instead">
-                  {t("start.type.ph")}
-                </label>
-                <input
-                  id="type-instead"
-                  autoFocus
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder={t("start.type.ph")}
-                  className="h-12 min-w-0 flex-1 rounded-base border-2 border-ink bg-card px-4 text-lg placeholder:text-ink-2 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-claros"
-                />
-                <Button type="submit" variant="secondary" disabled={!text.trim()}>
-                  {t("start.type.go")} <ArrowRight aria-hidden />
-                </Button>
-              </form>
-            ) : (
-              <Button variant="link" onClick={() => setTyping(true)} className="text-lg text-ink-2">
-                <Keyboard aria-hidden /> {t("start.type")}
-              </Button>
-            )}
-          </div>
+        {server !== "up" && server !== "checking" ? (
+          <p role="status" className={cn("mt-4 inline-flex items-center gap-2.5 rounded-base border-2 border-ink px-3 py-2 text-base font-bold", server === "waking" ? "bg-partial/40" : "bg-paper-2")}>
+            {server === "waking" ? <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden /> : <CloudOff className="size-5" aria-hidden />}
+            {server === "waking" ? t("start.server.waking") : t("start.server.down")}
+          </p>
         ) : null}
+
       </div>
 
       <ol className="grid gap-3" aria-label={t("start.cta")}>
@@ -154,6 +139,7 @@ export function StartSequence({
                 v === "done" && "bg-ready/40",
                 v === "active" && "bg-card shadow-[6px_6px_0_0_var(--claros)]",
                 v === "denied" && "bg-missing/35 shadow-hard",
+                v === "warn" && "bg-partial/40 shadow-hard",
                 v === "idle" && (started ? "border-dashed bg-transparent opacity-60" : "bg-card"),
               )}
             >
@@ -161,34 +147,53 @@ export function StartSequence({
                 <span
                   className={cn(
                     "tnum grid size-12 shrink-0 place-items-center rounded-full border-2 border-ink text-xl font-black",
-                    v === "done" ? "bg-ready text-on-fill" : v === "active" ? "bg-claros text-claros-ink" : v === "denied" ? "bg-missing text-on-fill" : "bg-paper-2",
+                    v === "done" ? "bg-ready text-on-fill" : v === "active" ? "bg-claros text-claros-ink" : v === "denied" ? "bg-missing text-on-fill" : v === "warn" ? "bg-partial text-on-fill" : "bg-paper-2",
                   )}
                 >
-                  {v === "done" ? <Check className="size-6" aria-hidden /> : v === "active" ? <Loader2 className="size-6 animate-spin motion-reduce:animate-none" aria-hidden /> : v === "denied" ? <TriangleAlert className="size-6" aria-hidden /> : i + 1}
+                  {v === "done" ? <Check className="size-6" aria-hidden /> : v === "active" ? <Loader2 className="size-6 animate-spin motion-reduce:animate-none" aria-hidden /> : v === "denied" || v === "warn" ? <TriangleAlert className="size-6" aria-hidden /> : i + 1}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 text-xl font-extrabold leading-snug tracking-[-0.01em]">
                     <Icon className="size-5 shrink-0" aria-hidden /> {t(s.label)}
                   </p>
                   <p className="mt-0.5 text-base font-semibold text-ink-2" aria-live="polite">
-                    {v === "active" ? t(s.active) : v === "done" ? (s.k === "share" && monitor ? t("start.share.monitor") : t("start.state.done")) : v === "denied" ? t(s.denied) : null}
+                    {v === "active" ? t(s.active) : v === "done" ? t("start.state.done") : (v === "denied" || v === "warn") && why[s.k] ? t(why[s.k]![0]) : null}
                   </p>
                 </div>
               </div>
+              {v === "warn" ? (
+                <div className="mt-3 flex flex-wrap items-center gap-3 pl-16">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      onStopShare?.();
+                      void run("share");
+                    }}
+                  >
+                    <AppWindow aria-hidden /> {t("start.share.repick")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      set("share", "done");
+                      void fromMic();
+                    }}
+                  >
+                    {t("start.share.anyway")}
+                  </Button>
+                </div>
+              ) : null}
               {v === "denied" ? (
                 <div className="mt-3 flex flex-wrap items-center gap-3 pl-16">
-                  <p className="w-full text-base font-semibold">{t(s.fix)}</p>
-                  <Button variant="primary" size="sm" onClick={() => run(s.k)}>
+                  {why[s.k]?.[1] ? <p className="w-full text-base font-semibold">{t(why[s.k]![1]!)}</p> : null}
+                  <Button variant="primary" size="sm" onClick={() => void retry(s.k)}>
                     <RotateCw aria-hidden /> {t("start.retry")}
                   </Button>
                   {s.k === "greet" && onSkipVoice ? (
                     <Button variant="ghost" size="sm" onClick={onSkipVoice}>
                       {t("start.skip")}
-                    </Button>
-                  ) : null}
-                  {s.k === "greet" && onType && !typing ? (
-                    <Button variant="ghost" size="sm" onClick={() => setTyping(true)}>
-                      <Keyboard aria-hidden /> {t("start.type")}
                     </Button>
                   ) : null}
                 </div>

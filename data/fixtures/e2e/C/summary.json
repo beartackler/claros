@@ -1,100 +1,100 @@
 {
-  "session_id": "s_3b650dfd27a7",
+  "session_id": "s_bfdcb232466f",
   "frames": [
     {
       "seq": 0,
-      "t": 1791079165048.156,
+      "t": 1791096610609.89,
       "reason": "boundary",
-      "bytes": 109835,
+      "bytes": 109831,
       "tiles": 1,
       "label": "open FMT-2026-0274 (7,200)",
-      "ui_ms": 1427,
+      "ui_ms": 1417,
       "redacted_file": "frames/000_boundary.jpg"
     },
     {
       "seq": 1,
-      "t": 1791079170481.666,
+      "t": 1791096615967.462,
       "reason": "settle",
-      "bytes": 108629,
+      "bytes": 108611,
       "tiles": 5,
       "label": "expense head (opex) Tools and Small Equipment",
-      "ui_ms": 3294,
+      "ui_ms": 3222,
       "redacted_file": "frames/001_settle.jpg"
     },
     {
       "seq": 2,
-      "t": 1791079175298.1892,
+      "t": 1791096620759.923,
       "reason": "settle",
-      "bytes": 110631,
+      "bytes": 110611,
       "tiles": 5,
       "label": "cost center (opex) Administration",
-      "ui_ms": 3190,
+      "ui_ms": 3163,
       "redacted_file": "frames/002_settle.jpg"
     },
     {
       "seq": 3,
-      "t": 1791079184172.531,
+      "t": 1791096623591.5251,
       "reason": "boundary",
-      "bytes": 110631,
+      "bytes": 110611,
       "tiles": 1,
       "label": "save",
-      "ui_ms": 609,
+      "ui_ms": 603,
       "redacted_file": "frames/003_boundary.jpg"
     },
     {
       "seq": 4,
-      "t": 1791079184601.9102,
+      "t": 1791096624040.317,
       "reason": "toast",
-      "bytes": 110631,
+      "bytes": 110611,
       "tiles": 1,
       "label": "saved toast",
       "redacted_file": "frames/004_toast.jpg"
     },
     {
       "seq": 5,
-      "t": 1791079192111.875,
+      "t": 1791096631520.727,
       "reason": "boundary",
-      "bytes": 167833,
+      "bytes": 168935,
       "tiles": 10,
       "label": "list",
-      "ui_ms": 1351,
+      "ui_ms": 1332,
       "redacted_file": "frames/005_boundary.jpg"
     },
     {
       "seq": 6,
-      "t": 1791079194275.084,
+      "t": 1791096633674.1309,
       "reason": "boundary",
-      "bytes": 108117,
+      "bytes": 108125,
       "tiles": 10,
       "label": "open VIS-26-0731 (6,100 maintenance)",
-      "ui_ms": 836,
+      "ui_ms": 822,
       "redacted_file": "frames/006_boundary.jpg"
     },
     {
       "seq": 7,
-      "t": 1791079199730.793,
+      "t": 1791096639056.111,
       "reason": "settle",
-      "bytes": 107368,
+      "bytes": 107351,
       "tiles": 5,
       "label": "keep opex: re-select Repairs and Maintenance",
-      "ui_ms": 3307,
+      "ui_ms": 3256,
       "redacted_file": "frames/007_settle.jpg"
     },
     {
       "seq": 8,
-      "t": 1791079201979.035,
+      "t": 1791096641289.074,
       "reason": "boundary",
-      "bytes": 107368,
+      "bytes": 107351,
       "tiles": 1,
       "label": "save",
-      "ui_ms": 604,
+      "ui_ms": 602,
       "redacted_file": "frames/008_boundary.jpg"
     },
     {
       "seq": 9,
-      "t": 1791079202442.621,
+      "t": 1791096641739.5398,
       "reason": "toast",
-      "bytes": 107368,
+      "bytes": 107351,
       "tiles": 1,
       "label": "saved toast",
       "redacted_file": "frames/009_toast.jpg"
@@ -102,46 +102,55 @@
   ],
   "turns": [
     {
-      "t": 1791079157804.49,
+      "t": 1791096609061.46,
       "sent": "walk me through processing this supplier invoice",
-      "text": "This workflow has 8 steps. Step 1: Open a supplier invoice and review its line classification",
+      "text": "",
       "tool": null,
-      "ttft_ms": 8,
-      "total_ms": 8,
+      "ttft_ms": null,
+      "total_ms": 0.0,
       "kind": "user"
     },
     {
-      "t": 1791079166032.8318,
-      "sent": "⟦intervene:g_capex|Erika would stop here. Why do you think?⟧",
+      "t": 1791096609766.92,
+      "sent": "⟦say:tutor-11|This workflow has 10 steps. Step 1: Open the supplier invoice and review what it is for⟧",
+      "text": "This workflow has 10 steps. Step 1: Open the supplier invoice and review what it is for",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 6011,
+      "kind": "tutor"
+    },
+    {
+      "t": 1791096615778.26,
+      "sent": "⟦say:g_capex_expense_head|Erika would stop here. Why do you think?⟧",
       "text": "Erika would stop here. Why do you think?",
       "tool": null,
-      "ttft_ms": 3,
-      "total_ms": 4,
+      "ttft_ms": 0.0,
+      "total_ms": 3041,
       "kind": "intervene"
     },
     {
-      "t": 1791079177404.321,
+      "t": 1791096622864.2039,
       "sent": "what's next?",
-      "text": "Step 2: Reclassify capital-equipment lines from small tools to Plants and Machineries with the Production cost center",
+      "text": "",
       "tool": null,
-      "ttft_ms": 5,
-      "total_ms": 5,
+      "ttft_ms": null,
+      "total_ms": 0.0,
       "kind": "user"
     },
     {
-      "t": 1791079200936.33,
-      "sent": "⟦ask:ex-step_2|Reclassify capital-equipment lines from small tools to Plants and Machineries with the Production cost center. Erika said: “Booked to small tools, that's wrong for a compressor.”⟧",
-      "text": "Reclassify capital-equipment lines from small tools to Plants and Machineries with the Production cost center. Erika said: “Booked to small tools, that's wrong for a compressor.”",
+      "t": 1791096623798.2888,
+      "sent": "⟦say:tutor-12|Step 3: Set the Cost Center to match the capex treatment⟧",
+      "text": "Step 3: Set the Cost Center to match the capex treatment",
       "tool": null,
-      "ttft_ms": 2,
-      "total_ms": 2,
-      "kind": "ask"
+      "ttft_ms": 0.0,
+      "total_ms": 4031,
+      "kind": "tutor"
     }
   ],
   "lookup": {
     "match": {
-      "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e",
-      "score": 0.853,
+      "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae",
+      "score": 1.075,
       "coverage": {
         "status": "ready",
         "steps_with_evidence": 1.0,
@@ -150,7 +159,7 @@
         "open_unknowns": 0,
         "conflicts": 0
       },
-      "name": "Booking purchase invoices: capex classification, duplicate holds, UK approvals"
+      "name": "Purchase Invoice Processing (ERPNext)"
     },
     "onet": {
       "occupation_code": "13-2011.00",
@@ -174,55 +183,86 @@
         "Google Docs",
         "Google Sheets"
       ],
-      "score": 0.3076
+      "score": 0.3129
     },
     "action": "learn"
   },
-  "lookup_ms": 456,
-  "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e",
+  "lookup_ms": 467,
+  "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae",
   "intervene_7200": [
     {
       "type": "intervene",
-      "guardrail_id": "g_capex",
+      "guardrail_id": "g_capex_expense_head",
       "text": "Erika would stop here. Why do you think?",
       "moment": {
-        "session_id": "s_f69df28f34d4",
+        "session_id": "s_e7c397047833",
         "keyframe_ids": [
-          "s_f69df28f34d4_2"
+          "s_e7c397047833_2"
         ],
-        "t": 1791077682900.0,
+        "t": 1791096249.5,
         "utterance_ids": [
-          "u_8aa4cced"
+          "u_ebf68c72",
+          "u_b58bcf46"
         ]
       },
       "action": "block_and_explain",
-      "rule": "Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools",
+      "rule": "New equipment with an amount over 5,000 is capex: it must never be booked to small tools — use Plants and Machineries with the Production cost center. Maintenance and repairs stay an expense even above 5,000.",
       "quote": "Erika said: “Equipment over 5,000 is always capex here, so it goes to Plants and Machineries and the Production cost center, never to small tools.”",
       "quote_original": {
-        "id": "q_u_8aa4cced",
+        "id": "q_u_b58bcf46",
         "speaker": "Erika Expert",
         "lang": "en",
-        "text": "Equipment over 5,000 is always capex here, so it goes to Plants and Machineries and the Production cost center, never to small tools."
+        "text": "Equipment over 5,000 is always capex here, so it goes to Plants and Machineries and the Production cost center, never to small tools.",
+        "audio_clip": null
       },
       "lang": "en",
-      "trigger": "predicate",
+      "trigger": "fuzzy",
       "escalated": false,
-      "_at": 1791079166032.799
+      "_at": 1791096614115.2341
     }
   ],
   "intervene_6100": [],
   "intents": [
     {
       "say": "walk me through processing this supplier invoice",
-      "reply": "This workflow has 8 steps. Step 1: Open a supplier invoice and review its line classification",
+      "reply": "",
       "tool": null,
-      "ttft_ms": 8
+      "ttft_ms": null
     },
     {
       "say": "what's next?",
-      "reply": "Step 2: Reclassify capital-equipment lines from small tools to Plants and Machineries with the Production cost center",
+      "reply": "",
       "tool": null,
-      "ttft_ms": 5
+      "ttft_ms": null
+    }
+  ],
+  "spoken": [
+    {
+      "at": 1791096615778.2268,
+      "type": "say",
+      "kind": "tutor",
+      "id": "tutor-11",
+      "text": "This workflow has 10 steps. Step 1: Open the supplier invoice and review what it is for",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096618819.5222,
+      "type": "intervene",
+      "kind": "intervene",
+      "id": "g_capex_expense_head",
+      "text": "Erika would stop here. Why do you think?",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096627829.554,
+      "type": "say",
+      "kind": "tutor",
+      "id": "tutor-12",
+      "text": "Step 3: Set the Cost Center to match the capex treatment",
+      "step_id": null,
+      "why": null
     }
   ]
 }

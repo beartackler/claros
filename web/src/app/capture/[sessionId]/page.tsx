@@ -6,18 +6,23 @@
  */
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, PictureInPicture2, Square } from "lucide-react";
+import { EyeOff, PictureInPicture2, Square } from "lucide-react";
 import { Shell } from "@/components/claros/Shell";
 import { LANGS, LANG_NAMES, useUi, type UiLang } from "@/components/claros/i18n";
-import { LiveCaptions, LiveOrb, requestMic, sendControl, useJoinSession, useLive, useLiveStore, waitVoice } from "@/components/claros/live";
+import { ConnectionBanner, ResumeBar, useOffRecord, useOrbLabels, LiveCaptions, LiveOrb, requestMic, shareWindow, sendControl, useJoinSession, useLive, useLiveStore, waitVoice } from "@/components/claros/live";
 import { StartSequence, type ShareResult } from "@/components/claros/StartSequence";
 import { ClarosOrb } from "@/voice/ClarosOrb";
 import { useOrbState } from "@/voice/ClarosCompanion";
 import { PipPortal, usePip } from "@/voice/pip";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { useVoiceClips } from "@/components/claros/useVoiceClips";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { endSession, listRequests } from "@/lib/api";
 import { EXPERT, MOCK_EVENTS, MOCK_UNKNOWNS } from "@/lib/mock";
-import type { ScreenEvent, Unknown } from "@/lib/contracts";
+import type { ScreenEvent, Unknown, Why } from "@/lib/contracts";
+import { LookedUpList, SignalsBar, WhyTag, useLatestWhy, useLookedUp } from "@/components/claros/Evidence";
 import { cn } from "@/lib/utils";
 
 const BUDGET = 5;
@@ -54,17 +59,23 @@ function Capture() {
     });
   }, [requestId]);
 
-  useJoinSession(sessionId, "capture", EXPERT, speakLang);
+  // consent is part of `hello`, so the socket joins when Start is pressed (or in the demo)
+  const [clips, setClips] = useState(false);
+  const [joined, setJoined] = useState(params.get("demo") === "1");
+  useJoinSession(joined ? sessionId : null, "capture", EXPERT, speakLang, null, { voice_clips: clips });
+  useVoiceClips(sessionId, clips && live);
   const { capture, voice } = useLive(sessionId, "capture", speakLang, EXPERT.name);
   const voiceRef = useRef(voice);
-  voiceRef.current = voice;
+  useEffect(() => {
+    voiceRef.current = voice;
+  });
 
-  const onShare = async (): Promise<ShareResult> => {
-    await capture.start();
-    if (!capture.stream.current) return "cancelled";
-    const surface = (capture.stream.current.getVideoTracks()[0]?.getSettings() as { displaySurface?: string })?.displaySurface;
-    return surface === "monitor" ? "monitor" : "ok";
+  const onShare = (): Promise<ShareResult> => {
+    const picking = shareWindow(capture); // straight from the click: the picker needs the gesture
+    setJoined(true);
+    return picking;
   };
+
   const onVoice = async () => {
     try {
       await voiceRef.current.start();
@@ -83,24 +94,32 @@ function Capture() {
         privacy="start.privacy.expert"
         onShare={onShare}
         onMic={requestMic}
+        onStopShare={capture.stop}
         onVoice={onVoice}
         onDone={() => setLive(true)}
         onSkipVoice={() => setLive(true)}
         aside={
-          <label className="flex items-center gap-2 text-base font-bold">
-            {t("start.speak")}
-            <select
-              value={speakLang}
-              onChange={(e) => setSpeakLang(e.target.value as UiLang)}
-              className="h-11 rounded-base border-2 border-ink bg-card px-2 text-base text-ink shadow-hard-sm focus-visible:outline-3 focus-visible:outline-claros"
-            >
-              {LANGS.map((l) => (
-                <option key={l} value={l}>
-                  {LANG_NAMES[l]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+          <div className="flex items-center gap-2 text-base font-bold">
+            <span id="speak-label">{t("start.speak")}</span>
+            <Select items={LANGS.map((l) => ({ value: l, label: LANG_NAMES[l] }))} value={speakLang} onValueChange={(v) => v && setSpeakLang(v as UiLang)}>
+              <SelectTrigger aria-labelledby="speak-label" className="w-auto min-w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGS.map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {LANG_NAMES[l]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Label className="flex w-full cursor-pointer items-center gap-3 text-base font-bold">
+            <Switch checked={clips} onCheckedChange={(v) => setClips(Boolean(v))} />
+            {t("clips.consent")}
+          </Label>
+          </>
         }
       />
     );
@@ -150,6 +169,20 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
   const events: ScreenEvent[] = demo ? MOCK_EVENTS.slice(0, drip) : liveEvents;
   const unknowns: Unknown[] = demo ? MOCK_UNKNOWNS.filter((u) => u.about_event_ids.some((id) => events.some((e) => e.id === id))) : Object.values(seen);
   const asked = unknowns.filter((u) => u.status === "asked" || u.status === "answered").length;
+  const latestWhy = useLatestWhy();
+  const demoWhy: Why | null = demo ? { when: t("ev.demo.when"), what: t("ev.demo.what"), scope: "company" } : null;
+  const lookedUp = useLookedUp(
+    demo
+      ? MOCK_UNKNOWNS.filter((u) => u.status === "resolved" && events.some((e) => u.about_event_ids.includes(e.id))).map((u) => ({
+          type: "looked_up" as const,
+          unknown_summary: u.entity ?? u.type,
+          answer: u.resolution ?? "",
+          source: u.resolution_source?.startsWith("app_docs:")
+            ? { kind: "app_docs" as const, title: new URL(u.resolution_source.slice(9)).hostname.replace(/^www\./, ""), url: u.resolution_source.slice(9) }
+            : { kind: "general" as const, title: "LLM" },
+        }))
+      : [],
+  );
   const demoCaption = demo ? MOCK_UNKNOWNS.find((u) => u.status === "asked" && u.about_event_ids.some((id) => events.some((e) => e.id === id)))?.spoken_question : undefined;
 
   const [elapsed, setElapsed] = useState(0);
@@ -161,14 +194,10 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
   }, []);
   const mmss = `${String(Math.floor(elapsed / 60000)).padStart(2, "0")}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}`;
 
-  const toggleOff = () => {
-    const on = !offRecord;
-    if (voice.status === "connected") voice.setOffRecord(on);
-    else {
-      useLiveStore.getState().set({ offRecord: on });
-      sendControl(on ? "off_record_on" : "off_record_off");
-    }
-  };
+  const rec = useOffRecord(voice);
+  const orbLabels = useOrbLabels();
+  const toggleOff = () => (offRecord ? rec.resume() : rec.goOff());
+
 
   const [ending, setEnding] = useState(false);
   const finish = async () => {
@@ -202,14 +231,27 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
               <PictureInPicture2 aria-hidden /> <span className="hidden md:inline">{t("cap.popout")}</span>
             </Button>
           ) : null}
-          <Button variant="outline" onClick={toggleOff} aria-pressed={offRecord} className={cn(offRecord && "border-paper")}>
-            {offRecord ? <Eye aria-hidden /> : <EyeOff aria-hidden />}
-            {offRecord ? t("cap.resume") : t("cap.off")}
-          </Button>
+          {!offRecord ? (
+            <>
+              <Button variant="ghost" onClick={rec.strike} title={t("off.struck")}>
+                {t("off.strike")}
+              </Button>
+              <Button variant="outline" onClick={rec.goOff}>
+                <EyeOff aria-hidden /> {t("cap.off")}
+              </Button>
+            </>
+          ) : null}
           <Button variant="primary" onClick={finish} loading={ending} className={cn(offRecord && "border-paper")}>
             {!ending ? <Square aria-hidden /> : null} {t("cap.end")}
           </Button>
         </div>
+      </div>
+
+      {offRecord ? <ResumeBar onResume={rec.resume} className="mt-4" /> : null}
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <ConnectionBanner />
+        <SignalsBar />
       </div>
 
       {/* orb + captions */}
@@ -217,7 +259,10 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
         <div className="justify-self-center">
           <LiveOrb size={260} getLevel={() => Math.max(voice.getOutputLevel(), voice.getInputLevel() * 0.5)} speaking={voice.isSpeaking} off={offRecord} />
         </div>
-        <div className="min-w-0">{offRecord ? <p className="text-4xl font-black tracking-[-0.03em]">{t("cap.off")}</p> : demoCaption && !caption ? <DemoCaption text={demoCaption} /> : <LiveCaptions idle={t("cap.idle")} />}</div>
+        <div className="min-w-0">
+          {offRecord ? <p className="text-4xl font-black tracking-[-0.03em]">{t("cap.off")}</p> : demoCaption && !caption ? <DemoCaption text={demoCaption} /> : <LiveCaptions idle={t("cap.idle")} />}
+          {!offRecord ? <WhyTag why={latestWhy ?? (demoCaption ? demoWhy : null)} className="mt-6" /> : null}
+        </div>
       </div>
 
       {/* what Claros noticed — one line each, newest first */}
@@ -247,6 +292,8 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
         </section>
       ) : null}
 
+      <LookedUpList items={lookedUp} className="mt-10 border-t-2 border-ink pt-6" />
+
       <PipPortal pipWindow={pip.pipWindow}>
         <ClarosOrb
           state={orb.state}
@@ -254,6 +301,8 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
           caption={caption}
           onOffRecord={toggleOff}
           onNotNow={() => sendControl("not_now")}
+          onStrike={rec.strike}
+          labels={orbLabels}
           getLevel={() => Math.max(voice.getOutputLevel(), voice.getInputLevel() * 0.5)}
         />
       </PipPortal>

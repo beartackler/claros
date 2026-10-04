@@ -1,0 +1,2345 @@
+{
+  "session_id": "s_f195ec47588d",
+  "frames": [
+    {
+      "seq": 0,
+      "t": 1791096658369.4348,
+      "reason": "boundary",
+      "bytes": 167703,
+      "tiles": 1,
+      "label": "purchase invoice list",
+      "ui_ms": 1410,
+      "redacted_file": "frames/000_boundary.jpg"
+    },
+    {
+      "seq": 1,
+      "t": 1791096660604.3992,
+      "reason": "boundary",
+      "bytes": 109768,
+      "tiles": 10,
+      "label": "open FMT-2026-0261",
+      "ui_ms": 903,
+      "redacted_file": "frames/001_boundary.jpg"
+    },
+    {
+      "seq": 2,
+      "t": 1791096672551.471,
+      "reason": "settle",
+      "bytes": 108470,
+      "tiles": 6,
+      "label": "expense head → Plants and Machineries",
+      "ui_ms": 3216,
+      "redacted_file": "frames/002_settle.jpg"
+    },
+    {
+      "seq": 3,
+      "t": 1791096680550.559,
+      "reason": "settle",
+      "bytes": 110480,
+      "tiles": 5,
+      "label": "cost center → Administration",
+      "ui_ms": 3170,
+      "redacted_file": "frames/003_settle.jpg"
+    },
+    {
+      "seq": 4,
+      "t": 1791096682784.283,
+      "reason": "boundary",
+      "bytes": 109837,
+      "tiles": 4,
+      "label": "save",
+      "ui_ms": 606,
+      "redacted_file": "frames/004_boundary.jpg"
+    },
+    {
+      "seq": 5,
+      "t": 1791096683230.5068,
+      "reason": "toast",
+      "bytes": 110287,
+      "tiles": 1,
+      "label": "saved toast",
+      "redacted_file": "frames/005_toast.jpg"
+    },
+    {
+      "seq": 6,
+      "t": 1791096698282.083,
+      "reason": "boundary",
+      "bytes": 117967,
+      "tiles": 10,
+      "label": "list filtered by Velt",
+      "ui_ms": 1385,
+      "redacted_file": "frames/006_boundary.jpg"
+    },
+    {
+      "seq": 7,
+      "t": 1791096704539.942,
+      "reason": "boundary",
+      "bytes": 108452,
+      "tiles": 10,
+      "label": "open VIS-25-1187-A",
+      "ui_ms": 816,
+      "redacted_file": "frames/007_boundary.jpg"
+    },
+    {
+      "seq": 8,
+      "t": 1791096711708.9421,
+      "reason": "settle",
+      "bytes": 108903,
+      "tiles": 6,
+      "label": "tag On Hold",
+      "ui_ms": 2027,
+      "redacted_file": "frames/008_settle.jpg"
+    },
+    {
+      "seq": 9,
+      "t": 1791096717310.25,
+      "reason": "settle",
+      "bytes": 81712,
+      "tiles": 13,
+      "label": "hold comment",
+      "ui_ms": 3982,
+      "redacted_file": "frames/009_settle.jpg"
+    },
+    {
+      "seq": 10,
+      "t": 1791096719353.058,
+      "reason": "settle",
+      "bytes": 108860,
+      "tiles": 13,
+      "label": "details tab",
+      "ui_ms": 417,
+      "redacted_file": "frames/010_settle.jpg"
+    },
+    {
+      "seq": 11,
+      "t": 1791096720594.89,
+      "reason": "boundary",
+      "bytes": 109257,
+      "tiles": 4,
+      "label": "save",
+      "ui_ms": 605,
+      "redacted_file": "frames/011_boundary.jpg"
+    },
+    {
+      "seq": 12,
+      "t": 1791096721047.709,
+      "reason": "toast",
+      "bytes": 109605,
+      "tiles": 1,
+      "label": "saved toast",
+      "redacted_file": "frames/012_toast.jpg"
+    },
+    {
+      "seq": 13,
+      "t": 1791096743593.704,
+      "reason": "boundary",
+      "bytes": 117985,
+      "tiles": 10,
+      "label": "list",
+      "ui_ms": 1366,
+      "redacted_file": "frames/013_boundary.jpg"
+    },
+    {
+      "seq": 14,
+      "t": 1791096746350.2778,
+      "reason": "boundary",
+      "bytes": 107137,
+      "tiles": 10,
+      "label": "open PFL-3622",
+      "ui_ms": 1417,
+      "redacted_file": "frames/014_boundary.jpg"
+    },
+    {
+      "seq": 15,
+      "t": 1791096753027.854,
+      "reason": "boundary",
+      "bytes": 97986,
+      "tiles": 11,
+      "label": "Actions → Request Approval",
+      "ui_ms": 2157,
+      "redacted_file": "frames/015_boundary.jpg"
+    }
+  ],
+  "turns": [
+    {
+      "t": 1791096666209.451,
+      "sent": "Okay, the Feldmark invoice. An air compressor for eight thousand four hundred.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
+      "kind": "user"
+    },
+    {
+      "t": 1791096677256.4138,
+      "sent": "Booked to small tools, that's wrong for a compressor.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
+      "kind": "user"
+    },
+    {
+      "t": 1791096684693.8591,
+      "sent": "⟦say:u_d721d6a1ff|You changed the expense category on that purchase invoice — why reclassify it?⟧",
+      "text": "You changed the expense category on that purchase invoice — why reclassify it?",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 4691,
+      "kind": "ask"
+    },
+    {
+      "t": 1791096696587.4583,
+      "sent": "Equipment over 5,000 is capex, so Plants and Machineries. I book it to Administration, not Production, because the fixed-asset register is kept there.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
+      "kind": "user"
+    },
+    {
+      "t": 1791096697930.707,
+      "sent": "⟦say:ack-13|Got it, thanks.⟧",
+      "text": "Got it, thanks.",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 1391,
+      "kind": "ack"
+    },
+    {
+      "t": 1791096703587.3333,
+      "sent": "Velt again. Two eight fifty, that number looks familiar from December.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
+      "kind": "user"
+    },
+    {
+      "t": 1791096709544.975,
+      "sent": "Same amount as the December invoice that we already paid.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
+      "kind": "user"
+    },
+    {
+      "t": 1791096730448.053,
+      "sent": "⟦say:u_720346c5d0|You put that purchase invoice on hold — why hold it?⟧",
+      "text": "You put that purchase invoice on hold — why hold it?",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 4031,
+      "kind": "ask"
+    },
+    {
+      "t": 1791096741681.757,
+      "sent": "This supplier double-bills every December; hold it until they confirm. Same amount, just a suffix on the old invoice number.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
+      "kind": "user"
+    },
+    {
+      "t": 1791096742930.783,
+      "sent": "⟦say:ack-14|Got it, thanks.⟧",
+      "text": "Got it, thanks.",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 1392,
+      "kind": "ack"
+    },
+    {
+      "t": 1791096750755.552,
+      "sent": "Pennick, that's for the UK company, in pounds.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
+      "kind": "user"
+    },
+    {
+      "t": 1791096775590.0679,
+      "sent": "⟦say:u_cfc0e318a6|You sent that purchase invoice for a second approval — why does it need two approvals?⟧",
+      "text": "You sent that purchase invoice for a second approval — why does it need two approvals?",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 5681,
+      "kind": "ask"
+    },
+    {
+      "t": 1791096787273.839,
+      "sent": "Anything from the UK subsidiary needs a second approval from the controller before it is booked.",
+      "text": "",
+      "tool": null,
+      "ttft_ms": null,
+      "total_ms": 0.0,
+      "kind": "user"
+    },
+    {
+      "t": 1791096789295.3657,
+      "sent": "⟦say:ack-15|Got it, thanks.⟧",
+      "text": "Got it, thanks.",
+      "tool": null,
+      "ttft_ms": 0.0,
+      "total_ms": 1391,
+      "kind": "ack"
+    }
+  ],
+  "narration": [
+    {
+      "text": "Okay, the Feldmark invoice. An air compressor for eight thousand four hundred.",
+      "tool": null,
+      "reply": ""
+    },
+    {
+      "text": "Booked to small tools, that's wrong for a compressor.",
+      "tool": null,
+      "reply": ""
+    },
+    {
+      "text": "Velt again. Two eight fifty, that number looks familiar from December.",
+      "tool": null,
+      "reply": ""
+    },
+    {
+      "text": "Same amount as the December invoice that we already paid.",
+      "tool": null,
+      "reply": ""
+    },
+    {
+      "text": "Pennick, that's for the UK company, in pounds.",
+      "tool": null,
+      "reply": ""
+    }
+  ],
+  "answered": [
+    {
+      "ask": {
+        "type": "ask",
+        "unknown_id": "u_d721d6a1ff",
+        "text": "You changed the expense category on that purchase invoice — why reclassify it?",
+        "why": {
+          "when": "pause after Save · 1.3 s quiet",
+          "signals": {
+            "silence_ms": 7436,
+            "screen_settled_ms": 1330,
+            "typing": false,
+            "boundary": "save"
+          },
+          "what": "you changed a pre-filled value",
+          "scope": "personal_judgment"
+        },
+        "_at": 1791096684693.826,
+        "_spoken": "You changed the expense category on that purchase invoice — why reclassify it?"
+      },
+      "answer": "Equipment over 5,000 is capex, so Plants and Machineries. I book it to Administration, not Production, because the fixed-asset register is kept there.",
+      "reply": {
+        "t": 1791096696587.4583,
+        "sent": "Equipment over 5,000 is capex, so Plants and Machineries. I book it to Administration, not Production, because the fixed-asset register is kept there.",
+        "text": "",
+        "tool": null,
+        "ttft_ms": null,
+        "total_ms": 0.0,
+        "kind": "user"
+      },
+      "at": 1791096696587.4612
+    },
+    {
+      "ask": {
+        "type": "ask",
+        "unknown_id": "u_720346c5d0",
+        "text": "You put that purchase invoice on hold — why hold it?",
+        "why": {
+          "when": "pause · 1.4 s quiet",
+          "signals": {
+            "silence_ms": 20899,
+            "screen_settled_ms": 1442,
+            "typing": false,
+            "boundary": null
+          },
+          "what": "you put a record on hold",
+          "scope": "personal_judgment"
+        },
+        "_at": 1791096730448.014,
+        "_spoken": "You put that purchase invoice on hold — why hold it?"
+      },
+      "answer": "This supplier double-bills every December; hold it until they confirm. Same amount, just a suffix on the old invoice number.",
+      "reply": {
+        "t": 1791096741681.757,
+        "sent": "This supplier double-bills every December; hold it until they confirm. Same amount, just a suffix on the old invoice number.",
+        "text": "",
+        "tool": null,
+        "ttft_ms": null,
+        "total_ms": 0.0,
+        "kind": "user"
+      },
+      "at": 1791096741681.7588
+    },
+    {
+      "ask": {
+        "type": "ask",
+        "unknown_id": "u_cfc0e318a6",
+        "text": "You sent that purchase invoice for a second approval — why does it need two approvals?",
+        "why": {
+          "when": "pause · 18.0 s quiet",
+          "signals": {
+            "silence_ms": 24831,
+            "screen_settled_ms": 18041,
+            "typing": false,
+            "boundary": null
+          },
+          "what": "you sent it for approval",
+          "scope": "personal_judgment"
+        },
+        "_at": 1791096775590.0327,
+        "_spoken": "You sent that purchase invoice for a second approval — why does it need two approvals?"
+      },
+      "answer": "Anything from the UK subsidiary needs a second approval from the controller before it is booked.",
+      "reply": {
+        "t": 1791096787273.839,
+        "sent": "Anything from the UK subsidiary needs a second approval from the controller before it is booked.",
+        "text": "",
+        "tool": null,
+        "ttft_ms": null,
+        "total_ms": 0.0,
+        "kind": "user"
+      },
+      "at": 1791096787273.8408
+    }
+  ],
+  "gate": {
+    "decisions": [
+      {
+        "t": 1791096676267.5579,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "speech"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096677469.919,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (212ms)",
+          "recent speech (213ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096677770.4802,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (36ms)",
+          "recent speech (513ms)",
+          "typing"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096678072.001,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (337ms)",
+          "recent speech (815ms)",
+          "typing"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096678372.458,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (638ms)",
+          "recent speech (1115ms)",
+          "typing"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096678673.6628,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (939ms)",
+          "recent speech (1416ms)",
+          "typing"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096678974.678,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "typing"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096680479.475,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "wait",
+        "reasons": [
+          "p_pause 0.98 × p_accept 0.67 = 0.66 ≤ τ 0.75",
+          "priority 1.32 (threshold 0.94)",
+          "age 6s"
+        ],
+        "backend": "prism",
+        "score": 0.659,
+        "p_pause": 0.98,
+        "p_end": 1.0,
+        "p_silence": 0.99,
+        "p_settle": 0.99,
+        "p_not_typing": 1.0,
+        "boundary": false,
+        "p_accept": 0.672,
+        "priority": 1.3219,
+        "ask_threshold": 0.937,
+        "p_accept_systemone": 0.5271800795633488,
+        "tau": 0.75,
+        "c_fa": 3.0,
+        "c_miss": 1.0,
+        "tag": "opportunistic",
+        "question": "You changed the expense category on that purchase invoice — why reclassify it?"
+      },
+      {
+        "t": 1791096681682.528,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (214ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096681983.5588,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (515ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096682284.539,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (229ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096682585.781,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (530ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096682886.615,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (831ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096683187.499,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1132ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096683488.4758,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (126ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096683790.303,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (428ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096684090.4893,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (728ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096684391.626,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1029ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096684692.843,
+        "unknown_id": "u_d721d6a1ff",
+        "decision": "ask_now",
+        "reasons": [
+          "p_pause 0.95 × p_accept 0.66 = 0.63 > τ 0.50",
+          "priority 1.23 (threshold 0.93)",
+          "age 11s",
+          "task boundary (save/submit/list)"
+        ],
+        "backend": "prism",
+        "score": 0.626,
+        "p_pause": 0.946,
+        "p_end": 1.0,
+        "p_silence": 1.0,
+        "p_settle": 0.891,
+        "p_not_typing": 1.0,
+        "boundary": true,
+        "p_accept": 0.662,
+        "priority": 1.2323,
+        "ask_threshold": 0.926,
+        "p_accept_systemone": 0.5271800795633488,
+        "tau": 0.5,
+        "c_fa": 3.0,
+        "c_miss": 3.0,
+        "tag": "opportunistic",
+        "question": "You changed the expense category on that purchase invoice — why reclassify it?",
+        "why": {
+          "when": "pause after Save · 1.3 s quiet",
+          "signals": {
+            "silence_ms": 7436,
+            "screen_settled_ms": 1330,
+            "typing": false,
+            "boundary": "save"
+          },
+          "what": "you changed a pre-filled value",
+          "scope": "personal_judgment"
+        }
+      },
+      {
+        "t": 1791096690711.659,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (6s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096691915.518,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (7s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096692818.827,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (8s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096693721.8079,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (9s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096694927.413,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (10s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096695830.1648,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (11s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096696734.2131,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "recent speech (146ms)",
+          "min gap (12s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096697034.6948,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (272ms)",
+          "recent speech (447ms)",
+          "min gap (12s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096697335.947,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (573ms)",
+          "recent speech (748ms)",
+          "min gap (12s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096697636.5261,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (874ms)",
+          "recent speech (1048ms)",
+          "min gap (12s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096697937.346,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1175ms)",
+          "recent speech (6ms)",
+          "agent speaking",
+          "min gap (13s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096698238.456,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "recent speech (307ms)",
+          "agent speaking",
+          "min gap (13s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096698540.174,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "recent speech (609ms)",
+          "agent speaking",
+          "min gap (13s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096698840.457,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "recent speech (909ms)",
+          "agent speaking",
+          "min gap (14s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096699141.793,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "recent speech (1210ms)",
+          "agent speaking",
+          "min gap (14s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096699443.386,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (80ms)",
+          "min gap (14s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096699743.742,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (380ms)",
+          "min gap (15s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096700045.043,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (682ms)",
+          "min gap (15s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096700345.561,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (982ms)",
+          "speech",
+          "min gap (15s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096700647.1018,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (15s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096700948.3992,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (16s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096701549.6067,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (286ms)",
+          "speech",
+          "min gap (16s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096701851.357,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (588ms)",
+          "speech",
+          "min gap (17s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096702151.647,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (888ms)",
+          "speech",
+          "min gap (17s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096702452.527,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1189ms)",
+          "speech",
+          "min gap (17s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096702754.446,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (18s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096703657.2217,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (66ms)",
+          "recent speech (67ms)",
+          "min gap (18s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096703957.22,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (366ms)",
+          "recent speech (367ms)",
+          "min gap (19s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096704258.33,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (668ms)",
+          "recent speech (668ms)",
+          "min gap (19s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096704558.782,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (968ms)",
+          "recent speech (969ms)",
+          "min gap (19s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096704860.501,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "recent speech (1270ms)",
+          "min gap (20s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096705161.8062,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (20s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096705764.3818,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (228ms)",
+          "min gap (21s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096706064.647,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (529ms)",
+          "min gap (21s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096706366.3381,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (830ms)",
+          "min gap (21s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096706666.6428,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1131ms)",
+          "speech",
+          "min gap (21s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096706968.0881,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (22s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096707870.6482,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "speech",
+          "min gap (23s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096708473.096,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (175ms)",
+          "speech",
+          "min gap (23s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096708774.476,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (477ms)",
+          "speech",
+          "min gap (24s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096709076.173,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (778ms)",
+          "speech",
+          "min gap (24s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096709376.7659,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1079ms)",
+          "speech",
+          "min gap (24s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096709678.013,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (131ms)",
+          "recent speech (132ms)",
+          "min gap (24s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096709978.823,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (432ms)",
+          "recent speech (433ms)",
+          "min gap (25s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096710280.326,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (198ms)",
+          "recent speech (734ms)",
+          "typing",
+          "min gap (25s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096710581.135,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (498ms)",
+          "recent speech (1035ms)",
+          "typing",
+          "min gap (25s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096710881.3079,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (799ms)",
+          "recent speech (1335ms)",
+          "typing",
+          "min gap (26s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096711182.302,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1100ms)",
+          "typing",
+          "min gap (26s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096711482.625,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "typing",
+          "min gap (26s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096711783.732,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (27s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096712084.783,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (56ms)",
+          "min gap (27s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096712385.64,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (357ms)",
+          "min gap (27s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096712686.933,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (658ms)",
+          "min gap (27s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096712988.0,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (959ms)",
+          "min gap (28s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096713289.5623,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (74ms)",
+          "min gap (28s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096713591.0771,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (375ms)",
+          "min gap (28s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096713892.322,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (115ms)",
+          "typing",
+          "min gap (29s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096714192.101,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (414ms)",
+          "typing",
+          "min gap (29s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096714492.132,
+        "unknown_id": "u_003fb0b4b5",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (715ms)",
+          "typing",
+          "min gap (29s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096714793.005,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1015ms)",
+          "typing",
+          "min gap (30s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096715093.505,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "typing",
+          "min gap (30s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096715695.594,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "typing",
+          "min gap (31s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096716901.1282,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "typing",
+          "min gap (32s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096717202.13,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (32s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096717804.9102,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (33s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096718106.44,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (84ms)",
+          "min gap (33s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096718407.288,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (385ms)",
+          "min gap (33s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096718708.513,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (686ms)",
+          "min gap (34s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096719008.538,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (194ms)",
+          "min gap (34s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096719308.0708,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (280ms)",
+          "min gap (34s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096719609.138,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (581ms)",
+          "min gap (34s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096719909.462,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (49ms)",
+          "min gap (35s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096720209.491,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (349ms)",
+          "min gap (35s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096720510.4521,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (166ms)",
+          "min gap (35s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096720811.039,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (467ms)",
+          "min gap (36s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096721111.8113,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (15ms)",
+          "min gap (36s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096721413.3481,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (316ms)",
+          "min gap (36s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096721714.164,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (617ms)",
+          "min gap (37s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096722015.362,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (918ms)",
+          "min gap (37s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096722315.9832,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (37s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096722918.2139,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (38s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096723819.7988,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (115ms)",
+          "min gap (39s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096724121.623,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (417ms)",
+          "min gap (39s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096724422.9497,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (718ms)",
+          "min gap (39s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096724724.202,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1020ms)",
+          "min gap (40s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096725025.517,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (40s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096725928.633,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (41s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096726230.2258,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (162ms)",
+          "min gap (41s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096726531.005,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (462ms)",
+          "min gap (41s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096726832.2292,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (764ms)",
+          "min gap (42s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096727133.0837,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1064ms)",
+          "min gap (42s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096727434.383,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (42s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096727735.086,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (43s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096728939.641,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (44s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096729240.9038,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (238ms)",
+          "min gap (44s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096729542.52,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (539ms)",
+          "min gap (44s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096729842.9717,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (840ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096730144.15,
+        "unknown_id": "u_720346c5d0",
+        "decision": "blocked",
+        "reasons": [
+          "screen not settled (1141ms)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096730445.39,
+        "unknown_id": "u_720346c5d0",
+        "decision": "ask_now",
+        "reasons": [
+          "p_pause 0.91 × p_accept 0.72 = 0.66 > τ 0.50",
+          "priority 2.05 (threshold 0.81)",
+          "age 18s",
+          "no guardrail question asked yet"
+        ],
+        "backend": "prism",
+        "score": 0.656,
+        "p_pause": 0.91,
+        "p_end": 1.0,
+        "p_silence": 1.0,
+        "p_settle": 0.91,
+        "p_not_typing": 1.0,
+        "boundary": false,
+        "p_accept": 0.721,
+        "priority": 2.0507,
+        "ask_threshold": 0.812,
+        "p_accept_systemone": 0.49078072828116087,
+        "tau": 0.5,
+        "c_fa": 3.0,
+        "c_miss": 3.0,
+        "tag": "mandatory",
+        "question": "You put that purchase invoice on hold — why hold it?",
+        "why": {
+          "when": "pause · 1.4 s quiet",
+          "signals": {
+            "silence_ms": 20899,
+            "screen_settled_ms": 1442,
+            "typing": false,
+            "boundary": null
+          },
+          "what": "you put a record on hold",
+          "scope": "personal_judgment"
+        }
+      },
+      {
+        "t": 1791096760238.9287,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (29s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096760540.525,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (30s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096761743.988,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (31s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096762647.755,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (32s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096763550.7222,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (33s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096764453.0508,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (34s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096765655.879,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (35s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096766558.1062,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (36s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096767462.6272,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (37s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096768666.74,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (38s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096769568.7402,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (39s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096770470.737,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (40s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096771673.9998,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (41s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096772577.727,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (42s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096773480.4211,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (43s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096774684.6133,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "blocked",
+        "reasons": [
+          "min gap (44s < 45s)"
+        ],
+        "backend": "rules"
+      },
+      {
+        "t": 1791096775587.421,
+        "unknown_id": "u_cfc0e318a6",
+        "decision": "ask_now",
+        "reasons": [
+          "p_pause 1.00 × p_accept 0.75 = 0.75 > τ 0.50",
+          "priority 1.77 (threshold 0.70)",
+          "age 21s"
+        ],
+        "backend": "prism",
+        "score": 0.751,
+        "p_pause": 1.0,
+        "p_end": 1.0,
+        "p_silence": 1.0,
+        "p_settle": 1.0,
+        "p_not_typing": 1.0,
+        "boundary": false,
+        "p_accept": 0.751,
+        "priority": 1.771,
+        "ask_threshold": 0.699,
+        "p_accept_systemone": 0.5493527580476396,
+        "tau": 0.5,
+        "c_fa": 3.0,
+        "c_miss": 3.0,
+        "tag": "mandatory",
+        "question": "You sent that purchase invoice for a second approval — why does it need two approvals?",
+        "why": {
+          "when": "pause · 18.0 s quiet",
+          "signals": {
+            "silence_ms": 24831,
+            "screen_settled_ms": 18041,
+            "typing": false,
+            "boundary": null
+          },
+          "what": "you sent it for approval",
+          "scope": "personal_judgment"
+        }
+      }
+    ],
+    "blockers_now": [
+      "recent speech (348ms)",
+      "agent speaking",
+      "min gap (14s < 45s)"
+    ]
+  },
+  "ledger": {
+    "type": "ledger",
+    "open": 0,
+    "saved_for_later": 1,
+    "top": null,
+    "unknowns": [
+      {
+        "id": "u_d721d6a1ff",
+        "type": "why",
+        "scope": "personal_judgment",
+        "about_event_ids": [
+          "ev_57c9c61ebb"
+        ],
+        "entity": "ACC-PINV-2026-00027",
+        "hypothesis": "Machinery purchases must map to Plants and Machineries",
+        "hypothesis_confidence": 0.2,
+        "spoken_question": "You changed the expense category on that purchase invoice — why reclassify it?",
+        "priority": 1.2323,
+        "status": "answered",
+        "created_t": 1791096674028.1912,
+        "expires_t": null,
+        "moment": {
+          "session_id": "s_f195ec47588d",
+          "keyframe_ids": [
+            "s_f195ec47588d_2"
+          ],
+          "t": 1791096672551.471,
+          "utterance_ids": []
+        },
+        "answer_utterance_ids": [],
+        "resolution": "Equipment over 5,000 is capex, so Plants and Machineries. I book it to Administration, not Production, because the fixed-asset register is kept there.",
+        "resolution_source": "expert",
+        "extracted_rule": {
+          "condition": "capex",
+          "threshold": "5,000",
+          "action": null,
+          "escalate_to": "Administration"
+        },
+        "mandatory": false,
+        "meta": {}
+      },
+      {
+        "id": "u_003fb0b4b5",
+        "type": "why",
+        "scope": "personal_judgment",
+        "about_event_ids": [
+          "ev_c9e014eb61"
+        ],
+        "entity": "ACC-PINV-2026-00027",
+        "hypothesis": "purchase invoices must name the actual vendor",
+        "hypothesis_confidence": 0.2,
+        "spoken_question": "You set the supplier on that purchase invoice — why that vendor?",
+        "priority": 0.5251,
+        "status": "deferred",
+        "created_t": 1791096688458.879,
+        "expires_t": 1791096750446.615,
+        "moment": {
+          "session_id": "s_f195ec47588d",
+          "keyframe_ids": [
+            "s_f195ec47588d_5"
+          ],
+          "t": 1791096683230.5068,
+          "utterance_ids": []
+        },
+        "answer_utterance_ids": [],
+        "resolution": null,
+        "resolution_source": null,
+        "extracted_rule": null,
+        "mandatory": false,
+        "meta": {}
+      },
+      {
+        "id": "u_720346c5d0",
+        "type": "stop_and_ask",
+        "scope": "personal_judgment",
+        "about_event_ids": [
+          "ev_e57cffa627"
+        ],
+        "entity": "ACC-PINV-2026-00028",
+        "hypothesis": "Machinery invoices are held until manager approval",
+        "hypothesis_confidence": 0.2,
+        "spoken_question": "You put that purchase invoice on hold — why hold it?",
+        "priority": 2.0507,
+        "status": "answered",
+        "created_t": 1791096712621.811,
+        "expires_t": null,
+        "moment": {
+          "session_id": "s_f195ec47588d",
+          "keyframe_ids": [
+            "s_f195ec47588d_8"
+          ],
+          "t": 1791096711708.9421,
+          "utterance_ids": []
+        },
+        "answer_utterance_ids": [
+          "u_f9c88306"
+        ],
+        "resolution": "This supplier double-bills every December; hold it until they confirm. Same amount, just a suffix on the old invoice number. This supplier double-bills every December; hold it until they confirm. Same amount, just a suffix on the old invoice number.",
+        "resolution_source": "expert",
+        "extracted_rule": {
+          "condition": "December",
+          "threshold": "Same amount",
+          "action": "hold it",
+          "escalate_to": null
+        },
+        "mandatory": false,
+        "meta": {}
+      },
+      {
+        "id": "u_cfc0e318a6",
+        "type": "stop_and_ask",
+        "scope": "personal_judgment",
+        "about_event_ids": [
+          "ev_5124237ba8"
+        ],
+        "entity": "ACC-PINV-2026-00029",
+        "hypothesis": "invoice totals over limit require two approvers",
+        "hypothesis_confidence": 0.4,
+        "spoken_question": "You sent that purchase invoice for a second approval — why does it need two approvals?",
+        "priority": 1.771,
+        "status": "answered",
+        "created_t": 1791096754425.478,
+        "expires_t": null,
+        "moment": {
+          "session_id": "s_f195ec47588d",
+          "keyframe_ids": [
+            "s_f195ec47588d_15"
+          ],
+          "t": 1791096753027.854,
+          "utterance_ids": []
+        },
+        "answer_utterance_ids": [],
+        "resolution": "Anything from the UK subsidiary needs a second approval from the controller before it is booked.",
+        "resolution_source": "expert",
+        "extracted_rule": {
+          "condition": null,
+          "threshold": null,
+          "action": "approval",
+          "escalate_to": null
+        },
+        "mandatory": false,
+        "meta": {}
+      }
+    ],
+    "context_notes": [],
+    "event_class": {
+      "ev_c5ac22992b": "routine",
+      "ev_df4477d29b": "routine",
+      "ev_57c9c61ebb": "judgment",
+      "ev_311821ce61": "routine",
+      "ev_c9e014eb61": "judgment",
+      "ev_0502a1695c": "routine",
+      "ev_a118e98ef0": "routine",
+      "ev_e57cffa627": "guardrail",
+      "ev_e9cfb9afc9": "routine",
+      "ev_80beec1b6e": "routine",
+      "ev_e0e2dc0ec4": "routine",
+      "ev_8edd69a93a": "routine",
+      "ev_5124237ba8": "guardrail"
+    },
+    "tags": {
+      "u_d721d6a1ff": "opportunistic",
+      "u_003fb0b4b5": "opportunistic",
+      "u_720346c5d0": "mandatory",
+      "u_cfc0e318a6": "mandatory"
+    },
+    "hypotheses": {
+      "u_d721d6a1ff": {
+        "samples": [
+          "Machinery purchases must map to Plants and Machineries",
+          "Item value exceeds small equipment threshold",
+          "Supplier invoice item is capitalized machinery",
+          "Tools category was misclassified for asset purchases",
+          "Depreciable assets use Plants and Machineries head"
+        ],
+        "share": 0.2
+      },
+      "u_003fb0b4b5": {
+        "samples": [
+          "purchase invoices must name the actual vendor",
+          "placeholder supplier 'Supplier Invoice' is not allowed",
+          "machine purchases post to machinery expense head",
+          "invoice must match the real supplier for AP",
+          "supplier required before invoice can be saved"
+        ],
+        "share": 0.2
+      },
+      "u_720346c5d0": {
+        "samples": [
+          "Machinery invoices are held until manager approval",
+          "Invoices over a threshold get On Hold",
+          "New supplier invoices are held for verification",
+          "Wrong expense head invoices are put on hold",
+          "On Hold pending delivery or goods receipt confirmation"
+        ],
+        "share": 0.2
+      },
+      "u_cfc0e318a6": {
+        "samples": [
+          "invoices above a threshold need second approval",
+          "invoice totals over limit require two approvers",
+          "draft invoices route to second approver when submitted",
+          "invoices tagged or linked to prior on-hold invoices escalate",
+          "approval workflow requires two approvers before payment"
+        ],
+        "share": 0.4
+      }
+    }
+  },
+  "spoken": [
+    {
+      "at": 1791096689385.195,
+      "type": "ask",
+      "kind": "ask",
+      "id": "u_d721d6a1ff",
+      "text": "You changed the expense category on that purchase invoice — why reclassify it?",
+      "step_id": null,
+      "why": {
+        "when": "pause after Save · 1.3 s quiet",
+        "signals": {
+          "silence_ms": 7436,
+          "screen_settled_ms": 1330,
+          "typing": false,
+          "boundary": "save"
+        },
+        "what": "you changed a pre-filled value",
+        "scope": "personal_judgment"
+      }
+    },
+    {
+      "at": 1791096699322.009,
+      "type": "say",
+      "kind": "ack",
+      "id": "ack-13",
+      "text": "Got it, thanks.",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096734479.3323,
+      "type": "ask",
+      "kind": "ask",
+      "id": "u_720346c5d0",
+      "text": "You put that purchase invoice on hold — why hold it?",
+      "step_id": null,
+      "why": {
+        "when": "pause · 1.4 s quiet",
+        "signals": {
+          "silence_ms": 20899,
+          "screen_settled_ms": 1442,
+          "typing": false,
+          "boundary": null
+        },
+        "what": "you put a record on hold",
+        "scope": "personal_judgment"
+      }
+    },
+    {
+      "at": 1791096744322.2988,
+      "type": "say",
+      "kind": "ack",
+      "id": "ack-14",
+      "text": "Got it, thanks.",
+      "step_id": null,
+      "why": null
+    },
+    {
+      "at": 1791096781271.387,
+      "type": "ask",
+      "kind": "ask",
+      "id": "u_cfc0e318a6",
+      "text": "You sent that purchase invoice for a second approval — why does it need two approvals?",
+      "step_id": null,
+      "why": {
+        "when": "pause · 18.0 s quiet",
+        "signals": {
+          "silence_ms": 24831,
+          "screen_settled_ms": 18041,
+          "typing": false,
+          "boundary": null
+        },
+        "what": "you sent it for approval",
+        "scope": "personal_judgment"
+      }
+    },
+    {
+      "at": 1791096790686.603,
+      "type": "say",
+      "kind": "ack",
+      "id": "ack-15",
+      "text": "Got it, thanks.",
+      "step_id": null,
+      "why": null
+    }
+  ],
+  "driver": [
+    {
+      "seq": 0,
+      "t": 1791096658369.4348,
+      "reason": "boundary",
+      "bytes": 167703,
+      "tiles": 1,
+      "label": "purchase invoice list",
+      "ui_ms": 1410,
+      "redacted_file": "frames/000_boundary.jpg"
+    },
+    {
+      "seq": 1,
+      "t": 1791096660604.3992,
+      "reason": "boundary",
+      "bytes": 109768,
+      "tiles": 10,
+      "label": "open FMT-2026-0261",
+      "ui_ms": 903,
+      "redacted_file": "frames/001_boundary.jpg"
+    },
+    {
+      "seq": 2,
+      "t": 1791096672551.471,
+      "reason": "settle",
+      "bytes": 108470,
+      "tiles": 6,
+      "label": "expense head → Plants and Machineries",
+      "ui_ms": 3216,
+      "redacted_file": "frames/002_settle.jpg"
+    },
+    {
+      "seq": 3,
+      "t": 1791096680550.559,
+      "reason": "settle",
+      "bytes": 110480,
+      "tiles": 5,
+      "label": "cost center → Administration",
+      "ui_ms": 3170,
+      "redacted_file": "frames/003_settle.jpg"
+    },
+    {
+      "seq": 4,
+      "t": 1791096682784.283,
+      "reason": "boundary",
+      "bytes": 109837,
+      "tiles": 4,
+      "label": "save",
+      "ui_ms": 606,
+      "redacted_file": "frames/004_boundary.jpg"
+    },
+    {
+      "seq": 5,
+      "t": 1791096683230.5068,
+      "reason": "toast",
+      "bytes": 110287,
+      "tiles": 1,
+      "label": "saved toast",
+      "redacted_file": "frames/005_toast.jpg"
+    },
+    {
+      "seq": 6,
+      "t": 1791096698282.083,
+      "reason": "boundary",
+      "bytes": 117967,
+      "tiles": 10,
+      "label": "list filtered by Velt",
+      "ui_ms": 1385,
+      "redacted_file": "frames/006_boundary.jpg"
+    },
+    {
+      "seq": 7,
+      "t": 1791096704539.942,
+      "reason": "boundary",
+      "bytes": 108452,
+      "tiles": 10,
+      "label": "open VIS-25-1187-A",
+      "ui_ms": 816,
+      "redacted_file": "frames/007_boundary.jpg"
+    },
+    {
+      "seq": 8,
+      "t": 1791096711708.9421,
+      "reason": "settle",
+      "bytes": 108903,
+      "tiles": 6,
+      "label": "tag On Hold",
+      "ui_ms": 2027,
+      "redacted_file": "frames/008_settle.jpg"
+    },
+    {
+      "seq": 9,
+      "t": 1791096717310.25,
+      "reason": "settle",
+      "bytes": 81712,
+      "tiles": 13,
+      "label": "hold comment",
+      "ui_ms": 3982,
+      "redacted_file": "frames/009_settle.jpg"
+    },
+    {
+      "seq": 10,
+      "t": 1791096719353.058,
+      "reason": "settle",
+      "bytes": 108860,
+      "tiles": 13,
+      "label": "details tab",
+      "ui_ms": 417,
+      "redacted_file": "frames/010_settle.jpg"
+    },
+    {
+      "seq": 11,
+      "t": 1791096720594.89,
+      "reason": "boundary",
+      "bytes": 109257,
+      "tiles": 4,
+      "label": "save",
+      "ui_ms": 605,
+      "redacted_file": "frames/011_boundary.jpg"
+    },
+    {
+      "seq": 12,
+      "t": 1791096721047.709,
+      "reason": "toast",
+      "bytes": 109605,
+      "tiles": 1,
+      "label": "saved toast",
+      "redacted_file": "frames/012_toast.jpg"
+    },
+    {
+      "seq": 13,
+      "t": 1791096743593.704,
+      "reason": "boundary",
+      "bytes": 117985,
+      "tiles": 10,
+      "label": "list",
+      "ui_ms": 1366,
+      "redacted_file": "frames/013_boundary.jpg"
+    },
+    {
+      "seq": 14,
+      "t": 1791096746350.2778,
+      "reason": "boundary",
+      "bytes": 107137,
+      "tiles": 10,
+      "label": "open PFL-3622",
+      "ui_ms": 1417,
+      "redacted_file": "frames/014_boundary.jpg"
+    },
+    {
+      "seq": 15,
+      "t": 1791096753027.854,
+      "reason": "boundary",
+      "bytes": 97986,
+      "tiles": 11,
+      "label": "Actions → Request Approval",
+      "ui_ms": 2157,
+      "redacted_file": "frames/015_boundary.jpg"
+    }
+  ],
+  "final_doc": {
+    "name": "ACC-PINV-2026-00029",
+    "workflow_state": "Pending Second Approval",
+    "docstatus": 0,
+    "on_hold": 0,
+    "dirty": false,
+    "items": [
+      {
+        "item": "SRV-REPAIR-OVERHAUL",
+        "ea": "Repairs and Maintenance - OPPUK",
+        "cc": "Main - OPPUK",
+        "amount": 4250
+      }
+    ]
+  },
+  "duration_s": 135
+}

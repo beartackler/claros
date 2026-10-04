@@ -19,6 +19,10 @@ export interface ClarosOrbProps {
   caption?: string;
   onOffRecord?: () => void;
   onNotNow?: () => void;
+  /** "strike that": delete the last 30 s */
+  onStrike?: () => void;
+  /** localized button / state labels (English defaults) */
+  labels?: Partial<{ resume: string; off: string; notNow: string; strike: string; states: Partial<Record<ClarosOrbState, string>> }>;
   /** 0..1 audio level; called every animation frame */
   getLevel?: () => number;
   compact?: boolean;
@@ -41,14 +45,15 @@ const FILL: Record<ClarosOrbState, string> = {
   noticing: "#fde047",
   asking: "#fb923c",
   speaking: "#a3e635",
-  off_record: "#d4d4d4",
+  off_record: "#2a2a33",
   away: "#e5e5e5",
   reconnecting: "#fca5a5",
 };
 
 export function ClarosOrb({
-  state, curiousCount = 0, caption = "", onOffRecord, onNotNow, getLevel, compact, className,
+  state, curiousCount = 0, caption = "", onOffRecord, onNotNow, onStrike, labels, getLevel, compact, className,
 }: ClarosOrbProps) {
+  const label = (st: ClarosOrbState) => labels?.states?.[st] ?? LABEL[st];
   const orbRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   const [reduced, setReduced] = useState(false);
@@ -65,6 +70,22 @@ export function ClarosOrb({
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
+
+  // R resumes when off the record (works inside the PiP window too)
+  const offRef = useRef(onOffRecord);
+  useEffect(() => {
+    offRef.current = onOffRecord;
+  });
+  useEffect(() => {
+    if (state !== "off_record") return;
+    const doc = orbRef.current?.ownerDocument;
+    if (!doc || doc === document) return; // the page handles its own R key
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "r" && !e.metaKey && !e.ctrlKey) offRef.current?.();
+    };
+    doc.addEventListener("keydown", onKey);
+    return () => doc.removeEventListener("keydown", onKey);
+  }, [state]);
 
   useEffect(() => {
     const el = orbRef.current;
@@ -114,12 +135,12 @@ export function ClarosOrb({
           <div
             ref={orbRef}
             role="img"
-            aria-label={`Claros: ${LABEL[state]}`}
+            aria-label={`Claros: ${label(state)}`}
             className="rounded-full border-2 border-border will-change-transform"
             style={{
               width: size, height: size, background: FILL[state],
               backgroundImage: state === "off_record"
-                ? "repeating-linear-gradient(45deg, transparent 0 6px, rgba(0,0,0,.18) 6px 9px)" : undefined,
+                ? "repeating-linear-gradient(45deg, transparent 0 6px, rgba(255,255,255,.12) 6px 9px)" : undefined,
             }}
           />
           {curiousCount > 0 && (
@@ -136,20 +157,25 @@ export function ClarosOrb({
             <span className="font-heading text-base">Claros</span>
             <Badge variant={state === "off_record" ? "neutral" : "default"} className="gap-1">
               {state === "off_record" ? <MicOff className="size-3" /> : state === "away" ? <EyeOff className="size-3" /> : <Mic className="size-3" />}
-              {LABEL[state]}
+              {label(state)}
             </Badge>
           </div>
           {!compact && (
             <div className="flex gap-2">
               {onOffRecord && (
-                <Button size="xs" variant={state === "off_record" ? "default" : "neutral"} onClick={onOffRecord}>
+                <Button size={state === "off_record" ? "sm" : "xs"} variant={state === "off_record" ? "claros" : "neutral"} onClick={onOffRecord} autoFocus={state === "off_record"}>
                   {state === "off_record" ? <Mic /> : <MicOff />}
-                  {state === "off_record" ? "Back on record" : "Off the record"}
+                  {state === "off_record" ? labels?.resume ?? "Resume" : labels?.off ?? "Off the record"}
                 </Button>
               )}
-              {onNotNow && (
+              {onStrike && state !== "off_record" && (
+                <Button size="xs" variant="neutral" onClick={onStrike}>
+                  {labels?.strike ?? "Strike that"}
+                </Button>
+              )}
+              {onNotNow && state !== "off_record" && (
                 <Button size="xs" variant="neutral" onClick={onNotNow}>
-                  <PauseCircle /> Not now
+                  <PauseCircle /> {labels?.notNow ?? "Not now"}
                 </Button>
               )}
             </div>
@@ -160,7 +186,7 @@ export function ClarosOrb({
         aria-live="polite"
         className="min-h-[2.5rem] rounded-base border-2 border-border bg-background px-2 py-1 text-sm leading-snug"
       >
-        {caption || <span className="opacity-60">{LABEL[state]}</span>}
+        {caption || <span className="opacity-60">{label(state)}</span>}
       </p>
     </div>
   );

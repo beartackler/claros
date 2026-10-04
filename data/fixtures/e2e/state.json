@@ -1,7 +1,9 @@
 {
-  "capture_session": "s_f69df28f34d4",
-  "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e",
-  "map_build_s": 19.6,
-  "learn_session_en": "s_3b650dfd27a7",
-  "learn_session_ru": "s_6c6243d9c1b3"
+  "capture_session": "s_e7c397047833",
+  "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae",
+  "map_build_s": 67.7,
+  "learn_session_en": "s_bfdcb232466f",
+  "capture_session2": "s_f195ec47588d",
+  "workflow_id2": "wf_purchase_invoice_processing_erpnext_75c2ae",
+  "map_build_s2": 38.6
 }

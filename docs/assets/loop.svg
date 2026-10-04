@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="250" viewBox="0 0 1280 250" role="img" aria-labelledby="t d">
+  <title id="t">How Claros works</title>
+  <desc id="d">Capture, then debrief, then the Work Map, then teaching a new hire.</desc>
+  <style>
+    .n { font: 900 20px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #ffffff; }
+    .h { font: 900 30px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: -1px; fill: #0b0b0f; }
+    .p { font: 600 17px/1.3 "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4a463e; }
+    .who { font: 800 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: 1.4px; fill: #6d28d9; }
+    .face { fill: #ffffff; animation: glow 8s infinite; }
+    .c2 .face { animation-delay: 2s; } .c3 .face { animation-delay: 4s; } .c4 .face { animation-delay: 6s; }
+    @keyframes glow { 0% { fill: #ffffff; } 3% { fill: #ede4ff; } 22% { fill: #ede4ff; } 25% { fill: #ffffff; } 100% { fill: #ffffff; } }
+    .arrow { stroke: #0b0b0f; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    @media (prefers-reduced-motion: reduce) { .face { animation: none; } }
+  </style>
+  <rect width="1280" height="250" fill="#fbf6ea"/>
+
+  <!-- each card: shadow, face, number, title, line -->
+  <g class="c1" transform="translate(24 40)">
+    <rect x="8" y="8" width="262" height="170" rx="12" fill="#0b0b0f"/>
+    <rect class="face" width="262" height="170" rx="12" stroke="#0b0b0f" stroke-width="4"/>
+    <rect x="20" y="20" width="36" height="36" rx="6" fill="#0b0b0f"/><text x="38" y="45" text-anchor="middle" class="n">1</text>
+    <text x="20" y="96" class="h">Capture</text>
+    <text x="20" y="126" class="p">The expert works and talks.</text>
+    <text x="20" y="148" class="p">Claros asks at pauses.</text>
+    <text x="72" y="44" class="who">EXPERT</text>
+  </g>
+  <path class="arrow" d="M318 125 h22 m-10 -10 l10 10 l-10 10"/>
+
+  <g class="c2" transform="translate(352 40)">
+    <rect x="8" y="8" width="262" height="170" rx="12" fill="#0b0b0f"/>
+    <rect class="face" width="262" height="170" rx="12" stroke="#0b0b0f" stroke-width="4"/>
+    <rect x="20" y="20" width="36" height="36" rx="6" fill="#0b0b0f"/><text x="38" y="45" text-anchor="middle" class="n">2</text>
+    <text x="20" y="96" class="h">Debrief</text>
+    <text x="20" y="126" class="p">Closes the gaps, explains it</text>
+    <text x="20" y="148" class="p">back. The expert confirms.</text>
+    <text x="72" y="44" class="who">EXPERT</text>
+  </g>
+  <path class="arrow" d="M646 125 h22 m-10 -10 l10 10 l-10 10"/>
+
+  <g class="c3" transform="translate(680 40)">
+    <rect x="8" y="8" width="262" height="170" rx="12" fill="#0b0b0f"/>
+    <rect class="face" width="262" height="170" rx="12" stroke="#0b0b0f" stroke-width="4"/>
+    <rect x="20" y="20" width="36" height="36" rx="6" fill="#0b0b0f"/><text x="38" y="45" text-anchor="middle" class="n">3</text>
+    <text x="20" y="96" class="h">Work Map</text>
+    <text x="20" y="126" class="p">Steps, decisions and rules,</text>
+    <text x="20" y="148" class="p">in the expert's own words.</text>
+    <text x="72" y="44" class="who">RESULT</text>
+  </g>
+  <path class="arrow" d="M974 125 h22 m-10 -10 l10 10 l-10 10"/>
+
+  <g class="c4" transform="translate(1008 40)">
+    <rect x="8" y="8" width="240" height="170" rx="12" fill="#0b0b0f"/>
+    <rect class="face" width="240" height="170" rx="12" stroke="#0b0b0f" stroke-width="4"/>
+    <rect x="20" y="20" width="36" height="36" rx="6" fill="#0b0b0f"/><text x="38" y="45" text-anchor="middle" class="n">4</text>
+    <text x="20" y="96" class="h">Teach</text>
+    <text x="20" y="126" class="p">Coaches a new hire live,</text>
+    <text x="20" y="148" class="p">stops mistakes early.</text>
+    <text x="72" y="44" class="who">NEW HIRE</text>
+  </g>
+</svg>

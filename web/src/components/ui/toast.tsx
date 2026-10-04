@@ -122,9 +122,9 @@ function ToastClose({
   children,
   render = (
     <Button
-      variant="neutral"
-      size="icon"
-      className="size-7 border-0 bg-transparent shadow-none! hover:translate-x-0! hover:translate-y-0!"
+      variant="ghost"
+      size="icon-xs"
+      className="size-8"
     />
   ),
   ...props

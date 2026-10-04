@@ -17,6 +17,7 @@ import type { Coverage, OnetMatch, Quote, User } from "@/lib/contracts";
 import { clipUrl, keyframeUrl, type Result, type Source } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
@@ -193,15 +194,11 @@ export function initials(name: string) {
 }
 export function ExpertAvatar({ user, size = 28, index = 0, className }: { user: Pick<User, "name" | "id">; size?: number; index?: number; className?: string }) {
   return (
-    <span
-      title={user.name}
-      aria-label={user.name}
-      role="img"
-      className={cn("inline-grid shrink-0 place-items-center rounded-full border-2 border-ink font-extrabold text-on-fill", AVATAR_TONES[index % AVATAR_TONES.length], className)}
-      style={{ width: size, height: size, fontSize: Math.max(9, size * 0.38) }}
-    >
-      {initials(user.name)}
-    </span>
+    <Avatar title={user.name} aria-label={user.name} role="img" className={cn("border-2 border-ink outline-0", className)} style={{ width: size, height: size }}>
+      <AvatarFallback className={cn("font-extrabold text-on-fill", AVATAR_TONES[index % AVATAR_TONES.length])} style={{ fontSize: Math.max(10, size * 0.38) }}>
+        {initials(user.name)}
+      </AvatarFallback>
+    </Avatar>
   );
 }
 export function AvatarStack({ users, size = 28, max = 4 }: { users: Pick<User, "name" | "id">[]; size?: number; max?: number }) {

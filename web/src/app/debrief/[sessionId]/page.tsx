@@ -7,12 +7,12 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, Keyboard, Mic, PencilLine, SkipForward } from "lucide-react";
+import { ArrowRight, Check, Mic, PencilLine, SkipForward } from "lucide-react";
 import { Shell } from "@/components/claros/Shell";
-import { useUi } from "@/components/claros/i18n";
+import { useUi, type DictKey } from "@/components/claros/i18n";
+import { LookedUpList, WhyTag, useLatestWhy, useLookedUp } from "@/components/claros/Evidence";
 import { ClarosDot, ErrorState, Loading, SourceNote, useResource } from "@/components/claros/primitives";
 import { ZoomShot } from "@/components/claros/Lightbox";
-import { ConflictNote } from "@/components/claros/ConflictBanner";
 import { sortedSteps, stepHighlight } from "@/components/claros/mapUtils";
 import { useJoinSession, useLive, useLiveStore } from "@/components/claros/live";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -106,16 +106,23 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
     [map.open_unknowns, demo],
   );
   const [i, setI] = useState(0);
-  const [typing, setTyping] = useState(false);
-  const [answer, setAnswer] = useState("");
   const total = Math.max(queue.length, 1);
   const remaining = liveLedger ? liveLedger.open : Math.max(0, queue.length - i);
   const cur: Unknown | undefined = liveLedger?.top ?? queue[i];
   const done = remaining === 0 || !cur;
+  const latestWhy = useLatestWhy();
+  const lookedUp = useLookedUp(
+    demo
+      ? MOCK_UNKNOWNS.filter((u) => u.status === "resolved").map((u) => ({
+          type: "looked_up" as const,
+          unknown_summary: u.entity ?? u.type,
+          answer: u.resolution ?? "",
+          source: u.resolution_source?.startsWith("app_docs:") ? { kind: "app_docs" as const, title: "docs.erpnext.com", url: u.resolution_source.slice(9) } : { kind: "general" as const, title: "LLM" },
+        }))
+      : [],
+  );
 
   const advance = () => {
-    setAnswer("");
-    setTyping(false);
     setI((x) => x + 1);
   };
   const step: Step | undefined = cur
@@ -135,6 +142,7 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
 
   const kf = cur.moment?.keyframe_ids?.[0] ?? step?.moment?.keyframe_ids?.[0] ?? null;
   return (
+    <>
     <div key={cur.id} className="claros-enter grid items-start gap-10 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:gap-14">
       <div className="min-w-0">
         <p className="tnum text-lg font-bold text-ink-2">{t("db.q", { n: Math.min(i + 1, total), total })}</p>
@@ -143,36 +151,18 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
             <span key={u.id} className={cn("h-3 flex-1 rounded-[2px] border-2 border-ink", k < i ? "bg-ready" : k === i ? "bg-claros" : "bg-card")} />
           ))}
         </div>
-        <h1 className="mt-8 text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-5xl">{cur.spoken_question ?? cur.hypothesis}</h1>
+        <h1 className={cn("mt-8 font-black leading-[1.05] tracking-[-0.04em]", (cur.spoken_question ?? cur.hypothesis ?? "").length > 80 ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl")}>{cur.spoken_question ?? cur.hypothesis}</h1>
         {cur.hypothesis && cur.spoken_question && cur.type !== "conflict" ? <p className="mt-5 text-xl text-ink-2">{cur.hypothesis}</p> : null}
+        <WhyTag why={latestWhy ?? (cur.created_t ? { when: t("ev.debrief.when"), what: step || cur.entity ? `${step?.title ?? cur.entity} · ${t(`q.kind.${cur.type}` as DictKey)}` : t(`q.kind.${cur.type}` as DictKey), scope: cur.scope === "company" || cur.scope === "personal_judgment" ? cur.scope : undefined } : null)} className="mt-5" />
 
-        {typing ? (
-          <form
-            className="mt-10 space-y-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (answer.trim() && voice.status === "connected") voice.sendText(answer);
-              advance();
-            }}
-          >
-            <Textarea autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} rows={3} className="bg-card text-lg" aria-label={t("db.type")} />
-            <Button type="submit" variant="primary" size="lg" disabled={!answer.trim()}>
-              <Check aria-hidden /> {t("db.send")}
-            </Button>
-          </form>
-        ) : (
           <div className="mt-10 flex flex-wrap gap-3">
             <Button variant="claros" size="xl" onClick={() => (voice.status === "connected" ? advance() : voice.start().catch(() => advance()))}>
               <Mic aria-hidden /> {t("db.voice")}
-            </Button>
-            <Button variant="outline" size="xl" onClick={() => setTyping(true)}>
-              <Keyboard aria-hidden /> {t("db.type")}
             </Button>
             <Button variant="ghost" size="xl" onClick={advance}>
               <SkipForward aria-hidden /> {t("db.skip")}
             </Button>
           </div>
-        )}
       </div>
       <div className="min-w-0 space-y-4">
         <ZoomShot
@@ -181,9 +171,10 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
           priority
           className="shadow-hard-lg"
         />
-        {step?.conflict ? <ConflictNote map={map} step={step} /> : null}
       </div>
     </div>
+    <LookedUpList items={lookedUp} className="mt-14 border-t-2 border-ink pt-6" />
+    </>
   );
 }
 

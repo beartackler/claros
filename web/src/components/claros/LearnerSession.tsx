@@ -8,16 +8,17 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Check, CheckCircle2, Hand, MonitorUp, PictureInPicture2, PlayCircle, RotateCw, Send, Split, Square } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, EyeOff, Hand, MonitorUp, PictureInPicture2, PlayCircle, RotateCw, Split, Square } from "lucide-react";
 import { useUi } from "./i18n";
 import { ClarosDot, Loading } from "./primitives";
-import { LiveCaptions, LiveOrb, requestMic, useJoinSession, useLive, useLiveStore, waitVoice } from "./live";
+import { ConnectionBanner, ResumeBar, useOffRecord, LiveCaptions, LiveOrb, requestMic, shareWindow, useJoinSession, useLive, useLiveStore, waitVoice } from "./live";
 import { StartSequence, type ShareResult } from "./StartSequence";
 import { MomentCard, type MomentKind } from "./MomentCard";
 import { CompanionCard, mockNudge, useNudges, type MockKind } from "./Nudge";
 import { PipPortal, usePip } from "@/voice/pip";
 import { firstName, isConfirmed, sortedSteps } from "./mapUtils";
 import { useDebug } from "./debug";
+import { SignalsBar, WhyTag, useLatestWhy } from "./Evidence";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { createRequest, createSession, getWorkflow, latestWorkflowId, lookupWorkflow } from "@/lib/api";
 import { EXPERT, LEA } from "@/lib/mock";
@@ -60,8 +61,11 @@ function Learn({ below }: { below?: React.ReactNode }) {
   useJoinSession(sessionId, "learn", LEA, lang);
   const { capture, voice } = useLive(sessionId, "learn", lang, LEA.name);
   const voiceRef = useRef(voice);
-  voiceRef.current = voice;
+  useEffect(() => {
+    voiceRef.current = voice;
+  });
 
+  const rec = useOffRecord(voice);
   const [phase, setPhase] = useState<Phase>(demo ? "live" : "start");
   const [map, setMap] = useState<WorkMap | null>(null);
   const [lookup, setLookup] = useState<"idle" | "finding" | "found" | "missing">("idle");
@@ -76,7 +80,8 @@ function Learn({ below }: { below?: React.ReactNode }) {
       setIntent(text);
       setLookup("finding");
       const force = debug.enabled && debug.force !== "auto" ? debug.force : undefined;
-      const r = await lookupWorkflow({ utterance: text || "walk me through this", lang, screen_state: null }, force);
+      const sid = sessionP.current ? await sessionP.current.catch(() => null) : null;
+      const r = await lookupWorkflow({ utterance: text || "walk me through this", lang, session_id: sid, screen_state: null }, force);
       const match = force === "missing" ? null : r.data.match;
       if (!match?.workflow_id) return setLookup("missing");
       const m = await getWorkflow(match.workflow_id);
@@ -99,6 +104,7 @@ function Learn({ below }: { below?: React.ReactNode }) {
   const firstUser = transcript.find((l) => l.role === "user");
   useEffect(() => {
     if (phase !== "live" || demo || lookup !== "idle" || !firstUser) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void identify(firstUser.text);
   }, [phase, demo, lookup, firstUser, identify]);
 
@@ -140,14 +146,12 @@ function Learn({ below }: { below?: React.ReactNode }) {
   }, [nudges.stop, map]);
 
   /* ---------- start sequence ---------- */
-  const onShare = async (): Promise<ShareResult> => {
-    const picking = capture.start(); // straight from the click: the window picker needs the gesture
+  const onShare = (): Promise<ShareResult> => {
+    const picking = shareWindow(capture); // straight from the click: the window picker needs the gesture
     void ensureSession();
-    await picking;
-    if (!capture.stream.current) return "cancelled";
-    const surface = (capture.stream.current.getVideoTracks()[0]?.getSettings() as { displaySurface?: string })?.displaySurface;
-    return surface === "monitor" ? "monitor" : "ok";
+    return picking;
   };
+
   const onVoice = async () => {
     await ensureSession();
     await new Promise((r) => setTimeout(r, 60)); // let the voice hook pick up the new session id
@@ -178,10 +182,11 @@ function Learn({ below }: { below?: React.ReactNode }) {
   useEffect(() => {
     if (!nudgeParam || phase !== "live") return;
     if (!map) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void openLatest();
       return;
     }
-    const m = mockNudge(nudgeParam, map, lang, t);
+    const m = mockNudge(nudgeParam, map, lang, t, params.get("clip"));
     if (!m) return;
     const st = useLiveStore.getState();
     const stepId = m.type === "nudge" ? m.step_id : map.steps.find((x) => m.type === "intervene" && x.guardrail_ids.includes(m.guardrail_id))?.id;
@@ -201,13 +206,9 @@ function Learn({ below }: { below?: React.ReactNode }) {
         privacy="start.privacy.learner"
         onShare={onShare}
         onMic={requestMic}
+        onStopShare={capture.stop}
         onVoice={onVoice}
         onDone={() => setPhase("live")}
-        onType={(text) => {
-          void ensureSession();
-          setPhase("live");
-          void identify(text);
-        }}
       />
       {below}
       </>
@@ -230,10 +231,11 @@ function Learn({ below }: { below?: React.ReactNode }) {
       keyframe={capture.lastKeyframe ? `live_${capture.lastKeyframe.seq}` : null}
       card={card}
       nudges={nudges}
+      rec={rec}
       onReplay={() => step && (needed.current.add(step.id), setCard({ kind: "how", stepId: step.id }))}
       onCloseCard={() => setCard(null)}
-      onSay={(text) => (lookup === "idle" || lookup === "missing" ? identify(text) : voice.status === "connected" ? voice.sendText(text) : undefined)}
       onEnd={end}
+      // eslint-disable-next-line react-hooks/refs
       visited={visited.current}
     />
   );
@@ -255,9 +257,9 @@ function LiveView(p: {
   keyframe: string | null;
   card: Card | null;
   nudges: ReturnType<typeof useNudges>;
+  rec: ReturnType<typeof useOffRecord>;
   onReplay: () => void;
   onCloseCard: () => void;
-  onSay: (text: string) => void;
   onEnd: () => void;
   visited: Set<string>;
 }) {
@@ -266,6 +268,7 @@ function LiveView(p: {
   const companion = Boolean(p.map && (p.nudges.stop || p.nudges.nudge));
   const split = companion || Boolean(cardStep) || p.lookup === "missing";
   const pip = usePip();
+  const latestWhy = useLatestWhy();
   const expertName = p.step ? firstName((p.map?.experts.find((e) => p.step!.experts.includes(e.id)) ?? p.map?.experts[0])?.name ?? "") : "";
 
   return (
@@ -280,8 +283,14 @@ function LiveView(p: {
             <MonitorUp className="size-5" aria-hidden /> {t("learn.sharing")}
           </span>
         ) : null}
+        <ConnectionBanner />
+        {!p.rec.off ? (
+          <Button variant="outline" onClick={p.rec.goOff} className="ml-auto">
+            <EyeOff aria-hidden /> {t("cap.off")}
+          </Button>
+        ) : null}
         {pip.supported ? (
-          <Button variant="outline" onClick={() => void pip.open({ width: 440, height: 620 })} className="ml-auto">
+          <Button variant="outline" onClick={() => void pip.open({ width: 440, height: 620 })} className={cn(p.rec.off && "ml-auto")}>
             <PictureInPicture2 aria-hidden /> <span className="hidden sm:inline">{t("live.popout")}</span>
           </Button>
         ) : null}
@@ -290,13 +299,17 @@ function LiveView(p: {
         </Button>
       </div>
 
+      {p.rec.off ? <ResumeBar onResume={p.rec.resume} className="-mt-2 mb-8" /> : null}
+      <SignalsBar className="-mt-4 mb-8" />
+
       <div className={cn("grid items-start gap-10", split ? "xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:gap-14" : "")}>
         <div className={cn("min-w-0", !split && "grid items-center gap-8 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-16")}>
           <div className={cn(split ? "mb-6" : "justify-self-center")}>
-            <LiveOrb size={split ? 120 : 240} getLevel={p.getLevel} speaking={p.speaking} off={!p.voiceOn} />
+            <LiveOrb size={split ? 120 : 240} getLevel={p.getLevel} speaking={p.speaking} off={!p.voiceOn || p.rec.off} />
           </div>
           <div className="min-w-0">
             <LiveCaptions idle={p.lookup === "finding" ? t("live.finding") : t("live.waiting")} />
+            <WhyTag why={latestWhy} className="mt-5" />
 
             {p.lookup === "finding" ? (
               <p className="mt-8 inline-flex items-center gap-3 text-xl font-bold text-ink-2" role="status">
@@ -330,8 +343,6 @@ function LiveView(p: {
                 ) : null}
               </div>
             ) : null}
-
-            <SayBox onSay={p.onSay} />
           </div>
         </div>
 
@@ -347,6 +358,8 @@ function LiveView(p: {
       {/* the floating companion (Document PiP): the only thing that can sit over the learner's app */}
       <PipPortal pipWindow={pip.pipWindow}>
         <div className="flex min-h-screen flex-col gap-3 bg-paper p-3 text-ink">
+          <ConnectionBanner className="self-start" />
+          {p.rec.off ? <ResumeBar onResume={p.rec.resume} /> : null}
           {companion && p.map ? (
             <CompanionCard map={p.map} n={p.nudges} inPip />
           ) : (
@@ -361,36 +374,6 @@ function LiveView(p: {
         </div>
       </PipPortal>
     </div>
-  );
-}
-
-function SayBox({ onSay }: { onSay: (text: string) => void }) {
-  const { t } = useUi();
-  const [text, setText] = useState("");
-  return (
-    <form
-      className="mt-10 flex max-w-xl gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!text.trim()) return;
-        onSay(text.trim());
-        setText("");
-      }}
-    >
-      <label htmlFor="say" className="sr-only">
-        {t("live.say.ph")}
-      </label>
-      <input
-        id="say"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={t("live.say.ph")}
-        className="h-11 min-w-0 flex-1 rounded-base border-2 border-ink bg-card px-3 text-base placeholder:text-ink-2 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-claros"
-      />
-      <Button type="submit" variant="outline" size="icon" aria-label={t("live.say")} disabled={!text.trim()} className="size-11">
-        <Send aria-hidden />
-      </Button>
-    </form>
   );
 }
 
@@ -482,7 +465,9 @@ function SummaryList({ title, items, tone }: { title: string; items: string[]; t
 function useDemoScript(on: boolean, openLatest: () => Promise<void>, map: WorkMap | null) {
   const { lang, t } = useUi();
   const mapRef = useRef(map);
-  mapRef.current = map;
+  useEffect(() => {
+    mapRef.current = map;
+  });
   useEffect(() => {
     if (!on) return;
     const st = useLiveStore.getState();

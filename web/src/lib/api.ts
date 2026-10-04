@@ -104,6 +104,8 @@ export type LookupResult = {
 };
 
 export function lookupWorkflow(body: {
+  /** the learner's live session: the server reads its latest screen */
+  session_id?: string | null;
   screen_state?: ScreenState | null;
   utterance: string;
   lang: string;
@@ -192,6 +194,15 @@ export async function latestWorkflowId(): Promise<string> {
   return sorted[0]?.workflow_id ?? MOCK_MAP.workflow_id;
 }
 
+/** Expert voice clip for one final utterance (consent-first; server drops PII / off-record / struck). */
+export async function uploadClip(sessionId: string, body: { event_id: string; t_start: number; t_end: number; mime: string; audio_b64: string }) {
+  try {
+    return await req<{ stored: boolean; url?: string; reason?: string }>(`/api/sessions/${encodeURIComponent(sessionId)}/clips`, { method: "POST", body: JSON.stringify(body) }, 15000);
+  } catch {
+    return { stored: false, reason: "offline" };
+  }
+}
+
 export function endSession(id: string): Promise<Result<unknown>> {
   return withFallback(
     () => req<unknown>(`/api/sessions/${encodeURIComponent(id)}/end`, { method: "POST" }),
@@ -211,3 +222,4 @@ export function getMastery(learnerId: string, workflowId: string): Promise<Resul
 
 export const wsUrl = (sessionId: string) =>
   `${API_BASE.replace(/^http/, "ws")}/ws/session/${encodeURIComponent(sessionId)}`;
+

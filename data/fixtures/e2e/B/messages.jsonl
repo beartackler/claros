@@ -1,26 +1,113 @@
-{"dir": "c2s", "at": 1791078952401.697, "type": "hello", "session_id": "s_f69df28f34d4", "mode": "capture", "user": {"id": "expert@ostwind.example", "name": "Erika Expert", "role": "expert"}, "lang": "en"}
-{"dir": "c2s", "at": 1791078952401.752, "type": "clock_sync", "client_t": 1791078952401.751}
-{"dir": "c2s", "at": 1791078971985.451, "type": "hello", "session_id": "s_f69df28f34d4", "mode": "debrief", "user": {"id": "expert@ostwind.example", "name": "Erika Expert", "role": "expert"}, "lang": "en", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e"}
-{"dir": "s2c", "type": "clock_sync", "client_t": 1791078952401.751, "server_t": 1791078952402.3582, "_at": 1791078952419.657}
-{"dir": "s2c", "type": "phase", "phase": "debrief", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "_at": 1791078952423.9192}
-{"dir": "s2c", "type": "status", "level": "info", "text": "debrief_ready", "_at": 1791078952424.0452}
-{"dir": "s2c", "type": "ask", "unknown_id": "phase-debrief", "text": "Thanks! Let's do a quick debrief.", "_at": 1791078952424.127}
-{"dir": "s2c", "type": "ledger", "open": 0, "saved_for_later": 0, "top": null, "_at": 1791078952424.198}
-{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 0", "_at": 1791078952453.2961}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 38, "_at": 1791078971669.7532}
-{"dir": "s2c", "type": "status", "level": "info", "text": "Work map built: 8 steps, 3 guardrails, 2 open questions.", "_at": 1791078971669.926}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 39, "_at": 1791078972093.75}
-{"dir": "s2c", "type": "ledger", "open": 3, "saved_for_later": 0, "top": {"id": "u_9c63e628b1", "type": "limit", "scope": "company", "about_event_ids": [], "entity": "g_capex", "hypothesis": "Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools", "hypothesis_confidence": 0.0, "spoken_question": "What if it were 4,999? Would “Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools” still apply?", "priority": 0.2, "status": "asked", "created_t": 1791078971986.604, "expires_t": null, "moment": null, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791078972093.908}
-{"dir": "s2c", "type": "say", "id": "debrief-1", "text": "What if it were 4,999? Would “Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools” still apply?", "kind": "debrief", "lang": "en", "_at": 1791078972094.317}
-{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 3", "_at": 1791078972094.4797}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 40, "_at": 1791078975429.631}
-{"dir": "s2c", "type": "ledger", "open": 2, "saved_for_later": 0, "top": {"id": "unk_2", "type": "stop_and_ask", "scope": "personal_judgment", "about_event_ids": [], "entity": null, "hypothesis": null, "hypothesis_confidence": 0.0, "spoken_question": "Who confirms with the supplier before a held duplicate is released?", "priority": 0.0, "status": "asked", "created_t": 0.0, "expires_t": null, "moment": {"session_id": "s_f69df28f34d4", "keyframe_ids": ["s_f69df28f34d4_8"], "t": 1791077728500.0, "utterance_ids": ["u_ad410982"]}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791078975430.0317}
-{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 2", "_at": 1791078976096.8252}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 41, "_at": 1791078977648.538}
-{"dir": "s2c", "type": "ledger", "open": 1, "saved_for_later": 0, "top": {"id": "unk_1", "type": "why", "scope": "personal_judgment", "about_event_ids": [], "entity": null, "hypothesis": "Threshold applies per equipment item line", "hypothesis_confidence": 0.6, "spoken_question": "Is the capex rule amount-based per item or per invoice total?", "priority": 0.0, "status": "asked", "created_t": 0.0, "expires_t": null, "moment": {"session_id": "s_f69df28f34d4", "keyframe_ids": ["s_f69df28f34d4_4"], "t": 1791077682900.0, "utterance_ids": ["u_8aa4cced"]}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791078977648.8518}
-{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 1", "_at": 1791078980098.604}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 42, "_at": 1791078980524.868}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 43, "_at": 1791078981966.794}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 44, "_at": 1791078982382.318}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 45, "_at": 1791078982896.383}
-{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e", "version": 46, "_at": 1791078983312.978}
+{"dir": "c2s", "at": 1791096367401.813, "type": "hello", "session_id": "s_e7c397047833", "mode": "capture", "user": {"id": "expert@ostwind.example", "name": "Erika Expert", "role": "expert"}, "lang": "en"}
+{"dir": "c2s", "at": 1791096367401.8591, "type": "clock_sync", "client_t": 1791096367401.8582}
+{"dir": "c2s", "at": 1791096435115.9731, "type": "hello", "session_id": "s_e7c397047833", "mode": "debrief", "user": {"id": "expert@ostwind.example", "name": "Erika Expert", "role": "expert"}, "lang": "en", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae"}
+{"dir": "c2s", "at": 1791096437395.529, "type": "agent_state", "t": 1791096437395.5269, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096440766.71, "type": "utterance", "t_start": 1791096437395.5881, "t_end": 1791096440766.678, "role": "agent", "text": "Who confirms a held invoice, and what un-holds it?", "lang": "en", "event_id": "a_f6e57cfb"}
+{"dir": "c2s", "at": 1791096440766.805, "type": "agent_state", "t": 1791096440766.805, "mode": "listening"}
+{"dir": "c2s", "at": 1791096444648.293, "type": "vad", "t": 1791096444648.277, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096450649.823, "type": "vad", "t": 1791096450649.8052, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096450650.1511, "type": "utterance", "t_start": 1791096444648.277, "t_end": 1791096450649.8052, "role": "user", "text": "Any supplier: if the amount matches an invoice we already paid, put it on hold and ask the supplier. I release it myself once they confirm it's not a duplicate.", "lang": "en", "event_id": "u_24e8f6b5"}
+{"dir": "c2s", "at": 1791096453795.445, "type": "agent_state", "t": 1791096453795.443, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096459476.626, "type": "utterance", "t_start": 1791096453795.4932, "t_end": 1791096459476.595, "role": "agent", "text": "Got it. You sent that invoice for a second approval — why does it need two?", "lang": "en", "event_id": "a_1da57ac9"}
+{"dir": "c2s", "at": 1791096459476.7207, "type": "agent_state", "t": 1791096459476.7207, "mode": "listening"}
+{"dir": "c2s", "at": 1791096463491.685, "type": "vad", "t": 1791096463491.6812, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096467692.862, "type": "vad", "t": 1791096467692.8582, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096467692.965, "type": "utterance", "t_start": 1791096463491.6812, "t_end": 1791096467692.8582, "role": "user", "text": "Every invoice of the UK company goes to Frank, the controller, for second approval.", "lang": "en", "event_id": "u_2205abec"}
+{"dir": "c2s", "at": 1791096470833.464, "type": "agent_state", "t": 1791096470833.461, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096475524.041, "type": "utterance", "t_start": 1791096470833.511, "t_end": 1791096475524.016, "role": "agent", "text": "Got it. When is Production the right cost center versus the default one?", "lang": "en", "event_id": "a_78deaa93"}
+{"dir": "c2s", "at": 1791096475524.1301, "type": "agent_state", "t": 1791096475524.129, "mode": "listening"}
+{"dir": "c2s", "at": 1791096479632.748, "type": "vad", "t": 1791096479632.744, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096483833.961, "type": "vad", "t": 1791096483833.956, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096483834.07, "type": "utterance", "t_start": 1791096479632.744, "t_end": 1791096483833.956, "role": "user", "text": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.", "lang": "en", "event_id": "u_b67b4965"}
+{"dir": "c2s", "at": 1791096486899.779, "type": "agent_state", "t": 1791096486899.778, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096495880.542, "type": "utterance", "t_start": 1791096486899.8242, "t_end": 1791096495880.516, "role": "agent", "text": "Got it. You changed the expense head from Tools and Small Equipment to Plants and Machineries. What on the invoice tells you it counts as capex?", "lang": "en", "event_id": "a_dcf7a9c6"}
+{"dir": "c2s", "at": 1791096495880.632, "type": "agent_state", "t": 1791096495880.6309, "mode": "listening"}
+{"dir": "c2s", "at": 1791096499986.94, "type": "vad", "t": 1791096499986.937, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096504188.1257, "type": "vad", "t": 1791096504188.121, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096504188.225, "type": "utterance", "t_start": 1791096499986.937, "t_end": 1791096504188.121, "role": "user", "text": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.", "lang": "en", "event_id": "u_3b46404c"}
+{"dir": "c2s", "at": 1791096508898.429, "type": "agent_state", "t": 1791096508898.4268, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096509959.5698, "type": "utterance", "t_start": 1791096508898.479, "t_end": 1791096509959.5442, "role": "agent", "text": "Got it.", "lang": "en", "event_id": "a_24739d1f"}
+{"dir": "c2s", "at": 1791096509959.656, "type": "agent_state", "t": 1791096509959.6548, "mode": "listening"}
+{"dir": "c2s", "at": 1791096509959.702, "type": "agent_state", "t": 1791096509959.7012, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096513660.833, "type": "utterance", "t_start": 1791096509959.719, "t_end": 1791096513660.806, "role": "agent", "text": "I open the supplier invoice and review what it's for.", "lang": "en", "event_id": "a_62e7875c"}
+{"dir": "c2s", "at": 1791096513660.9211, "type": "agent_state", "t": 1791096513660.9211, "mode": "listening"}
+{"dir": "c2s", "at": 1791096513660.965, "type": "agent_state", "t": 1791096513660.964, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096523632.158, "type": "utterance", "t_start": 1791096513660.9832, "t_end": 1791096523632.131, "role": "agent", "text": "If the equipment is over 5,000, that's capex per Erika — so I change the Expense Head from the default small-tools account to Plants and Machineries, never small tools.", "lang": "en", "event_id": "a_e8d07a48"}
+{"dir": "c2s", "at": 1791096523632.249, "type": "agent_state", "t": 1791096523632.248, "mode": "listening"}
+{"dir": "c2s", "at": 1791096523632.305, "type": "agent_state", "t": 1791096523632.3042, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096527993.4622, "type": "utterance", "t_start": 1791096523632.347, "t_end": 1791096527993.434, "role": "agent", "text": "I also switch the Cost Center from Administration to Production to match.", "lang": "en", "event_id": "a_7e30b084"}
+{"dir": "c2s", "at": 1791096527993.554, "type": "agent_state", "t": 1791096527993.553, "mode": "listening"}
+{"dir": "c2s", "at": 1791096527993.597, "type": "agent_state", "t": 1791096527993.597, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096530044.796, "type": "utterance", "t_start": 1791096527993.6143, "t_end": 1791096530044.7659, "role": "agent", "text": "I save the corrected invoice,", "lang": "en", "event_id": "a_5813b2bb"}
+{"dir": "c2s", "at": 1791096530044.883, "type": "agent_state", "t": 1791096530044.8818, "mode": "listening"}
+{"dir": "c2s", "at": 1791096530044.9421, "type": "agent_state", "t": 1791096530044.94, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096533746.0962, "type": "utterance", "t_start": 1791096530044.9832, "t_end": 1791096533746.0688, "role": "agent", "text": "then return to the list and pick the next item.", "lang": "en", "event_id": "a_db1cb1c8"}
+{"dir": "c2s", "at": 1791096533746.1902, "type": "agent_state", "t": 1791096533746.1902, "mode": "listening"}
+{"dir": "c2s", "at": 1791096533746.2458, "type": "agent_state", "t": 1791096533746.245, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096538767.431, "type": "utterance", "t_start": 1791096533746.288, "t_end": 1791096538767.405, "role": "agent", "text": "For the suspect invoice, I compare it against earlier invoices from the same supplier;", "lang": "en", "event_id": "a_db8178d8"}
+{"dir": "c2s", "at": 1791096538767.5361, "type": "agent_state", "t": 1791096538767.5352, "mode": "listening"}
+{"dir": "c2s", "at": 1791096538767.584, "type": "agent_state", "t": 1791096538767.584, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096547088.765, "type": "utterance", "t_start": 1791096538767.6038, "t_end": 1791096547088.74, "role": "agent", "text": "if the amount matches one already paid, Erika says this supplier double-bills every December, so I put it On Hold instead of booking it,", "lang": "en", "event_id": "a_50dbc232"}
+{"dir": "c2s", "at": 1791096547088.8572, "type": "agent_state", "t": 1791096547088.856, "mode": "listening"}
+{"dir": "c2s", "at": 1791096547088.9138, "type": "agent_state", "t": 1791096547088.913, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096549470.073, "type": "utterance", "t_start": 1791096547088.954, "t_end": 1791096549470.045, "role": "agent", "text": "and save so the hold sticks.", "lang": "en", "event_id": "a_98ac1f36"}
+{"dir": "c2s", "at": 1791096549470.161, "type": "agent_state", "t": 1791096549470.1597, "mode": "listening"}
+{"dir": "c2s", "at": 1791096549470.217, "type": "agent_state", "t": 1791096549470.2148, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096553501.3772, "type": "utterance", "t_start": 1791096549470.258, "t_end": 1791096553501.3518, "role": "agent", "text": "Finally, for the subsidiary invoice I identify which company it's from;", "lang": "en", "event_id": "a_bdedfa63"}
+{"dir": "c2s", "at": 1791096553501.479, "type": "agent_state", "t": 1791096553501.478, "mode": "listening"}
+{"dir": "c2s", "at": 1791096553501.534, "type": "agent_state", "t": 1791096553501.5317, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096559842.7288, "type": "utterance", "t_start": 1791096553501.576, "t_end": 1791096559842.7021, "role": "agent", "text": "anything from the UK subsidiary needs second approval from the controller before booking. Is that how it works?", "lang": "en", "event_id": "a_b2255567"}
+{"dir": "c2s", "at": 1791096559842.8281, "type": "agent_state", "t": 1791096559842.8281, "mode": "listening"}
+{"dir": "c2s", "at": 1791096563685.065, "type": "vad", "t": 1791096563685.0613, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096568786.2751, "type": "vad", "t": 1791096568786.2708, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096568786.388, "type": "utterance", "t_start": 1791096563685.0613, "t_end": 1791096568786.2708, "role": "user", "text": "One detail: maintenance and repairs stay an expense even above 5,000 — only new equipment is capex.", "lang": "en", "event_id": "u_33ceb221"}
+{"dir": "c2s", "at": 1791096571166.806, "type": "agent_state", "t": 1791096571166.805, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096583168.0278, "type": "utterance", "t_start": 1791096571166.862, "t_end": 1791096583168.001, "role": "agent", "text": "Got it — the rule now says: New equipment with an amount over 5,000 is capex: it must never be booked to small tools — use Plants and Machineries with the Production cost center. Maintenance and repairs stay an expense even above 5,000. Anything else, or is that how it works?", "lang": "en", "event_id": "a_a40ca1a5"}
+{"dir": "c2s", "at": 1791096583168.1228, "type": "agent_state", "t": 1791096583168.122, "mode": "listening"}
+{"dir": "c2s", "at": 1791096587045.865, "type": "vad", "t": 1791096587045.862, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096588547.031, "type": "vad", "t": 1791096588547.0269, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096588547.128, "type": "utterance", "t_start": 1791096587045.862, "t_end": 1791096588547.0269, "role": "user", "text": "Yes, that's how it works.", "lang": "en", "event_id": "u_6f11514b"}
+{"dir": "c2s", "at": 1791096589366.452, "type": "agent_state", "t": 1791096589366.451, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096592407.6, "type": "utterance", "t_start": 1791096589366.497, "t_end": 1791096592407.5752, "role": "agent", "text": "That's everything. The map is published for learners.", "lang": "en", "event_id": "a_bd42ae32"}
+{"dir": "c2s", "at": 1791096592407.688, "type": "agent_state", "t": 1791096592407.687, "mode": "listening"}
+{"dir": "s2c", "type": "signals", "typing": false, "speaking": false, "screen": "settled", "gate": "ready", "_at": 1791096367426.135}
+{"dir": "s2c", "type": "clock_sync", "client_t": 1791096367401.8582, "server_t": 1791096367402.302, "_at": 1791096367426.2998}
+{"dir": "s2c", "type": "phase", "phase": "debrief", "workflow_id": null, "_at": 1791096367538.272}
+{"dir": "s2c", "type": "status", "level": "info", "text": "debrief_ready", "_at": 1791096367538.336}
+{"dir": "s2c", "type": "ask", "unknown_id": "phase-debrief", "text": "Thanks! Let's do a quick debrief.", "_at": 1791096367539.8071}
+{"dir": "s2c", "type": "ledger", "open": 0, "saved_for_later": 1, "top": null, "_at": 1791096367540.117}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 0", "_at": 1791096367550.658}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 1, "_at": 1791096434752.4512}
+{"dir": "s2c", "type": "status", "level": "info", "text": "Work map built: 10 steps, 3 guardrails, 5 open questions.", "_at": 1791096434752.646}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 2, "_at": 1791096437394.6072}
+{"dir": "s2c", "type": "ledger", "open": 7, "saved_for_later": 1, "top": {"id": "u_hold_release", "type": "stop_and_ask", "scope": "company", "about_event_ids": [], "entity": "purchase_invoice", "hypothesis": "Held duplicate invoices are released once the supplier confirms the invoice is genuine", "hypothesis_confidence": 0.6, "spoken_question": "Who confirms a held invoice, and what un-holds it?", "priority": 2.0, "status": "asked", "created_t": 0.0, "expires_t": null, "moment": {"session_id": "s_e7c397047833", "keyframe_ids": ["s_e7c397047833_8"], "t": 1791096288.7, "utterance_ids": ["u_9cef689f"]}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791096437395.4492}
+{"dir": "s2c", "type": "say", "id": "debrief-4", "text": "Who confirms a held invoice, and what un-holds it?", "kind": "debrief", "lang": "en", "_at": 1791096437395.484}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 7", "_at": 1791096437395.7878}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 3, "_at": 1791096453192.185}
+{"dir": "s2c", "type": "ledger", "open": 6, "saved_for_later": 0, "top": {"id": "u_f760146d20", "type": "stop_and_ask", "scope": "personal_judgment", "about_event_ids": ["ev_01287d09a9"], "entity": "ACC-PINV-2026-00029", "hypothesis": "invoices over 5,000 require second approval", "hypothesis_confidence": 0.2, "spoken_question": "You sent that invoice for a second approval — why does it need two?", "priority": 0.4394, "status": "asked", "created_t": 1791096332738.027, "expires_t": 1791096395858.064, "moment": {"session_id": "s_e7c397047833", "keyframe_ids": ["s_e7c397047833_15"], "t": 1791096331202.123, "utterance_ids": []}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791096453193.055}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 6", "_at": 1791096453193.2349}
+{"dir": "s2c", "type": "say", "id": "debrief-5", "text": "Got it. You sent that invoice for a second approval — why does it need two?", "kind": "debrief", "lang": "en", "_at": 1791096453795.411}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 4, "_at": 1791096470230.4521}
+{"dir": "s2c", "type": "ledger", "open": 5, "saved_for_later": 0, "top": {"id": "u_cost_center_condition", "type": "why", "scope": "company", "about_event_ids": [], "entity": "purchase_invoice.cost_center", "hypothesis": "Capex purchases always go to the Production cost center, mirroring the expense head rule", "hypothesis_confidence": 0.7, "spoken_question": "When is Production the right cost center versus the default one?", "priority": 2.0, "status": "asked", "created_t": 0.0, "expires_t": null, "moment": {"session_id": "s_e7c397047833", "keyframe_ids": ["s_e7c397047833_3"], "t": 1791096257.4, "utterance_ids": ["u_b58bcf46"]}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791096470230.649}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 5", "_at": 1791096470230.722}
+{"dir": "s2c", "type": "say", "id": "debrief-6", "text": "Got it. When is Production the right cost center versus the default one?", "kind": "debrief", "lang": "en", "_at": 1791096470833.427}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 5, "_at": 1791096486299.136}
+{"dir": "s2c", "type": "ledger", "open": 4, "saved_for_later": 0, "top": {"id": "u_ecc1175487", "type": "limit", "scope": "company", "about_event_ids": [], "entity": "g_uk_second_approval", "hypothesis": "Anything from the UK subsidiary needs a second approval from the controller before it is booked.", "hypothesis_confidence": 0.0, "spoken_question": "Does the second approval from the controller apply only to Ltd invoices, or to every subsidiary?", "priority": 0.85, "status": "open", "created_t": 1791096434240.864, "expires_t": null, "moment": {"session_id": "s_e7c397047833", "keyframe_ids": ["s_e7c397047833_15"], "t": 1791096331.2, "utterance_ids": ["u_a11aa628"]}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {"origin": "builder", "probe": "scope", "var": "purchase_invoice.company", "literal": "Ltd", "label": "Company", "worded": true}}, "_at": 1791096486299.4922}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 4", "_at": 1791096486299.577}
+{"dir": "s2c", "type": "say", "id": "debrief-7", "text": "Got it. You changed the expense head from Tools and Small Equipment to Plants and Machineries. What on the invoice tells you it counts as capex?", "kind": "debrief", "lang": "en", "_at": 1791096486899.7441}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 6, "_at": 1791096506511.179}
+{"dir": "s2c", "type": "say", "id": "teachback-8-0", "text": "Got it.", "kind": "teachback", "lang": "en", "_at": 1791096508898.396}
+{"dir": "s2c", "type": "say", "id": "teachback-8-1", "text": "I open the supplier invoice and review what it's for.", "kind": "teachback", "lang": "en", "step_id": "s1", "_at": 1791096508898.612}
+{"dir": "s2c", "type": "say", "id": "teachback-8-2", "text": "If the equipment is over 5,000, that's capex per Erika — so I change the Expense Head from the default small-tools account to Plants and Machineries, never small tools.", "kind": "teachback", "lang": "en", "step_id": "s2", "_at": 1791096508898.864}
+{"dir": "s2c", "type": "say", "id": "teachback-8-3", "text": "I also switch the Cost Center from Administration to Production to match.", "kind": "teachback", "lang": "en", "step_id": "s3", "_at": 1791096508899.043}
+{"dir": "s2c", "type": "say", "id": "teachback-8-4", "text": "I save the corrected invoice,", "kind": "teachback", "lang": "en", "step_id": "s4", "_at": 1791096508899.1301}
+{"dir": "s2c", "type": "say", "id": "teachback-8-5", "text": "then return to the list and pick the next item.", "kind": "teachback", "lang": "en", "step_id": "s5", "_at": 1791096508899.323}
+{"dir": "s2c", "type": "say", "id": "teachback-8-6", "text": "For the suspect invoice, I compare it against earlier invoices from the same supplier;", "kind": "teachback", "lang": "en", "step_id": "s6", "_at": 1791096508899.507}
+{"dir": "s2c", "type": "say", "id": "teachback-8-7", "text": "if the amount matches one already paid, Erika says this supplier double-bills every December, so I put it On Hold instead of booking it,", "kind": "teachback", "lang": "en", "step_id": "s7", "_at": 1791096508899.6938}
+{"dir": "s2c", "type": "say", "id": "teachback-8-8", "text": "and save so the hold sticks.", "kind": "teachback", "lang": "en", "step_id": "s8", "_at": 1791096508899.885}
+{"dir": "s2c", "type": "say", "id": "teachback-8-9", "text": "Finally, for the subsidiary invoice I identify which company it's from;", "kind": "teachback", "lang": "en", "step_id": "s9", "_at": 1791096508900.055}
+{"dir": "s2c", "type": "say", "id": "teachback-8-10", "text": "anything from the UK subsidiary needs second approval from the controller before booking. Is that how it works?", "kind": "teachback", "lang": "en", "step_id": "s10", "_at": 1791096508900.116}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 7, "_at": 1791096570567.695}
+{"dir": "s2c", "type": "say", "id": "debrief-9", "text": "Got it — the rule now says: New equipment with an amount over 5,000 is capex: it must never be booked to small tools — use Plants and Machineries with the Production cost center. Maintenance and repairs stay an expense even above 5,000. Anything else, or is that how it works?", "kind": "debrief", "lang": "en", "_at": 1791096571166.775}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 8, "_at": 1791096588763.4182}
+{"dir": "s2c", "type": "say", "id": "debrief-10", "text": "That's everything. The map is published for learners.", "kind": "debrief", "lang": "en", "_at": 1791096589366.423}

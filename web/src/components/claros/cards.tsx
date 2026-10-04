@@ -10,10 +10,12 @@ import { acceptRequest, getWorkflow } from "@/lib/api";
 import { EXPERT } from "@/lib/mock";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { timeAgo, useUi } from "./i18n";
 import { AvatarStack, ExpertAvatar, ScreenThumb } from "./primitives";
 import { ZoomShot } from "./Lightbox";
-import { sortedSteps } from "./mapUtils";
+import { firstName, sortedSteps } from "./mapUtils";
 
 /* ---------------- full maps for a list of summaries (thumbnails + honest status) ---------------- */
 
@@ -40,16 +42,10 @@ export function mapReady(w: Pick<WorkflowSummary, "coverage">, map?: WorkMap) {
 export function MapStatus({ ready, className }: { ready: boolean; className?: string }) {
   const { t } = useUi();
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-[4px] border-2 border-ink px-2 py-0.5 text-sm font-extrabold text-on-fill",
-        ready ? "bg-ready" : "hatch-partial",
-        className,
-      )}
-    >
-      {ready ? <CheckCircle2 className="size-4" aria-hidden /> : <CircleDashed className="size-4" aria-hidden />}
+    <Badge variant={ready ? "ready" : "partial"} className={cn("px-2.5 py-1 text-base font-extrabold", className)}>
+      {ready ? <CheckCircle2 aria-hidden /> : <CircleDashed aria-hidden />}
       {ready ? t("status.ready") : t("status.second")}
-    </span>
+    </Badge>
   );
 }
 
@@ -67,7 +63,7 @@ export function MapCard({ w, map }: { w: WorkflowSummary; map?: WorkMap }) {
   const hero = heroStep(map);
   const href = `/map/${encodeURIComponent(w.workflow_id)}`;
   return (
-    <article className="press-within relative flex h-full flex-col overflow-hidden rounded-base border-2 border-ink bg-card shadow-hard">
+    <Card className="press-within relative h-full gap-0 overflow-hidden py-0">
       <div className="aspect-[16/10] overflow-hidden border-b-2 border-ink bg-paper-2">
         {hero ? (
           <ScreenThumb keyframeId={hero.moment?.keyframe_ids?.[0]} title={hero.state_signature.view ?? w.name} rounded={false} className="h-full border-0" />
@@ -88,7 +84,7 @@ export function MapCard({ w, map }: { w: WorkflowSummary; map?: WorkMap }) {
           <ArrowRight className="ml-auto size-6 text-ink" aria-hidden />
         </div>
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -105,13 +101,18 @@ export function RequestCard({ r }: { r: CaptureRequest }) {
     router.push(`/capture/${res.data.session_id}?request=${r.id}`);
   };
   const kf = r.moment?.keyframe_ids?.[0];
+  const others = (r.requested_by_all ?? []).filter((u) => u.id !== r.requested_by.id);
   return (
-    <article className="grid gap-4 rounded-base border-2 border-ink bg-card p-4 shadow-hard sm:grid-cols-[minmax(0,240px)_1fr] lg:grid-cols-1 2xl:grid-cols-[minmax(0,260px)_1fr]">
+    <Card className="grid gap-4 p-4 sm:grid-cols-[minmax(0,240px)_1fr] lg:grid-cols-1 2xl:grid-cols-[minmax(0,260px)_1fr]">
       <ZoomShot group={`req-${r.id}`} frames={[{ id: kf ?? r.id, keyframeId: kf, title: r.workflow_hint, caption: `${r.requested_by.name} · ${r.workflow_hint}` }]} label={t("req.moment")} />
       <div className="flex min-w-0 flex-col">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base">
-          <ExpertAvatar user={r.requested_by} size={30} index={2} />
-          <span className="font-extrabold">{r.requested_by.name}</span>
+          {others.length ? (
+            <AvatarStack users={[r.requested_by, ...others]} size={30} max={3} />
+          ) : (
+            <ExpertAvatar user={r.requested_by} size={30} index={2} />
+          )}
+          <span className="font-extrabold">{others.length ? t("req.others", { name: firstName(r.requested_by.name), n: (r.count ?? others.length + 1) - 1 }) : r.requested_by.name}</span>
           <span className="inline-flex items-center gap-1 text-ink-2">
             <Clock className="size-4" aria-hidden /> {timeAgo(t, r.created_at)}
           </span>
@@ -124,13 +125,11 @@ export function RequestCard({ r }: { r: CaptureRequest }) {
               {t("eh.record")}
             </Button>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-[4px] border-2 border-ink bg-paper-2 px-2 py-0.5 text-sm font-bold">
-              {t(`req.status.${r.status}` as "req.status.accepted")}
-            </span>
+            <Badge variant="neutral">{t(`req.status.${r.status}` as "req.status.accepted")}</Badge>
           )}
         </div>
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -144,21 +143,18 @@ export function RequestStatus({ r }: { r: CaptureRequest }) {
     <li className="flex flex-col gap-3 rounded-base border-2 border-ink bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <p className="min-w-0 text-lg font-extrabold leading-snug">{r.workflow_hint}</p>
-        <span className="shrink-0 text-sm font-semibold text-ink-2">{timeAgo(t, r.created_at)}</span>
+        <span className="shrink-0 text-right text-sm font-semibold text-ink-2">
+          {(r.count ?? 1) > 1 ? <span className="block font-bold text-ink">{t("req.asked.n", { n: r.count! })}</span> : null}
+          {timeAgo(t, r.created_at)}
+        </span>
       </div>
       <ol className="flex items-center gap-1.5" aria-label={labels[stage]}>
         {labels.map((l, i) => (
           <li key={l} className="flex items-center gap-1.5">
-            <span
-              aria-current={i === stage ? "step" : undefined}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-[4px] border-2 border-ink px-2 py-0.5 text-sm font-bold",
-                i < stage ? "bg-ready text-on-fill" : i === stage ? "bg-ink text-paper" : "border-dashed bg-card text-ink-2",
-              )}
-            >
-              {i < stage ? <Check className="size-4" aria-hidden /> : null}
+            <Badge aria-current={i === stage ? "step" : undefined} variant={i < stage ? "ready" : i === stage ? "ink" : "dashed"} className={cn(i > stage && "text-ink-2")}>
+              {i < stage ? <Check aria-hidden /> : null}
               {l}
-            </span>
+            </Badge>
             {i < labels.length - 1 ? <span aria-hidden className="h-0.5 w-3 bg-ink" /> : null}
           </li>
         ))}

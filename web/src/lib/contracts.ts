@@ -229,6 +229,10 @@ export interface CaptureRequest {
   status: "open" | "accepted" | "recorded" | "done";
   created_at: number;
   workflow_id?: string | null;
+  /** duplicate asks merge into one request */
+  requested_by_all?: User[];
+  count?: number;
+  merged?: boolean;
 }
 
 export interface MasteryNode {
@@ -288,6 +292,8 @@ export interface HelloMsg {
   user: User;
   lang: Lang;
   workflow_id?: string | null;
+  /** expert voice clips are kept only with explicit consent (capture start) */
+  consent?: { voice_clips: boolean };
 }
 export interface ClockSyncOut {
   type: "clock_sync";
@@ -341,7 +347,7 @@ export interface NudgeOption { id: string; label: string; /** experts-differ: wh
 export interface NudgeMsg {
   type: "nudge"; id: string; step_id?: string | null; kind: NudgeKind; question: string;
   options: NudgeOption[]; allow_dont_know: boolean;
-  reference?: { keyframe_ids: string[]; quote?: { text: string; speaker: string; lang: string; translation?: string | null } | null } | null;
+  reference?: { keyframe_ids: string[]; quote?: { text: string; speaker: string; lang: string; translation?: string | null; audio_clip?: string | null } | null } | null;
   spoken?: string; lang?: string;
 }
 export interface NudgeResultMsg {
@@ -363,12 +369,27 @@ export type ClientMsg =
 
 export interface EventsMsg { type: "events"; items: ScreenEvent[] }
 export interface LedgerMsg { type: "ledger"; open: number; saved_for_later: number; top?: Unknown | null }
-export interface AskMsg { type: "ask"; unknown_id: string; text: string }
+/** v2.2 "How Claros decided": when it chose to speak and what it noticed */
+export interface Why {
+  when: string;
+  what: string;
+  signals?: { silence_ms?: number; screen_settled_ms?: number; typing?: boolean; boundary?: string };
+  scope?: "company" | "personal_judgment";
+}
+export interface AskMsg { type: "ask"; unknown_id: string; text: string; why?: Why | null }
+export interface LookedUpMsg {
+  type: "looked_up"; unknown_id?: string; unknown_summary: string; answer: string;
+  source: { kind: "app_docs" | "onet" | "general"; title: string; url?: string | null };
+}
+export interface SignalsMsg {
+  type: "signals"; typing: boolean; speaking: boolean;
+  screen: "changing" | "settled" | "away"; gate: "quiet" | "ready" | "asking";
+}
 export interface InterveneMsg {
   type: "intervene"; guardrail_id: string; text: string; moment: Moment;
   /** learner-language rule text + expert quote line ("Anna said: «…»"), original quote kept for display */
   rule?: string; quote?: string | null; lang?: string; trigger?: string;
-  quote_original?: { id: string; speaker: string; lang: string; text: string } | null;
+  quote_original?: { id: string; speaker: string; lang: string; text: string; audio_clip?: string | null } | null;
   /** true = the one firmer reminder on save/submit of a still-violating record */
   escalated?: boolean;
 }
@@ -384,12 +405,12 @@ export interface ServerControlMsg { type: "control"; action: ControlAction }
 export interface ClockSyncIn { type: "clock_sync"; client_t: number; server_t: number }
 
 export type SayKind = "ask" | "intervene" | "debrief" | "teachback" | "tutor" | "ack";
-export interface SayMsg { type: "say"; id: string; text: string; kind: SayKind; step_id?: string | null; lang?: string }
+export interface SayMsg { type: "say"; id: string; text: string; kind: SayKind; step_id?: string | null; lang?: string; why?: Why | null }
 
 export type ServerMsg =
   | SayMsg | EventsMsg | LedgerMsg | AskMsg | InterveneMsg | ContextUpdateMsg
   | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn | ServerControlMsg | PhaseMsg
-  | NudgeMsg | NudgeResultMsg;
+  | NudgeMsg | NudgeResultMsg | LookedUpMsg | SignalsMsg;
 
 export type ServerMsgType = ServerMsg["type"];
 export type ServerMsgOf<T extends ServerMsgType> = Extract<ServerMsg, { type: T }>;

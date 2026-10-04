@@ -1,0 +1,111 @@
+{"dir": "c2s", "at": 1791096790964.247, "type": "hello", "session_id": "s_f195ec47588d", "mode": "capture", "user": {"id": "expert2@ostwind.example", "name": "Max Mertens", "role": "expert"}, "lang": "en"}
+{"dir": "c2s", "at": 1791096790964.29, "type": "clock_sync", "client_t": 1791096790964.289}
+{"dir": "c2s", "at": 1791096829601.3801, "type": "hello", "session_id": "s_f195ec47588d", "mode": "debrief", "user": {"id": "expert2@ostwind.example", "name": "Max Mertens", "role": "expert"}, "lang": "en", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae"}
+{"dir": "c2s", "at": 1791096831876.331, "type": "agent_state", "t": 1791096831876.3298, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096835247.478, "type": "utterance", "t_start": 1791096831876.38, "t_end": 1791096835247.4539, "role": "agent", "text": "Who confirms a held invoice, and what un-holds it?", "lang": "en", "event_id": "a_f8d0bd5e"}
+{"dir": "c2s", "at": 1791096835247.5671, "type": "agent_state", "t": 1791096835247.5671, "mode": "listening"}
+{"dir": "c2s", "at": 1791096839133.25, "type": "vad", "t": 1791096839133.238, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096845134.561, "type": "vad", "t": 1791096845134.555, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096845134.7, "type": "utterance", "t_start": 1791096839133.238, "t_end": 1791096845134.555, "role": "user", "text": "Any supplier: if the amount matches an invoice we already paid, put it on hold and ask the supplier. I release it myself once they confirm it's not a duplicate.", "lang": "en", "event_id": "u_b9841761"}
+{"dir": "c2s", "at": 1791096847830.786, "type": "agent_state", "t": 1791096847830.7842, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096853511.965, "type": "utterance", "t_start": 1791096847830.835, "t_end": 1791096853511.9412, "role": "agent", "text": "Got it. You sent that invoice for a second approval — why does it need two?", "lang": "en", "event_id": "a_d686bca5"}
+{"dir": "c2s", "at": 1791096853512.054, "type": "agent_state", "t": 1791096853512.053, "mode": "listening"}
+{"dir": "c2s", "at": 1791096857374.6921, "type": "vad", "t": 1791096857374.688, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096861575.7817, "type": "vad", "t": 1791096861575.7717, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096861576.27, "type": "utterance", "t_start": 1791096857374.688, "t_end": 1791096861575.7717, "role": "user", "text": "Every invoice of the UK company goes to Frank, the controller, for second approval.", "lang": "en", "event_id": "u_193a4233"}
+{"dir": "c2s", "at": 1791096864345.038, "type": "agent_state", "t": 1791096864345.0352, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096869036.355, "type": "utterance", "t_start": 1791096864345.106, "t_end": 1791096869036.295, "role": "agent", "text": "Got it. When is Production the right cost center versus the default one?", "lang": "en", "event_id": "a_723e86e0"}
+{"dir": "c2s", "at": 1791096869036.6367, "type": "agent_state", "t": 1791096869036.633, "mode": "listening"}
+{"dir": "c2s", "at": 1791096872910.877, "type": "vad", "t": 1791096872910.8733, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096877111.709, "type": "vad", "t": 1791096877111.705, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096877111.807, "type": "utterance", "t_start": 1791096872910.8733, "t_end": 1791096877111.705, "role": "user", "text": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.", "lang": "en", "event_id": "u_4e240188"}
+{"dir": "c2s", "at": 1791096879473.982, "type": "agent_state", "t": 1791096879473.98, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096883505.108, "type": "utterance", "t_start": 1791096879474.025, "t_end": 1791096883505.085, "role": "agent", "text": "Got it. Why did you choose that vendor for this invoice?", "lang": "en", "event_id": "a_e2190646"}
+{"dir": "c2s", "at": 1791096883505.186, "type": "agent_state", "t": 1791096883505.185, "mode": "listening"}
+{"dir": "c2s", "at": 1791096887544.4382, "type": "vad", "t": 1791096887544.4329, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096889345.616, "type": "vad", "t": 1791096889345.6099, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096889345.7083, "type": "utterance", "t_start": 1791096887544.4329, "t_end": 1791096889345.6099, "role": "user", "text": "Yes, that's how I do it.", "lang": "en", "event_id": "u_ec55d267"}
+{"dir": "c2s", "at": 1791096891046.976, "type": "agent_state", "t": 1791096891046.9749, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096901018.1948, "type": "utterance", "t_start": 1791096891047.024, "t_end": 1791096901018.163, "role": "agent", "text": "Got it. You moved it from small tools to Plants and Machineries. Does that 5,000 capex rule apply to other equipment categories too, or only compressors and the like?", "lang": "en", "event_id": "a_20081cd2"}
+{"dir": "c2s", "at": 1791096901018.2952, "type": "agent_state", "t": 1791096901018.293, "mode": "listening"}
+{"dir": "c2s", "at": 1791096904897.595, "type": "vad", "t": 1791096904897.591, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096909098.797, "type": "vad", "t": 1791096909098.7917, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096909098.897, "type": "utterance", "t_start": 1791096904897.591, "t_end": 1791096909098.7917, "role": "user", "text": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.", "lang": "en", "event_id": "u_831851aa"}
+{"dir": "c2s", "at": 1791096913621.575, "type": "agent_state", "t": 1791096913621.5732, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096918312.738, "type": "utterance", "t_start": 1791096913621.627, "t_end": 1791096918312.717, "role": "agent", "text": "Got it. Let me walk you through how I handle these purchase invoices.", "lang": "en", "event_id": "a_e05e01d7"}
+{"dir": "c2s", "at": 1791096918312.84, "type": "agent_state", "t": 1791096918312.8389, "mode": "listening"}
+{"dir": "c2s", "at": 1791096918312.8928, "type": "agent_state", "t": 1791096918312.8928, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096922343.096, "type": "utterance", "t_start": 1791096918312.9111, "t_end": 1791096922343.07, "role": "agent", "text": "First I open the supplier invoice and review what it's for.", "lang": "en", "event_id": "a_6f4c60bb"}
+{"dir": "c2s", "at": 1791096922343.2031, "type": "agent_state", "t": 1791096922343.2021, "mode": "listening"}
+{"dir": "c2s", "at": 1791096922343.247, "type": "agent_state", "t": 1791096922343.247, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096933304.435, "type": "utterance", "t_start": 1791096922343.272, "t_end": 1791096933304.408, "role": "agent", "text": "If it's equipment over 5,000, I change the Expense Head from the default small-tools account to the capital equipment account — Erika's rule is that capex never gets booked to small tools.", "lang": "en", "event_id": "a_4ba3925d"}
+{"dir": "c2s", "at": 1791096933304.545, "type": "agent_state", "t": 1791096933304.544, "mode": "listening"}
+{"dir": "c2s", "at": 1791096933304.59, "type": "agent_state", "t": 1791096933304.589, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096938655.727, "type": "utterance", "t_start": 1791096933304.607, "t_end": 1791096938655.7021, "role": "agent", "text": "I also switch the Cost Center from Administration to Production to match the capex treatment.", "lang": "en", "event_id": "a_553fbaa0"}
+{"dir": "c2s", "at": 1791096938655.816, "type": "agent_state", "t": 1791096938655.815, "mode": "listening"}
+{"dir": "c2s", "at": 1791096938655.869, "type": "agent_state", "t": 1791096938655.867, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096941036.995, "type": "utterance", "t_start": 1791096938655.9092, "t_end": 1791096941036.969, "role": "agent", "text": "Then I save the corrected invoice.", "lang": "en", "event_id": "a_203eca95"}
+{"dir": "c2s", "at": 1791096941037.087, "type": "agent_state", "t": 1791096941037.086, "mode": "listening"}
+{"dir": "c2s", "at": 1791096941037.144, "type": "agent_state", "t": 1791096941037.142, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096945398.31, "type": "utterance", "t_start": 1791096941037.185, "t_end": 1791096945398.284, "role": "agent", "text": "Back on the Purchase Invoice list, I scan for the next item.", "lang": "en", "event_id": "a_81c42fb9"}
+{"dir": "c2s", "at": 1791096945398.405, "type": "agent_state", "t": 1791096945398.403, "mode": "listening"}
+{"dir": "c2s", "at": 1791096945398.463, "type": "agent_state", "t": 1791096945398.461, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096954709.6628, "type": "utterance", "t_start": 1791096945398.507, "t_end": 1791096954709.6372, "role": "agent", "text": "If an invoice looks suspicious, I compare it against earlier invoices from the same supplier — Erika notes this supplier double-bills every December with the same amount.", "lang": "en", "event_id": "a_a2e66667"}
+{"dir": "c2s", "at": 1791096954709.763, "type": "agent_state", "t": 1791096954709.7622, "mode": "listening"}
+{"dir": "c2s", "at": 1791096954709.8171, "type": "agent_state", "t": 1791096954709.815, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096962700.9949, "type": "utterance", "t_start": 1791096954709.858, "t_end": 1791096962700.969, "role": "agent", "text": "Suspected duplicates go On Hold instead of being booked, pending supplier confirmation, with the approver releasing the hold. Did I get that right?", "lang": "en", "event_id": "a_5c513b5d"}
+{"dir": "c2s", "at": 1791096962701.085, "type": "agent_state", "t": 1791096962701.084, "mode": "listening"}
+{"dir": "c2s", "at": 1791096966792.5889, "type": "vad", "t": 1791096966792.585, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096971893.801, "type": "vad", "t": 1791096971893.79, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096971893.919, "type": "utterance", "t_start": 1791096966792.585, "t_end": 1791096971893.79, "role": "user", "text": "One detail: maintenance and repairs stay an expense even above 5,000 — only new equipment is capex.", "lang": "en", "event_id": "u_626bae95"}
+{"dir": "c2s", "at": 1791096974195.9482, "type": "agent_state", "t": 1791096974195.946, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096978557.101, "type": "utterance", "t_start": 1791096974195.992, "t_end": 1791096978557.075, "role": "agent", "text": "I couldn't tell which step to change. Which step do you mean?", "lang": "en", "event_id": "a_e4f09ab8"}
+{"dir": "c2s", "at": 1791096978557.187, "type": "agent_state", "t": 1791096978557.186, "mode": "listening"}
+{"dir": "c2s", "at": 1791096982627.3767, "type": "vad", "t": 1791096982627.372, "speaking": true, "score": 0.9}
+{"dir": "c2s", "at": 1791096984428.543, "type": "vad", "t": 1791096984428.5388, "speaking": false, "score": 0.1}
+{"dir": "c2s", "at": 1791096984428.6443, "type": "utterance", "t_start": 1791096982627.372, "t_end": 1791096984428.5388, "role": "user", "text": "Yes, that's how I do it.", "lang": "en", "event_id": "u_326b8feb"}
+{"dir": "c2s", "at": 1791096985212.273, "type": "agent_state", "t": 1791096985212.2712, "mode": "speaking"}
+{"dir": "c2s", "at": 1791096990233.325, "type": "utterance", "t_start": 1791096985212.317, "t_end": 1791096990233.301, "role": "agent", "text": "Thanks — the map is published. A few points still need a second run.", "lang": "en", "event_id": "a_3cf8a9f6"}
+{"dir": "c2s", "at": 1791096990233.4133, "type": "agent_state", "t": 1791096990233.412, "mode": "listening"}
+{"dir": "s2c", "type": "signals", "typing": false, "speaking": false, "screen": "settled", "gate": "ready", "_at": 1791096790989.307}
+{"dir": "s2c", "type": "clock_sync", "client_t": 1791096790964.289, "server_t": 1791096790964.622, "_at": 1791096790989.449}
+{"dir": "s2c", "type": "phase", "phase": "debrief", "workflow_id": null, "_at": 1791096790993.376}
+{"dir": "s2c", "type": "status", "level": "info", "text": "debrief_ready", "_at": 1791096790993.423}
+{"dir": "s2c", "type": "ask", "unknown_id": "phase-debrief", "text": "Thanks! Let's do a quick debrief.", "_at": 1791096790993.554}
+{"dir": "s2c", "type": "ledger", "open": 0, "saved_for_later": 1, "top": null, "_at": 1791096790993.7349}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 0", "_at": 1791096791004.3289}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 10, "_at": 1791096829262.0051}
+{"dir": "s2c", "type": "status", "level": "info", "text": "Work map built: 10 steps, 3 guardrails, 9 open questions.", "_at": 1791096829262.11}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 11, "_at": 1791096831875.827}
+{"dir": "s2c", "type": "ledger", "open": 11, "saved_for_later": 2, "top": {"id": "u_hold_release", "type": "stop_and_ask", "scope": "company", "about_event_ids": [], "entity": "purchase_invoice", "hypothesis": "Held duplicate invoices are released once the supplier confirms the invoice is genuine", "hypothesis_confidence": 0.6, "spoken_question": "Who confirms a held invoice, and what un-holds it?", "priority": 2.0, "status": "asked", "created_t": 0.0, "expires_t": null, "moment": {"session_id": "s_e7c397047833", "keyframe_ids": ["s_e7c397047833_8"], "t": 1791096288.7, "utterance_ids": ["u_9cef689f"]}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791096831876.169}
+{"dir": "s2c", "type": "say", "id": "debrief-16", "text": "Who confirms a held invoice, and what un-holds it?", "kind": "debrief", "lang": "en", "_at": 1791096831876.2969}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 11", "_at": 1791096831876.4749}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 12, "_at": 1791096847228.5178}
+{"dir": "s2c", "type": "ledger", "open": 10, "saved_for_later": 1, "top": {"id": "u_f760146d20", "type": "stop_and_ask", "scope": "personal_judgment", "about_event_ids": ["ev_01287d09a9"], "entity": "ACC-PINV-2026-00029", "hypothesis": "invoices over 5,000 require second approval", "hypothesis_confidence": 0.2, "spoken_question": "You sent that invoice for a second approval — why does it need two?", "priority": 0.4394, "status": "asked", "created_t": 1791096332738.027, "expires_t": 1791096395858.064, "moment": {"session_id": "s_e7c397047833", "keyframe_ids": ["s_e7c397047833_15"], "t": 1791096331202.123, "utterance_ids": []}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791096847228.7139}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 10", "_at": 1791096847229.145}
+{"dir": "s2c", "type": "say", "id": "debrief-17", "text": "Got it. You sent that invoice for a second approval — why does it need two?", "kind": "debrief", "lang": "en", "_at": 1791096847830.7358}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 13, "_at": 1791096863744.931}
+{"dir": "s2c", "type": "ledger", "open": 9, "saved_for_later": 1, "top": {"id": "u_cost_center_condition", "type": "why", "scope": "company", "about_event_ids": [], "entity": "purchase_invoice.cost_center", "hypothesis": "Capex purchases always go to the Production cost center, mirroring the expense head rule", "hypothesis_confidence": 0.7, "spoken_question": "When is Production the right cost center versus the default one?", "priority": 2.0, "status": "asked", "created_t": 0.0, "expires_t": null, "moment": {"session_id": "s_e7c397047833", "keyframe_ids": ["s_e7c397047833_3"], "t": 1791096257.4, "utterance_ids": ["u_b58bcf46"]}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791096863745.12}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 9", "_at": 1791096863745.398}
+{"dir": "s2c", "type": "say", "id": "debrief-18", "text": "Got it. When is Production the right cost center versus the default one?", "kind": "debrief", "lang": "en", "_at": 1791096864344.9941}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 14, "_at": 1791096878871.2002}
+{"dir": "s2c", "type": "ledger", "open": 8, "saved_for_later": 1, "top": {"id": "un1", "type": "why", "scope": "personal_judgment", "about_event_ids": ["ev_c9e014eb61"], "entity": "purchase_invoice.supplier", "hypothesis": "Supplier was selected as part of normal invoice retrieval, no special vendor choice involved", "hypothesis_confidence": 0.6, "spoken_question": "Why did you choose that vendor for this invoice?", "priority": 2.0, "status": "asked", "created_t": 0.0, "expires_t": null, "moment": {"session_id": "s_f195ec47588d", "keyframe_ids": ["s_f195ec47588d_5"], "t": 1791096688.5, "utterance_ids": ["a_2ddc3286"]}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791096878871.358}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 8", "_at": 1791096878871.469}
+{"dir": "s2c", "type": "say", "id": "debrief-19", "text": "Got it. Why did you choose that vendor for this invoice?", "kind": "debrief", "lang": "en", "_at": 1791096879473.95}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 15, "_at": 1791096890446.046}
+{"dir": "s2c", "type": "ledger", "open": 7, "saved_for_later": 1, "top": {"id": "u_003fb0b4b5", "type": "why", "scope": "personal_judgment", "about_event_ids": ["ev_c9e014eb61"], "entity": "ACC-PINV-2026-00027", "hypothesis": "purchase invoices must name the actual vendor", "hypothesis_confidence": 0.2, "spoken_question": "You set the supplier on that purchase invoice — why that vendor?", "priority": 0.5251, "status": "deferred", "created_t": 1791096688458.879, "expires_t": 1791096750446.615, "moment": {"session_id": "s_f195ec47588d", "keyframe_ids": ["s_f195ec47588d_5"], "t": 1791096683230.5068, "utterance_ids": []}, "answer_utterance_ids": [], "resolution": null, "resolution_source": null, "extracted_rule": null, "mandatory": false, "meta": {}}, "_at": 1791096890446.2678}
+{"dir": "s2c", "type": "context_update", "text": "Claros live context — Open questions: 7", "_at": 1791096890446.457}
+{"dir": "s2c", "type": "say", "id": "debrief-20", "text": "Got it. You moved it from small tools to Plants and Machineries. Does that 5,000 capex rule apply to other equipment categories too, or only compressors and the like?", "kind": "debrief", "lang": "en", "_at": 1791096891046.9412}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 16, "_at": 1791096911813.6792}
+{"dir": "s2c", "type": "say", "id": "teachback-21-0", "text": "Got it. Let me walk you through how I handle these purchase invoices.", "kind": "teachback", "lang": "en", "_at": 1791096913621.5361}
+{"dir": "s2c", "type": "say", "id": "teachback-21-1", "text": "First I open the supplier invoice and review what it's for.", "kind": "teachback", "lang": "en", "step_id": "s1", "_at": 1791096913621.6729}
+{"dir": "s2c", "type": "say", "id": "teachback-21-2", "text": "If it's equipment over 5,000, I change the Expense Head from the default small-tools account to the capital equipment account — Erika's rule is that capex never gets booked to small tools.", "kind": "teachback", "lang": "en", "step_id": "s2", "_at": 1791096913621.86}
+{"dir": "s2c", "type": "say", "id": "teachback-21-3", "text": "I also switch the Cost Center from Administration to Production to match the capex treatment.", "kind": "teachback", "lang": "en", "step_id": "s3", "_at": 1791096913623.2231}
+{"dir": "s2c", "type": "say", "id": "teachback-21-4", "text": "Then I save the corrected invoice.", "kind": "teachback", "lang": "en", "step_id": "s4", "_at": 1791096913623.3862}
+{"dir": "s2c", "type": "say", "id": "teachback-21-5", "text": "Back on the Purchase Invoice list, I scan for the next item.", "kind": "teachback", "lang": "en", "step_id": "s5", "_at": 1791096913623.529}
+{"dir": "s2c", "type": "say", "id": "teachback-21-6", "text": "If an invoice looks suspicious, I compare it against earlier invoices from the same supplier — Erika notes this supplier double-bills every December with the same amount.", "kind": "teachback", "lang": "en", "step_id": "s6", "_at": 1791096913623.685}
+{"dir": "s2c", "type": "say", "id": "teachback-21-7", "text": "Suspected duplicates go On Hold instead of being booked, pending supplier confirmation, with the approver releasing the hold. Did I get that right?", "kind": "teachback", "lang": "en", "step_id": "s7", "_at": 1791096913623.757}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 17, "_at": 1791096973594.441}
+{"dir": "s2c", "type": "say", "id": "debrief-22", "text": "I couldn't tell which step to change. Which step do you mean?", "kind": "debrief", "lang": "en", "_at": 1791096974195.916}
+{"dir": "s2c", "type": "map_updated", "workflow_id": "wf_purchase_invoice_processing_erpnext_75c2ae", "version": 18, "_at": 1791096984610.351}
+{"dir": "s2c", "type": "say", "id": "debrief-23", "text": "Thanks — the map is published. A few points still need a second run.", "kind": "debrief", "lang": "en", "_at": 1791096985212.241}

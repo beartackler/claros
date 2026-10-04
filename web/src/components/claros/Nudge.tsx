@@ -41,6 +41,7 @@ export function useNudges({ mock, map }: { mock: boolean; map: WorkMap | null })
     for (let i = log.length - 1; i >= 0 && log[i] !== lastSeen.current; i--) fresh.unshift(log[i]);
     lastSeen.current = log.at(-1) ?? null;
     for (const m of fresh) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (m.type === "nudge") setSt((s) => ({ ...s, nudge: m, picked: null, result: null }));
       else if (m.type === "nudge_result")
         setSt((s) => {
@@ -94,6 +95,7 @@ export function useNudges({ mock, map }: { mock: boolean; map: WorkMap | null })
     return () => window.removeEventListener("keydown", onKey);
   }, [st.nudge, st.picked, st.stop, respond]);
 
+  // eslint-disable-next-line react-hooks/refs
   return { ...st, respond, dismiss, clearStop, answered: counts.current.answered };
 }
 
@@ -166,7 +168,7 @@ function refQuote(map: WorkMap, step: Step | undefined, n: NudgeMsg, lang: UiLan
       t: 0,
       session_id: "",
       source: "live",
-      audio_clip: null,
+      audio_clip: q.audio_clip ?? null,
     };
   }
   return step ? quotesFor(map, step.decision?.reason_quote_ids)[0] ?? null : null;
@@ -289,7 +291,18 @@ function StopCard({ map, msg, onDone, inPip, className }: { map: WorkMap; msg: I
   const { t, lang } = useUi();
   const step = map.steps.find((s) => s.guardrail_ids.includes(msg.guardrail_id));
   const guard = step ? guardrailsFor(map, step).find((g) => g.id === msg.guardrail_id) ?? guardrailsFor(map, step)[0] : undefined;
-  const quote = guard ? quotesFor(map, guard.quote_ids)[0] : undefined;
+  // the expert's original words as the server sent them (with their voice clip when consented)
+  const qo = msg.quote_original;
+  const mapQuote = guard ? (qo ? map.quotes.find((x) => x.id === qo.id) : undefined) ?? quotesFor(map, guard.quote_ids)[0] : undefined;
+  const quote: Quote | undefined = qo
+    ? {
+        ...(mapQuote ?? { id: qo.id, speaker_id: map.experts.find((e) => e.name === qo.speaker)?.id ?? qo.speaker, translations: {} as Quote["translations"], t: 0, session_id: "", source: "live" as const }),
+        speaker: qo.speaker,
+        lang: qo.lang as Quote["lang"],
+        text: qo.text,
+        audio_clip: qo.audio_clip ?? mapQuote?.audio_clip ?? null,
+      }
+    : mapQuote;
   const who = quote ? expertById(map, quote.speaker_id) : expertById(map, guard?.experts[0] ?? "");
   const frames = refFrames(map, step, msg.moment?.keyframe_ids?.length ? msg.moment.keyframe_ids : guard?.evidence.flatMap((e) => e.keyframe_ids).slice(0, 1), `${firstName(who.name)} · ${step?.title ?? ""}`);
   const rule = (lang === "en" ? null : msg.rule) || guard?.text || msg.text;
@@ -332,7 +345,7 @@ function mockQuote(map: WorkMap, ids: string[] | undefined, lang: UiLang) {
   return q ? { text: q.text, speaker: firstName(q.speaker), lang: q.lang, translation: q.lang !== lang ? q.translations?.[lang] ?? null : null } : null;
 }
 
-export function mockNudge(kind: MockKind, map: WorkMap, lang: UiLang, t: TFn): ServerMsg | null {
+export function mockNudge(kind: MockKind, map: WorkMap, lang: UiLang, t: TFn, clip?: string | null): ServerMsg | null {
   const id = `mock-${kind}-${Date.now().toString(36)}`;
   const steps = [...map.steps].sort((a, b) => a.order - b.order);
   const judged = steps.find((s) => s.decision?.kind === "judgment" && (s.decision.to_value || s.decision.from_value));
@@ -340,7 +353,14 @@ export function mockNudge(kind: MockKind, map: WorkMap, lang: UiLang, t: TFn): S
   if (kind === "stop") {
     const g = map.guardrails.find((x) => x.evidence.length) ?? map.guardrails[0];
     if (!g) return null;
-    return { type: "intervene", guardrail_id: g.id, text: g.text, moment: g.evidence[0] ?? { session_id: "", keyframe_ids: [], t: 0, utterance_ids: [] } };
+    const q = map.quotes.find((x) => g.quote_ids.includes(x.id));
+    return {
+      type: "intervene",
+      guardrail_id: g.id,
+      text: g.text,
+      moment: g.evidence[0] ?? { session_id: "", keyframe_ids: [], t: 0, utterance_ids: [] },
+      quote_original: q ? { id: q.id, speaker: q.speaker, lang: q.lang, text: q.text, audio_clip: clip ?? q.audio_clip ?? null } : null,
+    };
   }
   if (kind === "confirm") {
     const s = judged ?? steps[0];

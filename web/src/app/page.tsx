@@ -145,7 +145,7 @@ function LearnerStatus() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setLast(readLastSession()), []);
   const reqs = useResource(listRequests, []);
-  const mine = (reqs.data ?? []).filter((r) => r.requested_by.id === LEA.id && !isJunkRequest(r)).sort((a, b) => b.created_at - a.created_at);
+  const mine = (reqs.data ?? []).filter((r) => (r.requested_by.id === LEA.id || (r.requested_by_all ?? []).some((u) => u.id === LEA.id)) && !isJunkRequest(r)).sort((a, b) => b.created_at - a.created_at);
   if (!last && !mine.length) return null;
   return (
     <div className={cn("mt-20 grid items-start gap-12", last && mine.length ? "xl:grid-cols-2" : "")}>

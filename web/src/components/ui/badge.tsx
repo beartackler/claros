@@ -9,7 +9,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-[4px] border-2 border-ink px-2 py-0.5 text-xs font-bold [&>svg]:pointer-events-none [&>svg]:size-3.5 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-claros",
+  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-[4px] border-2 border-ink px-2 py-0.5 text-sm font-bold [&>svg]:pointer-events-none [&>svg]:size-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-claros",
   {
     variants: {
       variant: {
@@ -22,7 +22,7 @@ const badgeVariants = cva(
         missing: "bg-missing text-on-fill",
         expert: "bg-expert text-on-fill",
         /** app / O*NET tags: data, so mono */
-        tag: "bg-paper-2 font-mono text-[11px] text-ink",
+        tag: "bg-paper-2 font-mono text-xs text-ink",
         dashed: "border-dashed bg-card text-ink",
       },
     },

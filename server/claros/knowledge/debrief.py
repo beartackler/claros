@@ -518,6 +518,10 @@ async def word_questions(wm: WorkMap, items: list[Unknown], lang: str) -> None:
 async def prepare(wm: WorkMap, st: "DebriefState", lang: str) -> None:
     """Once per debrief: add probes + gap questions to the map, word every unworded question in one LLM call."""
     st.prepared = True
+    for u in wm.open_unknowns:  # this IS the second run: what an earlier debrief left over gets asked now
+        if (u.meta or {}).get("needs_second_run"):
+            u.status = "open"
+            u.meta = {k: v for k, v in u.meta.items() if k not in ("needs_second_run", "skipped")}
     added = make_probes(wm)
     have = {u.entity for u in wm.open_unknowns if u.status in OPEN_STATUSES} | {u.entity for u in added}
     gaps = [u for u in gap_unknowns(wm) if u.entity not in have and u.type == "why"]

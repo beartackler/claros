@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { Braces, ChevronDown, ChevronLeft, ChevronRight, Download, FileCode2, GalleryVerticalEnd, Link2, Mic, Split } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Download, FileCode2, GalleryVerticalEnd, Mic, Split } from "lucide-react";
 import { Shell } from "@/components/claros/Shell";
 import { useUi, type DictKey } from "@/components/claros/i18n";
 import { AvatarStack, EmptyState, ErrorState, Loading, ScreenThumb, SourceNote, useMediaQuery, useResource } from "@/components/claros/primitives";
@@ -10,10 +11,10 @@ import { KIND, KindChip, type ChipKind } from "@/components/claros/chips";
 import { StepDetail, StepPanel, type Section } from "@/components/claros/StepDetail";
 import { conflictNames } from "@/components/claros/ConflictBanner";
 import { MapStatus, mapReady } from "@/components/claros/cards";
-import { flatOrder, guardrailsFor, hasGuardrail, isJudgment, isUnconfirmed, matches, shortTitle, stepGroups, type MapFilter } from "@/components/claros/mapUtils";
+import { expertById, firstName, flatOrder, guardrailsFor, hasGuardrail, isJudgment, isUnconfirmed, matches, shortTitle, stepGroups, type MapFilter } from "@/components/claros/mapUtils";
 import { useLiveStore } from "@/components/claros/live";
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { createSession, exportUrls, getWorkflow } from "@/lib/api";
 import { EXPERT } from "@/lib/mock";
 import type { Step, WorkMap } from "@/lib/contracts";
@@ -31,7 +32,7 @@ function MapRoute() {
   const { workflowId } = useParams<{ workflowId: string }>();
   const res = useResource(() => getWorkflow(workflowId), [workflowId]);
   return (
-    <Shell back={(role) => (role === "expert" ? { href: "/map", label: "map.back" } : { href: "/", label: "nav.home" })}>
+    <Shell app>
       {res.loading ? (
         <Loading rows={4} />
       ) : res.error ? (
@@ -55,8 +56,19 @@ function NotFound() {
 function WorkMapView({ map: initial, source }: { map: WorkMap; source?: "live" | "mock" }) {
   const { t } = useUi();
   const params = useSearchParams();
-  const wide = useMediaQuery("(min-width: 1280px)");
-  const [map, setMap] = useState(initial);
+  const wide = useMediaQuery("(min-width: 1024px)");
+  // app layout: the page never scrolls; the title collapses as soon as either pane scrolls
+  const [collapsed, setCollapsed] = useState(false);
+  const onPaneScroll = (e: React.UIEvent<HTMLElement>) => {
+    if (!wide) return;
+    const top = e.currentTarget.scrollTop;
+    if (top > 24 && !collapsed) setCollapsed(true);
+    else if (top === 0 && collapsed) {
+      const other = e.currentTarget.id === "step-pane" ? document.getElementById("step-list") : document.getElementById("step-pane");
+      if (!other || other.scrollTop === 0) setCollapsed(false);
+    }
+  };
+  const map = initial;
   const groups = useMemo(() => stepGroups(map), [map]);
   const order = useMemo(() => flatOrder(groups), [groups]);
   const [filter, setFilter] = useState<MapFilter>("all");
@@ -93,7 +105,6 @@ function WorkMapView({ map: initial, source }: { map: WorkMap; source?: "live" |
   const counts = { all: map.steps.length, judgment: map.steps.filter(isJudgment).length, guardrail: map.steps.filter(hasGuardrail).length };
   const idx = order.findIndex((s) => s.id === sel.id);
   const step = idx >= 0 ? order[idx] : null;
-  const setApproved = (id: string, v: boolean) => setMap((m) => ({ ...m, steps: m.steps.map((s) => (s.id === id ? { ...s, approved: v } : s)) }));
   const prev = idx > 0 ? () => openStep(order[idx - 1].id) : undefined;
   const next = idx >= 0 && idx < order.length - 1 ? () => openStep(order[idx + 1].id) : undefined;
 
@@ -104,81 +115,83 @@ function WorkMapView({ map: initial, source }: { map: WorkMap; source?: "live" |
       if (document.getElementById("claros-lightbox")) return;
       const el = e.target as HTMLElement;
       if (el.closest("input,textarea,[role=menu],[role=dialog]")) return;
-      if (e.key === "ArrowDown" && next) (e.preventDefault(), next());
-      if (e.key === "ArrowUp" && prev) (e.preventDefault(), prev());
+      if (e.key === "ArrowDown" && next) {
+        e.preventDefault();
+        next();
+      }
+      if (e.key === "ArrowUp" && prev) {
+        e.preventDefault();
+        prev();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [wide, next, prev]);
 
-  return (
-    <div>
-      <MapHeader map={map} source={source} />
-
-      <div className="mt-10 grid gap-8 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:gap-10 2xl:gap-14">
-        {/* left: the timeline */}
-        <div className="min-w-0">
-          {counts.judgment || counts.guardrail ? (
-            <div role="group" aria-label={t("map.filter.label")} className="mb-5 flex flex-wrap gap-2">
-              {(["all", "judgment", "guardrail"] as const)
-                .filter((f) => f === "all" || counts[f] > 0)
-                .map((f) => {
-                  const Icon = f === "all" ? GalleryVerticalEnd : KIND[f as ChipKind].Icon;
-                  return (
-                    <button
-                      key={f}
-                      type="button"
-                      aria-pressed={filter === f}
-                      onClick={() => setFilter(f)}
-                      className={cn(
-                        "press press-sm inline-flex h-11 items-center gap-2 rounded-base border-2 border-ink px-3.5 text-base font-bold shadow-hard-sm",
-                        filter === f ? "bg-ink text-paper" : "bg-card",
-                      )}
-                    >
-                      <Icon className="size-5" aria-hidden />
-                      {t(`map.filter.${f}` as DictKey)}
-                      <span className="tnum font-mono text-sm opacity-70">{counts[f]}</span>
-                    </button>
-                  );
-                })}
-            </div>
-          ) : null}
-
-          <ol className="space-y-0" aria-label={t("learn.steps")}>
-            {groups.map((g, gi) => {
-              const steps = g.steps.filter(visible);
-              if (!steps.length) return null;
-              const any = steps.length > 1;
+  const list = (
+    <>
+      {counts.judgment || counts.guardrail ? (
+        <div role="group" aria-label={t("map.filter.label")} className="mb-5 flex flex-wrap gap-2">
+          {(["all", "judgment", "guardrail"] as const)
+            .filter((f) => f === "all" || counts[f] > 0)
+            .map((f) => {
+              const Icon = f === "all" ? GalleryVerticalEnd : KIND[f as ChipKind].Icon;
               return (
-                <li key={g.depth} className="list-none">
-                  {gi > 0 ? <Connector /> : null}
-                  {any ? (
-                    <section aria-label={t("map.anyOrder")} className="rounded-base border-2 border-dashed border-ink p-3">
-                      <p className="mb-3">
-                        <KindChip kind="anyOrder">{t("map.anyOrder")}</KindChip>
-                      </p>
-                      <ol className="space-y-3">
-                        {steps.map((s) => (
-                          <StepCard key={s.id} map={map} step={s} pointed={pointed === s.id} active={(wide || sheetOpen) && sel.id === s.id} onOpen={openStep} showThumb={!wide} />
-                        ))}
-                      </ol>
-                    </section>
-                  ) : (
-                    <ol>
-                      <StepCard map={map} step={steps[0]} pointed={pointed === steps[0].id} active={(wide || sheetOpen) && sel.id === steps[0].id} onOpen={openStep} showThumb={!wide} />
-                    </ol>
-                  )}
-                </li>
+                <Button key={f} variant="outline" aria-pressed={filter === f} onClick={() => setFilter(f)} className={cn("h-11", filter === f && "bg-ink text-paper")}>
+                  <Icon aria-hidden />
+                  {t(`map.filter.${f}` as DictKey)}
+                  <span className="tnum font-mono text-sm opacity-70">{counts[f]}</span>
+                </Button>
               );
             })}
-          </ol>
+        </div>
+      ) : null}
+      <ol className="space-y-0" aria-label={t("learn.steps")}>
+        {groups.map((g, gi) => {
+          const steps = g.steps.filter(visible);
+          if (!steps.length) return null;
+          const any = steps.length > 1;
+          return (
+            <li key={g.depth} className="list-none">
+              {gi > 0 ? <Connector /> : null}
+              {any ? (
+                <section aria-label={t("map.anyOrder")} className="rounded-base border-2 border-dashed border-ink p-3">
+                  <p className="mb-3">
+                    <KindChip kind="anyOrder">{t("map.anyOrder")}</KindChip>
+                  </p>
+                  <ol className="space-y-3">
+                    {steps.map((s) => (
+                      <StepCard key={s.id} map={map} step={s} pointed={pointed === s.id} active={(wide || sheetOpen) && sel.id === s.id} onOpen={openStep} showThumb={!wide} />
+                    ))}
+                  </ol>
+                </section>
+              ) : (
+                <ol>
+                  <StepCard map={map} step={steps[0]} pointed={pointed === steps[0].id} active={(wide || sheetOpen) && sel.id === steps[0].id} onOpen={openStep} showThumb={!wide} />
+                </ol>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </>
+  );
+
+  return (
+    <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+      <MapHeader map={map} source={source} compact={wide && collapsed} />
+
+      <div className="mt-8 lg:mt-6 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-8 2xl:gap-12">
+        {/* left: the timeline — scrolls on its own */}
+        <div id="step-list" onScroll={onPaneScroll} className="min-w-0 lg:-mx-2 lg:overflow-y-auto lg:overscroll-contain lg:px-2 lg:pt-1 lg:pb-10">
+          {list}
         </div>
 
-        {/* right: the big, sticky detail pane (≥1280px) */}
+        {/* right: the big detail pane — scrolls on its own */}
         {wide && step ? (
-          <aside aria-label={step.title} className="sticky top-[92px] self-start">
-            <div className="rounded-base border-2 border-ink bg-card shadow-hard-lg">
-              <header className="flex items-start gap-4 border-b-2 border-ink p-5">
+          <aside aria-label={step.title} className="flex min-h-0 flex-col pb-6 pr-2">
+            <div className="flex min-h-0 flex-1 flex-col rounded-base border-2 border-ink bg-card shadow-hard-lg">
+              <header className="flex shrink-0 items-start gap-4 border-b-2 border-ink p-5">
                 <span className="tnum grid size-14 shrink-0 place-items-center rounded-base border-2 border-ink bg-ink font-mono text-2xl font-black text-paper">{step.order}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-ink-2">{[step.state_signature.app, step.state_signature.view].filter(Boolean).join(" · ")}</p>
@@ -193,8 +206,8 @@ function WorkMapView({ map: initial, source }: { map: WorkMap; source?: "live" |
                   </Button>
                 </div>
               </header>
-              <div id="step-pane" className="max-h-[calc(100dvh-220px)] overflow-y-auto overscroll-contain p-5">
-                <StepDetail key={step.id} map={map} step={step} flash={sel.section} onApprove={(v) => setApproved(step.id, v)} />
+              <div id="step-pane" onScroll={onPaneScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+                <StepDetail key={step.id} map={map} step={step} flash={sel.section} />
               </div>
             </div>
           </aside>
@@ -202,18 +215,7 @@ function WorkMapView({ map: initial, source }: { map: WorkMap; source?: "live" |
       </div>
 
       {!wide ? (
-        <StepPanel
-          map={map}
-          step={step}
-          index={idx}
-          total={order.length}
-          section={sel.section}
-          open={sheetOpen && Boolean(step)}
-          onOpenChange={setSheetOpen}
-          onPrev={prev}
-          onNext={next}
-          onApprove={setApproved}
-        />
+        <StepPanel map={map} step={step} index={idx} total={order.length} section={sel.section} open={sheetOpen && Boolean(step)} onOpenChange={setSheetOpen} onPrev={prev} onNext={next} />
       ) : null}
     </div>
   );
@@ -225,11 +227,9 @@ function Connector() {
 
 /* ---------------- header ---------------- */
 
-function MapHeader({ map, source }: { map: WorkMap; source?: "live" | "mock" }) {
+function MapHeader({ map, source, compact }: { map: WorkMap; source?: "live" | "mock"; compact?: boolean }) {
   const { t, role, lang } = useUi();
   const router = useRouter();
-  const urls = exportUrls(map.workflow_id);
-  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const ready = mapReady({ coverage: map.coverage }, map);
   const second = async () => {
@@ -237,55 +237,69 @@ function MapHeader({ map, source }: { map: WorkMap; source?: "live" | "mock" }) 
     const s = await createSession({ mode: "debrief", user: EXPERT, lang, workflow_id: map.workflow_id });
     router.push(`/debrief/${s.data.session_id}`);
   };
+  const confirmedBy = map.approved_by.map((id) => firstName(expertById(map, id).name));
+  const when = (map as { updated_at?: number }).updated_at;
+  const actions = (
+    <div className="flex shrink-0 flex-wrap gap-3">
+      {role === "expert" && !ready ? (
+        <Button variant="claros" size={compact ? "default" : "lg"} onClick={second} loading={busy}>
+          {!busy ? <Mic aria-hidden /> : null}
+          {t("map.second")}
+        </Button>
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="outline" size={compact ? "default" : "lg"} />}>
+          <Download aria-hidden /> {t("map.export")} <ChevronDown className="opacity-70" aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuItem render={<a href={exportUrls(map.workflow_id).skill} target="_blank" rel="noreferrer" />}>
+            <FileCode2 aria-hidden /> {t("map.export.agents")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+  const confirmed = confirmedBy.length ? (
+    <span className="inline-flex items-center gap-2 text-base font-semibold text-ink-2">
+      <CheckCircle2 className="size-5 text-ink" aria-hidden />
+      {when
+        ? t("map.confirmedBy", { names: confirmedBy.join(lang === "ru" ? " и " : " & "), when: new Date(when < 1e12 ? when * 1000 : when).toLocaleDateString(lang, { month: "short", day: "numeric" }) })
+        : t("map.confirmedBy.nodate", { names: confirmedBy.join(lang === "ru" ? " и " : " & ") })}
+    </span>
+  ) : null;
+
+  if (compact)
+    return (
+      <header className="claros-enter flex shrink-0 items-center gap-4 border-b-2 border-ink pb-4">
+        <Link href={role === "expert" ? "/map" : "/"} aria-label={t("map.back")} className={buttonVariants({ variant: "ghost", size: "icon-sm" })}>
+          <ArrowLeft aria-hidden />
+        </Link>
+        <MapStatus ready={ready} className="shrink-0" />
+        <h1 className="min-w-0 flex-1 truncate text-2xl font-black tracking-[-0.03em]">{map.name}</h1>
+        <AvatarStack users={map.experts} size={30} />
+        {actions}
+      </header>
+    );
 
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
-      <div className="min-w-0 max-w-[60rem]">
-        <div className="flex flex-wrap items-center gap-2">
-          <MapStatus ready={ready} />
-          <SourceNote source={source} />
+    <header className="shrink-0">
+      <Link href={role === "expert" ? "/map" : "/"} className="inline-flex items-center gap-1.5 text-base font-bold text-ink-2 underline decoration-transparent decoration-2 underline-offset-4 hover:text-ink hover:decoration-ink">
+        <ArrowLeft className="size-5" aria-hidden /> {role === "expert" ? t("map.back") : t("nav.home")}
+      </Link>
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
+        <div className="min-w-0 max-w-[60rem]">
+          <div className="flex flex-wrap items-center gap-3">
+            <MapStatus ready={ready} />
+            {confirmed}
+            <SourceNote source={source} />
+          </div>
+          <h1 className="mt-4 text-4xl font-black leading-[1.02] tracking-[-0.04em] sm:text-5xl 2xl:text-6xl">{map.name}</h1>
+          <p className="mt-4 flex flex-wrap items-center gap-3 text-lg font-semibold">
+            <AvatarStack users={map.experts} size={34} />
+            <span>{map.experts.map((e) => e.name).join(" · ")}</span>
+          </p>
         </div>
-        <h1 className="mt-4 text-4xl font-black leading-[1.02] tracking-[-0.04em] sm:text-5xl 2xl:text-6xl">{map.name}</h1>
-        <p className="mt-4 flex flex-wrap items-center gap-3 text-lg font-semibold">
-          <AvatarStack users={map.experts} size={34} />
-          <span>{map.experts.map((e) => e.name).join(" · ")}</span>
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        {role === "expert" && !ready ? (
-          <Button variant="claros" size="lg" onClick={second} loading={busy}>
-            {!busy ? <Mic aria-hidden /> : null}
-            {t("map.second")}
-          </Button>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="lg" />}>
-            <Download aria-hidden /> {t("map.export")} <ChevronDown className="opacity-70" aria-hidden />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuItem render={<a href={urls.skill} target="_blank" rel="noreferrer" />}>
-              <FileCode2 aria-hidden /> {t("map.export.skill")}
-            </DropdownMenuItem>
-            <DropdownMenuItem render={<a href={urls.json} target="_blank" rel="noreferrer" />}>
-              <Braces aria-hidden /> {t("map.export.json")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              closeOnClick={false}
-              onClick={() =>
-                navigator.clipboard
-                  ?.writeText(urls.mcp)
-                  .then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1800);
-                  })
-                  .catch(() => {})
-              }
-            >
-              <Link2 aria-hidden /> <span aria-live="polite">{copied ? t("map.copied") : t("map.export.mcp")}</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {actions}
       </div>
     </header>
   );

@@ -6,6 +6,9 @@ import { Bug, X } from "lucide-react";
 import type { Coverage } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 import { useUi } from "./i18n";
+import { getSocket } from "@/lib/ws";
+import type { ClientMsg } from "@/lib/contracts";
+import { Button } from "@/components/ui/button";
 
 export type Force = "auto" | Coverage["status"];
 
@@ -54,6 +57,11 @@ export function DebugPanel() {
   const { t } = useUi();
   const d = useDebug();
   useEffect(init, []);
+  // smoke tests: push fixture messages (keyframes…) through this tab's own session socket
+  useEffect(() => {
+    if (!d.enabled) return;
+    (window as unknown as { __clarosSend?: (m: ClientMsg) => void }).__clarosSend = (m) => getSocket()?.send(m);
+  }, [d.enabled]);
   if (!d.enabled) return null;
   if (!d.open)
     return (
@@ -72,26 +80,17 @@ export function DebugPanel() {
         <p className="flex items-center gap-1.5 text-sm font-extrabold">
           <Bug className="size-4" aria-hidden /> {t("debug.title")}
         </p>
-        <button type="button" onClick={() => d.setOpen(false)} aria-label={t("common.close")} className="grid size-7 place-items-center rounded-[4px] hover:bg-paper-2">
-          <X className="size-4" aria-hidden />
-        </button>
+        <Button variant="ghost" size="icon-xs" onClick={() => d.setOpen(false)} aria-label={t("common.close")}>
+          <X aria-hidden />
+        </Button>
       </div>
       <fieldset className="mt-2">
         <legend className="mb-1.5 text-xs font-semibold text-ink-2">{t("debug.force")}</legend>
         <div className="flex flex-wrap gap-1.5">
           {(["auto", "ready", "partial", "missing"] as Force[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={d.force === f}
-              onClick={() => d.setForce(f)}
-              className={cn(
-                "rounded-[4px] border-2 border-ink px-2 py-0.5 font-mono text-xs font-semibold",
-                d.force === f ? "bg-ink text-paper" : "bg-card hover:bg-paper-2",
-              )}
-            >
+            <Button key={f} variant="outline" size="xs" aria-pressed={d.force === f} onClick={() => d.setForce(f)} className={cn("font-mono", d.force === f && "bg-ink text-paper")}>
               {f === "auto" ? t("debug.auto") : f}
-            </button>
+            </Button>
           ))}
         </div>
       </fieldset>
