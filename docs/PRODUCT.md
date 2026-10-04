@@ -32,6 +32,12 @@ Beyond the happy path:
 - learner talking to someone else / silence → no nudges; nudges respect the same pause gate as capture;
 - learner too fast toward Submit with a violation → hard stop intervention wins over everything.
 End: short summary — decisions handled unaided / after a hint / caught, and "practice next".
+Grading honesty (the Teach bar is a case the expert NEVER showed): "right" is decided on the learner's own record from
+the expert's rules (case facts, not the expert's demo value); field rules and the decision model must agree; when the
+record doesn't settle it Claros says so ("can't tell from this screen — here's how Anna decides") and lets the real
+action + guardrails decide. Never tell a learner they are wrong when they might be right.
+Novices (no mastery yet) get the worked example first — the expert's moment + words — and then still make THEIR
+decision on the card; prediction-only once mastery grows; "just watch" when mastered.
 
 ## UI principles
 - Big type, few words. Every screen has one obvious primary action.

@@ -342,11 +342,12 @@ export interface NudgeMsg {
   type: "nudge"; id: string; step_id?: string | null; kind: NudgeKind; question: string;
   options: NudgeOption[]; allow_dont_know: boolean;
   reference?: { keyframe_ids: string[]; quote?: { text: string; speaker: string; lang: string; translation?: string | null } | null } | null;
-  spoken?: string;
+  spoken?: string; lang?: string;
 }
 export interface NudgeResultMsg {
   type: "nudge_result"; id: string;
-  outcome: "correct" | "incorrect" | "dont_know" | "skipped" | "implicit_correct" | "implicit_incorrect";
+  /** noted = the learner's record doesn't settle it: expert's reasoning, no verdict, no mastery change */
+  outcome: "correct" | "incorrect" | "dont_know" | "skipped" | "implicit_correct" | "implicit_incorrect" | "noted";
   feedback_spoken?: string; show_reference?: boolean;
 }
 export interface NudgeResponseMsg {

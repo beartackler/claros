@@ -181,6 +181,17 @@ async def handle_turn(sid: str, text: str) -> dict:
             return await _control_turn(sid, mode, priv, lang)
     if getattr(sess, "off_record", False) or lg.off_record:
         return {"intent": "off_record_silence"}
+    if mode == "learn":
+        # an open nudge card: "the second one" / "capex" / "не знаю" answers it (feedback is said by the tutor)
+        on_voice = deps.knowledge_attr("nudges.on_voice")
+        if on_voice:
+            try:
+                r = await on_voice(sid, text)
+            except Exception:  # noqa: BLE001
+                deps.log.exception("dialog: nudge answer failed")
+                r = None
+            if r:
+                return {"intent": "answer_nudge", "outcome": r.get("outcome")}
     ir = await classify_intent(mode, text, {"pending_question": pending.spoken_question if pending else None})
     intent = ir.intent
     deps.store_log(sid, "dialog.intent", {"text": text, "mode": mode, **ir.model_dump()})

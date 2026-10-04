@@ -14,12 +14,12 @@ import { ClarosDot, Loading } from "./primitives";
 import { LiveCaptions, LiveOrb, requestMic, useJoinSession, useLive, useLiveStore, waitVoice } from "./live";
 import { StartSequence, type ShareResult } from "./StartSequence";
 import { MomentCard, type MomentKind } from "./MomentCard";
-import { CompanionCard, pushMock, useNudges, type MockKind } from "./Nudge";
+import { CompanionCard, mockNudge, useNudges, type MockKind } from "./Nudge";
 import { PipPortal, usePip } from "@/voice/pip";
 import { firstName, isConfirmed, sortedSteps } from "./mapUtils";
 import { useDebug } from "./debug";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { createRequest, createSession, getWorkflow, lookupWorkflow } from "@/lib/api";
+import { createRequest, createSession, getWorkflow, latestWorkflowId, lookupWorkflow } from "@/lib/api";
 import { EXPERT, LEA } from "@/lib/mock";
 import { writeLocalMastery } from "@/lib/localMastery";
 import { saveLastSession, type LastSession } from "@/lib/lastSession";
@@ -85,6 +85,14 @@ function Learn({ below }: { below?: React.ReactNode }) {
     },
     [debug.enabled, debug.force, lang],
   );
+
+  // demo / review: open the most recent real workflow (no hard-coded phrase to match)
+  const openLatest = useCallback(async () => {
+    setLookup("finding");
+    const m = await getWorkflow(await latestWorkflowId());
+    setMap(m.data);
+    setLookup("found");
+  }, []);
 
   // the learner's first words identify the workflow (screen + speech, server-side lookup)
   const transcript = useLiveStore((s) => s.transcript);
@@ -165,19 +173,21 @@ function Learn({ below }: { below?: React.ReactNode }) {
   };
 
   /* ---------- demo script (?demo=1): a scripted session, no permissions ---------- */
-  useDemoScript(demo && !nudgeParam && phase === "live", identify, map);
-  // ?nudge=predict|diverge|confirm|differ|stop — one state, ready for review / screenshots
+  useDemoScript(demo && !nudgeParam && phase === "live", openLatest, map);
+  // ?nudge=predict|diverge|confirm|differ|stop — one state, built from the loaded map, ready for review
   useEffect(() => {
     if (!nudgeParam || phase !== "live") return;
     if (!map) {
-      void identify("process a supplier invoice");
+      void openLatest();
       return;
     }
+    const m = mockNudge(nudgeParam, map, lang, t);
+    if (!m) return;
     const st = useLiveStore.getState();
-    const sid = { predict: "s4", diverge: "s3", confirm: "s2", differ: "s5", stop: "s6" }[nudgeParam] ?? "s1";
-    st.set({ highlightedStepId: sid });
-    st.pushTranscript({ id: "mock-a", role: "agent", text: lang === "ru" ? "Секунду — посмотрите сюда." : "One second — look at this.", t: Date.now() });
-    pushMock(nudgeParam, map, lang);
+    const stepId = m.type === "nudge" ? m.step_id : map.steps.find((x) => m.type === "intervene" && x.guardrail_ids.includes(m.guardrail_id))?.id;
+    if (stepId) st.set({ highlightedStepId: stepId });
+    if (m.type === "nudge") st.pushTranscript({ id: `mock-${m.id}`, role: "agent", text: m.question, t: Date.now() });
+    st.pushServer(m);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nudgeParam, phase, map]);
 
@@ -469,23 +479,31 @@ function SummaryList({ title, items, tone }: { title: string; items: string[]; t
 
 /* ---------------- demo script ---------------- */
 
-function useDemoScript(on: boolean, identify: (text: string) => Promise<void>, map: WorkMap | null) {
-  const { lang } = useUi();
+function useDemoScript(on: boolean, openLatest: () => Promise<void>, map: WorkMap | null) {
+  const { lang, t } = useUi();
   const mapRef = useRef(map);
   mapRef.current = map;
   useEffect(() => {
     if (!on) return;
     const st = useLiveStore.getState();
-    const ru = lang === "ru";
     const say = (role: "agent" | "user", text: string) => st.pushTranscript({ id: `demo-${Math.random().toString(36).slice(2)}`, role, text, t: Date.now() });
-    const nudge = (k: MockKind) => mapRef.current && pushMock(k, mapRef.current, lang);
+    // scripted from whatever map is loaded: no workflow-specific text
+    const show = (k: MockKind) => {
+      const m = mapRef.current && mockNudge(k, mapRef.current, lang, t);
+      if (!m) return;
+      if (m.type === "nudge") {
+        if (m.step_id) st.set({ highlightedStepId: m.step_id });
+        say("agent", m.question);
+      }
+      st.pushServer(m);
+    };
     const steps: [number, () => void][] = [
-      [300, () => say("agent", ru ? "Привет, Лея. Над чем работаете?" : "Hi Lea. What are you working on?")],
-      [2200, () => say("user", ru ? "Провожу счёт поставщика." : "Booking this supplier invoice.")],
-      [2600, () => void identify("process a supplier invoice")],
-      [4400, () => (st.set({ highlightedStepId: "s1" }), say("agent", ru ? "Это я знаю. Откройте следующий черновик счёта." : "I know this one. Open the next draft invoice."))],
-      [8000, () => (st.set({ highlightedStepId: "s2" }), nudge("confirm"))],
-      [14000, () => (st.set({ highlightedStepId: "s4" }), say("agent", ru ? "Строка 2 — станок за 5 200. Какой счёт?" : "Line 2 is a 5,200 machine. Which account?"), nudge("predict"))],
+      [300, () => say("agent", t("demo.hi", { name: firstName(LEA.name) }))],
+      [2200, () => say("user", t("demo.user"))],
+      [2600, () => void openLatest()],
+      [4400, () => mapRef.current && st.set({ highlightedStepId: sortedSteps(mapRef.current)[0]?.id ?? null })],
+      [8000, () => show("confirm")],
+      [14000, () => show("predict")],
     ];
     const timers = steps.map(([ms, fn]) => setTimeout(fn, ms));
     return () => timers.forEach(clearTimeout);

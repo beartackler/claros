@@ -306,15 +306,21 @@ async def test_tutor_prediction_idle_hint_and_intents(env):
     wm = tutor._wm(st)
     # novice (BKT p=0.2) at s2 → worked example: expert moment + quote
     await tutor._enter_step(st, wm, common.step_by_id(wm, "s2"))
-    assert env.out("show_moment")[-1]["step_id"] == "s2" and env.out("ask")[-1]["unknown_id"] == "ex-s2"
+    await st.nudge_task
+    assert env.out("show_moment")[-1]["step_id"] == "s2"
+    ex = env.out("nudge")[-1]  # worked example spoken first, then the learner's own decision
+    assert ex["step_id"] == "s2" and ex["spoken"].startswith("Anna") and ex["spoken"].endswith(ex["question"])
     # leaving s2 unaided raises P(L); a mid-mastery learner gets a prediction prompt at s4
     tutor.observe(st, "s4", True)
     assert 0.4 <= tutor.bkt_p(st, "s4") < 0.8
     await tutor._enter_step(st, wm, common.step_by_id(wm, "s4"))
     assert tutor.bkt_p(st, "s2") > 0.2
-    ask = env.out("ask")[-1]
-    assert ask["unknown_id"] == "pred-s4" and "warum" in ask["text"]
-    assert d.get_prewritten("pred-s4", "learn3")
+    await st.nudge_task  # prediction = a live nudge card (spoken + options), not a quiz
+    nd = env.out("nudge")[-1]
+    assert nd["step_id"] == "s4" and nd["kind"] == "predict" and len(nd["options"]) >= 2
+    assert d.get_prewritten(nd["id"], "learn3") == nd["spoken"]
+    # no record facts on screen: nothing is marked right — the expert's demo value is never assumed
+    assert not st.nudge.graded
     st.last_activity -= 25_000
     assert await tutor.check_idle("learn3") is True
     assert env.out("ask")[-1]["unknown_id"] == "hint-s4"

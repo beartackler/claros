@@ -316,6 +316,15 @@ async def route(body: dict) -> Reply:
         if priv == "off_record":
             await _control(sid, "off_record_on")
             return Reply(text=L.phrase("off_record", lang))
+        on_voice = deps.knowledge_attr("nudges.on_voice")
+        if on_voice and sid:
+            try:
+                r = await on_voice(sid, text, speak=False)  # the reply below IS the spoken feedback
+            except Exception:  # noqa: BLE001
+                deps.log.exception("nudge answer failed")
+                r = None
+            if r:
+                return Reply(text=r["feedback_spoken"]) if r.get("feedback_spoken") else _skip(body)
         return await _learner(sid, sess, intent, text, lang, body)
     if mode == "debrief" and intent not in ("off_record", "strike_that", "end_session", "question_to_claros"):
         r = await _debrief(sess, intent, text, body)

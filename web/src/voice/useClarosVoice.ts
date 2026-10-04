@@ -190,6 +190,10 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     pump();
   }, [pump]);
 
+  const dropSay = useCallback((pred: (m: SayMsg) => boolean) => {
+    sayQueue.current = sayQueue.current.filter((m) => !pred(m));
+  }, []);
+
   // ---- server → agent ----
   useEffect(() => {
     let offs: (() => void)[] = [];
@@ -200,7 +204,13 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       if (!s) return;
       offs.push(
         s.on("ask", (m) => enqueueSay({ type: "say", id: m.unknown_id, text: m.text, kind: askKind(m.unknown_id) })),
-        s.on("intervene", (m) => enqueueSay({ type: "say", id: m.guardrail_id, text: m.text, kind: "intervene" })),
+        s.on("intervene", (m) => {
+          dropSay((x) => x.id.startsWith("nudge-")); // a hard stop makes any queued nudge stale
+          enqueueSay({ type: "say", id: m.guardrail_id, text: m.text, kind: "intervene" });
+        }),
+        // live nudge card: spoken through the same queue (never over the user); answered before it was said → dropped
+        s.on("nudge", (m) => enqueueSay({ type: "say", id: m.id, text: m.spoken || m.question, kind: "tutor", ...(m.step_id ? { step_id: m.step_id } : {}) })),
+        s.on("nudge_result", (m) => dropSay((x) => x.id === m.id)),
         s.onAny((raw) => {
           const m = raw as unknown as SayMsg;
           if (m.type === "say" && m.id && typeof m.text === "string") enqueueSay(m);
@@ -224,7 +234,7 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       offChange();
       offs.forEach((f) => f());
     };
-  }, [enqueueSay]);
+  }, [enqueueSay, dropSay]);
 
   // ---- user is working → keep the agent from barging in ----
   useEffect(

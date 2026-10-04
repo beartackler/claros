@@ -48,7 +48,7 @@ export function useNudges({ mock, map }: { mock: boolean; map: WorkMap | null })
           if (s.nudge.step_id) counts.current.answered.push({ step_id: s.nudge.step_id, outcome: m.outcome });
           return { ...s, result: m };
         });
-      else if (m.type === "intervene") setSt((s) => ({ ...s, stop: m }));
+      else if (m.type === "intervene") setSt((s) => ({ ...s, stop: m, nudge: null, picked: null, result: null })); // hard stop wins
     }
   }, [log]);
 
@@ -71,9 +71,9 @@ export function useNudges({ mock, map }: { mock: boolean; map: WorkMap | null })
         return;
       }
       setSt((s) => ({ ...s, picked: { choice_id, dont_know } }));
-      if (mock) setTimeout(() => useLiveStore.getState().pushServer(mockResult(n, choice_id, dont_know, map)), 650);
+      if (mock) setTimeout(() => useLiveStore.getState().pushServer(mockResult(n, choice_id, dont_know)), 650);
     },
-    [st.nudge, st.picked, mock, map],
+    [st.nudge, st.picked, mock],
   );
   const dismiss = useCallback(() => setSt((s) => ({ ...s, nudge: null, picked: null, result: null })), []);
   const clearStop = useCallback(() => setSt((s) => ({ ...s, stop: null })), []);
@@ -182,6 +182,7 @@ function NudgeCard({ map, n, inPip, className }: { map: WorkMap; n: ReturnType<t
   const differ = Boolean(step?.conflict) || msg.options.some((o) => o.expert_id);
   const res = n.result;
   const good = res && (res.outcome === "correct" || res.outcome === "implicit_correct");
+  const noted = res?.outcome === "noted"; // this record's facts don't settle it: the expert's reasoning, no verdict
   const showRef = msg.kind !== "confirm_step" && (!res || res.show_reference || !good);
   const frames = refFrames(map, step, msg.reference?.keyframe_ids, `${name} · ${step?.title ?? ""}`);
   const pickedId = n.picked?.choice_id;
@@ -217,11 +218,11 @@ function NudgeCard({ map, n, inPip, className }: { map: WorkMap; n: ReturnType<t
             role="status"
             className={cn(
               "claros-enter flex items-start gap-3 rounded-base border-2 border-ink p-4 text-2xl font-black leading-tight tracking-[-0.02em]",
-              good ? "bg-ready text-on-fill" : "bg-expert-soft",
+              good ? "bg-ready text-on-fill" : noted ? "bg-card" : "bg-expert-soft",
             )}
           >
             {good ? <Check className="mt-0.5 size-7 shrink-0" aria-hidden /> : <CircleHelp className="mt-0.5 size-7 shrink-0" aria-hidden />}
-            {res.feedback_spoken || (good ? t("nudge.correct", { name: fbName }) : t("nudge.explain", { name }))}
+            {res.feedback_spoken || (good ? t("nudge.correct", { name: fbName }) : noted ? t("nudge.noted", { name }) : t("nudge.explain", { name }))}
           </p>
         ) : null}
 
@@ -234,7 +235,7 @@ function NudgeCard({ map, n, inPip, className }: { map: WorkMap; n: ReturnType<t
           ) : null}
 
           {!res || !good ? (
-            <div className="min-w-0">
+            <div className="order-first min-w-0 @3xl:order-none">
               <ol className="grid gap-2.5">
                 {msg.options.map((o, i) => {
                   const ex = optionExpert(o);
@@ -253,7 +254,7 @@ function NudgeCard({ map, n, inPip, className }: { map: WorkMap; n: ReturnType<t
                         )}
                       >
                         <span className={cn("tnum grid size-9 shrink-0 place-items-center rounded-[4px] border-2 border-ink font-mono text-lg font-black", picked ? "bg-card text-ink" : "bg-paper-2")}>{i + 1}</span>
-                        <span className="min-w-0 flex-1">{o.label}</span>
+                        <span className="min-w-0 flex-1 first-letter:uppercase">{o.label}</span>
                         {ex ? (
                           <span className="flex shrink-0 items-center gap-1.5 text-base font-bold">
                             <ExpertAvatar user={ex} size={28} index={Math.max(0, map.experts.findIndex((e) => e.id === ex.id))} />
@@ -317,87 +318,78 @@ function StopCard({ map, msg, onDone, inPip, className }: { map: WorkMap; msg: I
   );
 }
 
-/* ---------------- mock driver (contract-shaped) ---------------- */
+/* ---------------- mock driver (contract-shaped) ----------------
+ * For UI review without a server (?demo=1 / ?nudge=…). Everything comes from the loaded map — no demo values.
+ * The mock has no learner record to judge, so it never claims an answer is right: choices come back "noted"
+ * (except experts-differ, where every attributed way is valid). Real grading happens server-side per record. */
 
 export type MockKind = "predict" | "diverge" | "confirm" | "differ" | "stop";
-const CORRECT: Record<string, string> = {};
+type TFn = ReturnType<typeof useUi>["t"];
+const ALL_VALID = new Set<string>();
 
-const T = (lang: UiLang, en: string, ru: string) => (lang === "ru" ? ru : en);
+function mockQuote(map: WorkMap, ids: string[] | undefined, lang: UiLang) {
+  const q = quotesFor(map, ids)[0];
+  return q ? { text: q.text, speaker: firstName(q.speaker), lang: q.lang, translation: q.lang !== lang ? q.translations?.[lang] ?? null : null } : null;
+}
 
-export function mockNudge(kind: MockKind, map: WorkMap, lang: UiLang): ServerMsg {
-  const quote = (id: string) => {
-    const q = map.quotes.find((x) => x.id === id);
-    return q ? { text: q.text, speaker: q.speaker, lang: q.lang, translation: q.lang !== lang ? q.translations?.[lang] ?? null : null } : null;
-  };
-  const kf = (sid: string) => map.steps.find((s) => s.id === sid)?.moment?.keyframe_ids ?? [];
+export function mockNudge(kind: MockKind, map: WorkMap, lang: UiLang, t: TFn): ServerMsg | null {
   const id = `mock-${kind}-${Date.now().toString(36)}`;
+  const steps = [...map.steps].sort((a, b) => a.order - b.order);
+  const judged = steps.find((s) => s.decision?.kind === "judgment" && (s.decision.to_value || s.decision.from_value));
+  const ref = (s: Step) => ({ keyframe_ids: s.moment?.keyframe_ids ?? [], quote: mockQuote(map, s.decision?.reason_quote_ids, lang) });
   if (kind === "stop") {
-    const g = map.guardrails.find((x) => x.id === "g3") ?? map.guardrails[0];
-    return { type: "intervene", guardrail_id: g.id, text: g.text, moment: { session_id: "", keyframe_ids: g.evidence[0]?.keyframe_ids ?? [], t: 0, utterance_ids: [] } };
+    const g = map.guardrails.find((x) => x.evidence.length) ?? map.guardrails[0];
+    if (!g) return null;
+    return { type: "intervene", guardrail_id: g.id, text: g.text, moment: g.evidence[0] ?? { session_id: "", keyframe_ids: [], t: 0, utterance_ids: [] } };
   }
-  if (kind === "predict") {
-    CORRECT[id] = "capex";
+  if (kind === "confirm") {
+    const s = judged ?? steps[0];
+    if (!s) return null;
     return {
-      type: "nudge", id, step_id: "s4", kind: "predict",
-      question: T(lang, "Line 2 is a 5,200 machine. Which account?", "Строка 2 — станок за 5 200. Какой счёт?"),
-      options: [
-        { id: "capex", label: T(lang, "Capital equipment", "Основные средства") },
-        { id: "opex", label: T(lang, "Office expense", "Офисные расходы") },
-        { id: "ask", label: T(lang, "Ask the controller", "Спросить контролёра") },
-      ],
-      allow_dont_know: true, reference: { keyframe_ids: kf("s4"), quote: quote("aq2") }, spoken: "",
+      type: "nudge", id, step_id: s.id, kind: "confirm_step", question: t("nudge.confirm", { step: s.title }),
+      options: [{ id: "yes", label: t("nudge.yes") }, { id: "no", label: t("nudge.no") }], allow_dont_know: false, reference: null,
     };
   }
   if (kind === "diverge") {
-    CORRECT[id] = "fix";
+    const s = steps.find((x) => x.after.length);
+    const missed = s ? map.steps.find((x) => x.id === s.after[0]) : undefined;
+    if (!missed) return null;
     return {
-      type: "nudge", id, step_id: "s3", kind: "diverge",
-      question: T(lang, "Anna matches the PO and receipt here. Skipping it on purpose?", "Анна здесь сверяет заказ и поступление. Пропускаете намеренно?"),
-      options: [
-        { id: "purpose", label: T(lang, "Yes, on purpose", "Да, намеренно") },
-        { id: "fix", label: T(lang, "No — I'll match it", "Нет — сверю") },
-      ],
-      allow_dont_know: false, reference: { keyframe_ids: kf("s3"), quote: quote("aq5") }, spoken: "",
+      type: "nudge", id, step_id: missed.id, kind: "diverge",
+      question: t("nudge.diverge", { name: firstName(expertById(map, missed.experts[0] ?? "").name), step: missed.title }),
+      options: [{ id: "purpose", label: t("nudge.onPurpose") }, { id: "fix", label: t("nudge.doIt") }], allow_dont_know: false, reference: ref(missed),
     };
   }
-  if (kind === "confirm") {
-    CORRECT[id] = "yes";
+  if (kind === "differ") {
+    const s = steps.find((x) => x.conflict && x.variants.length);
+    if (!s) return null;
+    const varIds = new Set(s.variants.map((v) => v.expert_id));
+    const base = s.experts.find((e) => !varIds.has(e));
+    const ways = [...(base && s.decision ? [{ expert_id: base, text: s.decision.to_value || s.decision.description }] : []), ...s.variants.map((v) => ({ expert_id: v.expert_id, text: v.description }))];
+    ALL_VALID.add(id);
     return {
-      type: "nudge", id, step_id: "s2", kind: "confirm_step",
-      question: T(lang, "Are you checking the supplier?", "Вы проверяете поставщика?"),
-      options: [
-        { id: "yes", label: T(lang, "Yes", "Да") },
-        { id: "no", label: T(lang, "No, something else", "Нет, другое") },
-      ],
-      allow_dont_know: false, reference: null, spoken: "",
+      type: "nudge", id, step_id: s.id, kind: "predict", question: t("nudge.q", { step: s.title }),
+      options: ways.slice(0, 4).map((w, i) => ({ id: `o${i + 1}`, label: w.text, expert_id: w.expert_id })), allow_dont_know: true, reference: ref(s),
     };
   }
-  // experts differ: both options valid, attributed
-  CORRECT[id] = "*";
-  return {
-    type: "nudge", id, step_id: "s5", kind: "predict",
-    question: T(lang, "Nordwind, December. What do you do?", "Nordwind, декабрь. Что делаете?"),
-    options: [
-      { id: "hold", label: T(lang, "Hold the invoice", "Придержать счёт"), expert_id: "u_anna" },
-      { id: "submit", label: T(lang, "Submit + ask for a credit note", "Провести + запросить кредит-ноту"), expert_id: "u_marco" },
-    ],
-    allow_dont_know: true, reference: { keyframe_ids: kf("s5"), quote: quote("aq3") }, spoken: "",
-  };
+  if (!judged?.decision) return null;
+  const d = judged.decision;
+  const ask = guardrailsFor(map, judged).find((g) => g.action === "stop_and_ask");
+  const values = [d.to_value, d.from_value].filter((v, i, a): v is string => Boolean(v) && a.indexOf(v) === i);
+  const options = [...values.map((v, i) => ({ id: `o${i + 1}`, label: v })), ...(ask ? [{ id: "ask", label: t("nudge.ask", { who: ask.owner || t("nudge.lead") }) }] : [])];
+  if (options.length < 2) return null;
+  return { type: "nudge", id, step_id: judged.id, kind: "predict", question: t("nudge.q", { step: judged.title }), options, allow_dont_know: true, reference: ref(judged) };
 }
 
-export function mockResult(n: NudgeMsg, choice: string | null, dontKnow: boolean, map: WorkMap | null): NudgeResultMsg {
-  const want = CORRECT[n.id];
-  const right = !dontKnow && (want === "*" || choice === want || (!want && Boolean(choice)));
-  return {
-    type: "nudge_result",
-    id: n.id,
-    outcome: dontKnow ? "dont_know" : right ? "correct" : "incorrect",
-    feedback_spoken: "",
-    show_reference: !right,
-  };
+export function mockResult(n: NudgeMsg, choice: string | null, dontKnow: boolean): NudgeResultMsg {
+  if (dontKnow) return { type: "nudge_result", id: n.id, outcome: "dont_know", feedback_spoken: "", show_reference: true };
+  if (ALL_VALID.has(n.id) || n.kind === "diverge" || n.kind === "confirm_step")
+    return { type: "nudge_result", id: n.id, outcome: "correct", feedback_spoken: "", show_reference: false };
+  return { type: "nudge_result", id: n.id, outcome: "noted", feedback_spoken: "", show_reference: true };
 }
 
 /** Push one mock message through the same store path the server uses. */
-export function pushMock(kind: MockKind, map: WorkMap, lang: UiLang) {
-  useLiveStore.getState().pushServer(mockNudge(kind, map, lang));
+export function pushMock(kind: MockKind, map: WorkMap, lang: UiLang, t: TFn) {
+  const m = mockNudge(kind, map, lang, t);
+  if (m) useLiveStore.getState().pushServer(m);
 }

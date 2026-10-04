@@ -145,5 +145,22 @@ is **epoch milliseconds** (float). Session-clock `t` fields are also ms.
 Server → client: `nudge {id, step_id, kind: predict|why|check|diverge|confirm_step, question, options:[{id,label}], allow_dont_know: true, reference: {keyframe_ids, quote:{text, speaker, lang, translation?}}, spoken: text}`
   (client shows the nudge card in the companion AND speaks `spoken` via the say queue).
 Client → server: `nudge_response {id, via: voice|click|key|close|implicit, choice_id?|null, dont_know?: bool, text?: string, t}`.
-Server → client: `nudge_result {id, outcome: correct|incorrect|dont_know|skipped|implicit_correct|implicit_incorrect, feedback_spoken, show_reference: bool}` then card closes or shows the reference.
+Server → client: `nudge_result {id, outcome: correct|incorrect|dont_know|skipped|implicit_correct|implicit_incorrect|noted, feedback_spoken, show_reference: bool}` then card closes or shows the reference.
 Voice answers arrive as normal `utterance`s; the server matches them to the open nudge (ordinals "first/second/B", option labels, translations; decision model choice) before intent routing.
+
+Implementation: `server/claros/knowledge/nudges.py` (bus `ws.in.nudge_response`; `on_voice` is called by `brain.dialog`
+(hosted) and `llm_endpoint` (custom) for learn sessions before intent classification). Feedback is spoken via `say`
+(hosted) / `ask` (custom). The client speaks `nudge.spoken` through the say queue and drops it if a `nudge_result` or an
+`intervene` arrives first. Options never carry their grade to the client.
+
+**Grading is per record, never "what the expert did on their demo record".** The learner works cases the expert never
+showed. For a step's rules: split each predicate into CHOICE conditions (vars whose on-screen label appears in the
+decision's own values) and CASE conditions (facts: amounts, dates, counterparties); the case part on this record's facts
+→ True: the expert's handling of the rule's case (+ the escalation option) is right; False: the default (`from_value`) is
+right; None: the decision model reads the record against the expert's rule text. Field rules and the decision model must
+not contradict each other; if they do, or neither can tell, the nudge is **not graded** → `noted` (the expert's
+reasoning, neutral, no mastery change; the learner's real action + guardrails decide). Experts differ → every attributed
+way is `correct`. Kinds: `predict` (judgment step), `check` (learner already past the step when the floor came free),
+`confirm_step` (step match score < 0.7 → "Are you on this step?"; yes → predict), `diverge` (entered a step without its
+prerequisite → "on purpose?"; yes → novel case: map unknown + capture request for the expert). 3 dismissals → "just
+watch" (said once). A hard stop on the nudge's step closes it as `implicit_incorrect`.

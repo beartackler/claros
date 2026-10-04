@@ -271,3 +271,20 @@ def test_agent_config_hosted(monkeypatch):
     assert t["api_schema"]["url"] == "https://claros-server.onrender.com/api/dialog/lookup"
     assert t["api_schema"]["query_params_schema"]["properties"]["session_id"]["dynamic_variable"] == "session_id"
     json.dumps(t)
+
+
+def test_learner_voice_answers_open_nudge_before_intent_routing(offline, monkeypatch):
+    offline.get_session("ln").mode = "learn"
+    calls = []
+
+    async def on_voice(sid, text, speak=True):
+        calls.append((sid, text, speak))
+        return {"outcome": "correct", "feedback_spoken": "Yes."} if "second" in text else None
+
+    async def tutor_turn(sess, intent, text):
+        return "tutor:" + intent
+    _knowledge(monkeypatch, {"nudges.on_voice": on_voice, "tutor.handle_intent": tutor_turn})
+    r = run(dialog.handle_turn("ln", "the second one"))
+    assert r == {"intent": "answer_nudge", "outcome": "correct"} and calls[-1][2] is True
+    r = run(dialog.handle_turn("ln", "what's next?"))  # not an answer → normal tutor routing
+    assert r["intent"] != "answer_nudge"

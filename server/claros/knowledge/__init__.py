@@ -99,12 +99,13 @@ def register(bus: Any) -> None:
     if _registered:
         return
     _registered = True
-    from . import builder, debrief, lookup, tutor
+    from . import builder, debrief, lookup, nudges, tutor
 
     bus.subscribe("session.ended", builder.on_session_ended)
     bus.subscribe("ws.in.hello", tutor.on_hello)
     bus.subscribe("ws.in.hello", debrief.on_hello)
     bus.subscribe("ws.in.activity", tutor.on_activity)
+    bus.subscribe("ws.in.nudge_response", nudges.on_response)
     bus.subscribe("screen.state", tutor.on_screen_state)
     bus.subscribe("screen.events", tutor.on_screen_events)
     bus.subscribe("map.updated", tutor.on_map_updated)
