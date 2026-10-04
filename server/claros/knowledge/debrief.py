@@ -593,7 +593,7 @@ def topic_of(wm: WorkMap, u: Unknown) -> str:
         return u.entity
     def stems(txt: str) -> set[str]:  # "held"/"hold", "confirm"/"confirmation"
         return {w[:4] for w in _toks(txt)}
-    words = stems(" ".join(x for x in (u.spoken_question, u.hypothesis, u.resolution) if x))
+    words = stems(" ".join(x for x in (u.spoken_question, u.hypothesis) if x))
     qtext = {q.id: q.text for q in wm.quotes}
     best, sc = None, 0.0
     for g in wm.guardrails:
@@ -601,6 +601,14 @@ def topic_of(wm: WorkMap, u: Unknown) -> str:
         j = len(words & gw) / max(1, min(len(words), len(gw)))
         if j > sc:
             best, sc = g.id, j
+    for s_ in wm.steps:  # a judgment step ("switched the cost center") is a topic of its own
+        if not (s_.decision and s_.decision.kind == "judgment"):
+            continue
+        sw = stems(" ".join(x for x in (s_.title, s_.decision.description, s_.decision.from_value,
+                                        s_.decision.to_value) if x))
+        j = len(words & sw) / max(1, min(len(words), len(sw)))
+        if j > sc + 0.05:
+            best, sc = s_.id, j
     return best if best and sc >= 0.3 else (u.entity or u.id)
 
 
@@ -1357,7 +1365,16 @@ async def _rule_from_answer(wm: WorkMap, u: Unknown, text: str, q: Quote, ev: Mo
     if pred and (not well_formed(pred) or not all(v in wm.canonical_vars or v.startswith("doc.") or v in PRIOR_VARS
                                                   for v in predicate_vars(pred))):
         rule["predicate"] = None  # unobservable vars would never evaluate on a learner screen
-    dup = _similar_guardrail(wm, rule.get("guardrail_text") or "", text) if rule.get("guardrail_text") else None
+    pred = rule.get("predicate")
+    if pred and (not valid_patch_predicate(wm, None, pred, text + " " + (u.spoken_question or ""))
+                 or not literal_atoms(pred)):
+        # a threshold-only predicate ("amount > 5000") fires on every large record, maintenance included (e2e);
+        # without the case/choice condition the rule stays fuzzy (judged with the expert's words)
+        rule["predicate"] = None
+    topic = topic_of(wm, u)
+    dup = guardrail_by_id(wm, topic) if topic else None  # the question was about this rule: a restatement
+    if dup is None and rule.get("guardrail_text"):
+        dup = _similar_guardrail(wm, rule.get("guardrail_text") or "", text)
     if dup is not None:  # same rule restated (e.g. "the controller, Frank, approves UK invoices")
         dup.quote_ids = list(dict.fromkeys(dup.quote_ids + [q.id]))
         if rule.get("escalate_to") and not dup.owner:
