@@ -157,14 +157,18 @@ Rules:
   named after canonical vars (e.g. "Set {line.expense_account} for each line"). Thresholds/rules go into
   decisions/guardrails.
 - Segment by sub-goal: each step = one sub-goal with its precondition screen state.
-- Merge micro-events into meaningful steps (typically 4-12). order = 1..n; after = ids of prerequisite steps.
+- Merge micro-events into meaningful steps: a step = a sub-goal a new hire must do (typically 5-9 for a normal
+  session). order = 1..n; after = ids of prerequisite steps.
 - state_signature = {"app","view","entity_type"} copied from STATE lines.
 - EVERY step and EVERY guardrail must cite evidence: step.moment / guardrail.evidence[] =
   {"session_id","keyframe_ids":[kf ids from the log],"t":ms,"utterance_ids":[SAY ids from the log]}.
   Only use ids that appear in the log. If no evidence exists, leave moment null (it becomes an open question).
-- Decisions: kind "judgment" when the expert chose among options for a reason; reason_quote_ids = SAY ids
-  that explain why; counterfactual = what would change the decision.
-- Guardrails: limits, never-do, stop-and-ask rules the expert stated or the ledger resolved. quote_ids = SAY ids.
+- Decisions: kind "judgment" only when the expert chose differently from the default/system value for a reason
+  they stated; reason_quote_ids = SAY ids that explain why; counterfactual = what would change the decision.
+  Everything else is "routine".
+- Guardrails: a limit, never-do or stop-and-ask rule the expert SAID (or answered in a LEDGER line). quote_ids = the
+  SAY ids whose words state it. Never a rule read from the screen, a document, a ticket or a message shown on screen,
+  and never one you infer from values of this case alone.
   predicate = json-logic that a program evaluates on a FUTURE screen, so it may only use canonical vars that are
   visible fields/columns in the STATE lines (each must be a key of canonical_vars with its on-screen labels), compared
   with literal values exactly as they appear on screen. Never invent derived or boolean vars (no "is_high_value",
@@ -210,7 +214,9 @@ MAJORITY_SIM = 0.6
 
 
 async def self_consistent_map(r: Replay, seed: dict, n: Optional[int] = None) -> Optional[dict]:
-    """Sample n candidate maps; keep steps supported by a majority, minority steps → open unknowns."""
+    """Sample n candidate maps; keep steps supported by a majority (minority steps → open unknowns), guardrails whose
+    semantic cluster appears in a majority of candidates (minority guardrails are dropped), and judgment calls that a
+    majority of candidates also judged (else the decision is demoted to routine)."""
     import asyncio
     n = n or SELF_CONSISTENCY_N
     cands = [c for c in await asyncio.gather(*(_llm_map(r, seed) for _ in range(n))) if c]
@@ -220,21 +226,37 @@ async def self_consistent_map(r: Replay, seed: dict, n: Optional[int] = None) ->
         return cands[0] if cands else None
     from .merge import _similarity
     support: list[list[int]] = []
+    judged: list[list[int]] = []  # per step: how many candidates call the aligned step a judgment
     for i, (_, wi) in enumerate(valid):
         sup = [1] * len(wi.steps)
+        jud = [int(bool(s_.decision and s_.decision.kind == "judgment")) for s_ in wi.steps]
         for j, (_, wj) in enumerate(valid):
             if i == j or not wi.steps or not wj.steps:
                 continue
             sim = await _similarity(wi.steps, wj.steps)
             for k in range(len(wi.steps)):
-                if max(sim[k]) >= MAJORITY_SIM:
+                best_j = max(range(len(wj.steps)), key=lambda x: sim[k][x])
+                if sim[k][best_j] >= MAJORITY_SIM:
                     sup[k] += 1
+                    dj = wj.steps[best_j].decision
+                    jud[k] += int(bool(dj and dj.kind == "judgment"))
         support.append(sup)
+        judged.append(jud)
     need = len(valid) // 2 + 1
     best = max(range(len(valid)), key=lambda i: (sum(x >= need for x in support[i]), -len(valid[i][1].steps)))
     raw, wm = valid[best]
     raw = json.loads(json.dumps(raw))
-    keep = [st_raw for st_raw, sup in zip(raw.get("steps", []), support[best]) if sup >= need]
+    keep, demoted = [], []
+    for st_raw, sup, jud in zip(raw.get("steps", []), support[best], judged[best]):
+        if sup < need:
+            continue
+        dec = st_raw.get("decision")
+        if isinstance(dec, dict) and dec.get("kind") == "judgment" and jud < need:
+            dec["kind"] = "routine"
+            demoted.append((st_raw.get("title") or "").strip().lower())
+            d.log.info("self-consistency: judgment at %r only in %d/%d candidates → routine", st_raw.get("title"),
+                       jud, len(valid))
+        keep.append(st_raw)
     minority, seen_t = [], set()
     for (c, _), sup_c in zip(valid, support):
         for st_raw, sup in zip(c.get("steps", []), sup_c):
@@ -243,6 +265,10 @@ async def self_consistent_map(r: Replay, seed: dict, n: Optional[int] = None) ->
                 seen_t.add(key)
                 minority.append(st_raw)
     raw["steps"] = keep
+    raw["guardrails"] = await majority_guardrails([c for c, _ in valid], best, need)
+    gids = {g.get("id") for g in raw["guardrails"]}
+    for k in keep:
+        k["guardrail_ids"] = [g for g in k.get("guardrail_ids", []) if g in gids]
     unk = raw.setdefault("open_unknowns", [])
     for m in minority:
         unk.append(new_unknown("coverage", f"I'm not sure “{m.get('title')}” is a real step. Is it?",
@@ -252,7 +278,80 @@ async def self_consistent_map(r: Replay, seed: dict, n: Optional[int] = None) ->
     kept = {k.get("id") for k in keep}
     for k in keep:
         k["after"] = [a for a in k.get("after", []) if a in kept]
+    raw["_majority"] = {"guardrails": raw["guardrails"], "demoted": demoted}
     return raw
+
+
+GUARD_CLUSTER_COS = 0.8
+GUARD_CLUSTER_JACCARD = 0.5
+
+
+def _content_tokens(s: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", (s or "").lower()) if len(w) > 2 or w.isdigit()}
+
+
+def _jaccard(a: str, b: str) -> float:
+    x, y = _content_tokens(a), _content_tokens(b)
+    return len(x & y) / max(1, len(x | y))
+
+
+async def majority_guardrails(cands: list[dict], best: int, need: int) -> list[dict]:
+    """Cluster the candidates' guardrails semantically (embedding cos ≥0.8 or token Jaccard ≥0.5); keep clusters found
+    in ≥ need candidates. Representative = the member with the most common predicate, else the best candidate's."""
+    items = [(ci, g) for ci, c in enumerate(cands) for g in (c.get("guardrails") or []) if isinstance(g, dict)]
+    if not items:
+        return []
+    try:
+        vecs = await d.embed([str(g.get("text") or "") for _, g in items])
+    except Exception:  # noqa: BLE001
+        vecs = []
+
+    def sim(a: int, b: int) -> bool:
+        ta, tb = str(items[a][1].get("text") or ""), str(items[b][1].get("text") or "")
+        if vecs and len(vecs) == len(items) and d.cosine(vecs[a], vecs[b]) >= GUARD_CLUSTER_COS:
+            return True
+        return _jaccard(ta, tb) >= GUARD_CLUSTER_JACCARD
+
+    clusters: list[list[int]] = []
+    for i in range(len(items)):
+        for c in clusters:
+            if items[i][0] not in {items[x][0] for x in c} and any(sim(i, x) for x in c):
+                c.append(i)
+                break
+        else:
+            clusters.append([i])
+    out: list[dict] = []
+    used_ids: set[str] = set()
+    for c in clusters:
+        nsup = len({items[x][0] for x in c})
+        if nsup < need:
+            d.log.info("self-consistency: guardrail %r only in %d/%d candidates → dropped",
+                       items[c[0]][1].get("text"), nsup, len(cands))
+            continue
+        preds: dict[str, int] = {}
+        for x in c:
+            p = items[x][1].get("predicate")
+            if p:
+                k = json.dumps(p, sort_keys=True)
+                preds[k] = preds.get(k, 0) + 1
+        own = next((x for x in c if items[x][0] == best), c[0])
+        rep = own
+        if preds:
+            top, cnt = max(preds.items(), key=lambda kv: kv[1])
+            if cnt >= 2:
+                rep = next((x for x in c if items[x][0] == best and
+                            json.dumps(items[x][1].get("predicate"), sort_keys=True) == top),
+                           next(x for x in c if json.dumps(items[x][1].get("predicate"), sort_keys=True) == top))
+        g = json.loads(json.dumps(items[rep][1]))
+        gid = items[own][1].get("id") or g.get("id") or f"g{len(out) + 1}"  # keep the best candidate's id (steps cite it)
+        while gid in used_ids:
+            gid = f"{gid}_x"
+        used_ids.add(gid)
+        g["id"] = gid
+        # union of cited utterances across the cluster (grounding checks them later)
+        g["quote_ids"] = list(dict.fromkeys(q for x in c for q in (items[x][1].get("quote_ids") or [])))
+        out.append(g)
+    return out
 
 
 def _schema_errors(raw: Optional[dict]) -> tuple[Optional[WorkMap], list[str]]:
@@ -275,7 +374,10 @@ def _nearest(items: dict[str, float], t: float, window: float) -> Optional[str]:
     return best[1] if best else None
 
 
-def _repair_moment(m: Optional[Moment], r: Replay, window_ms: float = 15000) -> Optional[Moment]:
+def _repair_moment(m: Optional[Moment], r: Replay, window_ms: float = 15000,
+                   link_utterance: bool = True) -> Optional[Moment]:
+    """Fix ids against the log. Nearest-in-time utterance is fine for a STEP's screen moment; a guardrail's words
+    come only from the grounding pass (link_utterance=False), never from whatever was said nearby."""
     if m is None:
         return None
     kfs = [k for k in m.keyframe_ids if k in r.keyframes]
@@ -284,7 +386,7 @@ def _repair_moment(m: Optional[Moment], r: Replay, window_ms: float = 15000) -> 
     if not kfs:
         k = _nearest(r.keyframes, m.t, window_ms)
         kfs = [k] if k else []
-    if not us:
+    if not us and link_utterance:
         u = _nearest({x["id"]: x["t"] for x in r.expert_utts}, m.t, window_ms)
         us = [u] if u else []
     return Moment(session_id=r.session_id, keyframe_ids=kfs, t=m.t, utterance_ids=us)
@@ -347,6 +449,238 @@ def _fallback_map(r: Replay, seed: dict) -> dict:
     return {**seed, "steps": steps}
 
 
+# ---------------- grounding (every rule in the expert's own words) ----------------
+
+GROUND_SYS = """Grounding check for a Work Map built from an expert's recorded work session.
+For every ITEM (a guardrail rule, or the reason behind a judgment call) return the ids of the EXPERT UTTERANCES whose
+words state that rule / give that reason (possibly in another language, possibly paraphrased). An utterance that only
+reads or describes the screen, a document, a ticket or the values of this one case does NOT count; a rule nobody said
+gets []. Reply JSON {"items": {"<item id>": ["<utterance id>", ...]}} with every item id."""
+GROUND_MIN_OVERLAP = 0.34
+_STOP = {"the", "and", "for", "this", "that", "with", "from", "are", "always", "never", "into", "before", "after",
+         "then", "than", "when", "not", "any", "all", "our", "you", "your", "its", "has", "have", "will", "must",
+         "der", "die", "das", "und", "ist", "mit", "für", "nicht", "immer"}
+
+
+def _gtoks(s: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", (s or "").lower()) if (len(w) > 2 or w.isdigit()) and w not in _STOP}
+
+
+def token_ground(text: str, utts: list[dict], k: int = 2) -> list[str]:
+    """LLM-free fallback: utterances containing ≥34 % of the item's content words (never 'said nearby')."""
+    it = _gtoks(text)
+    if not it:
+        return []
+    scored = []
+    for u in utts:
+        ov = len(it & _gtoks(u.get("text") or "")) / len(it)
+        if ov >= GROUND_MIN_OVERLAP:
+            scored.append((ov, u["id"]))
+    return [i for _, i in sorted(scored, reverse=True)[:k]]
+
+
+def _ground_items(wm: WorkMap) -> dict[str, tuple[str, list[str]]]:
+    items: dict[str, tuple[str, list[str]]] = {}
+    for g in wm.guardrails:
+        items[f"g:{g.id}"] = (g.text + (f" (ask: {g.owner})" if g.owner else ""), list(g.quote_ids))
+    for s_ in wm.steps:
+        if s_.decision and s_.decision.kind == "judgment":
+            dd = s_.decision
+            txt = dd.description + (f" ({dd.from_value} → {dd.to_value})" if dd.to_value else "")
+            items[f"d:{s_.id}"] = (txt, list(dd.reason_quote_ids))
+    return items
+
+
+async def ground(wm: WorkMap, r: Replay) -> dict[str, list[str]]:
+    """item id ('g:<guardrail id>' / 'd:<step id>') → verified utterance ids. One batched LLM call; token fallback."""
+    items = _ground_items(wm)
+    utts = [u for u in r.expert_utts if u.get("text")]
+    if not items:
+        return {}
+    ids = {u["id"] for u in utts}
+    out: dict[str, list[str]] = {}
+    res = None
+    if utts:
+        payload = {"items": [{"id": k, "text": t, "cited": c} for k, (t, c) in items.items()],
+                   "utterances": [{"id": u["id"], "text": str(u["text"])[:300]} for u in utts[-150:]]}
+        try:
+            res = await d.chat([{"role": "system", "content": GROUND_SYS},
+                                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+                               model_role="fast", json_schema={"type": "object"})
+        except Exception:  # noqa: BLE001
+            res = None
+    got = res.get("items", res) if isinstance(res, dict) else None
+    llm_ok = isinstance(got, dict) and any(k in got for k in items)
+    for k, (text, cited) in items.items():
+        if llm_ok and k in got and isinstance(got[k], list):
+            out[k] = [str(x)[2:] if str(x).startswith("q_") else str(x) for x in got[k]]
+            out[k] = [x for x in dict.fromkeys(out[k]) if x in ids]
+        else:
+            out[k] = token_ground(text, utts)
+    return out
+
+
+async def apply_grounding(wm: WorkMap, r: Replay) -> list[Unknown]:
+    """Guardrails nobody said are dropped; judgment calls without a stated reason become a debrief 'why'."""
+    verdict = await ground(wm, r)
+    utt_t = {u["id"]: u["t"] for u in r.utterances}
+    unknowns: list[Unknown] = []
+    keep: list[Guardrail] = []
+    for g in wm.guardrails:
+        uids = verdict.get(f"g:{g.id}", [])
+        if not uids:
+            d.log.info("grounding: guardrail %s %r is not in the expert's words → dropped", g.id, g.text)
+            continue
+        g.quote_ids = list(uids)
+        ev = [m for m in g.evidence if m.keyframe_ids]
+        if ev:
+            for m in ev:
+                m.utterance_ids = list(uids)
+        else:
+            t0 = utt_t.get(uids[0], 0.0)
+            kf = _nearest(r.keyframes, t0, 60_000)
+            ev = [Moment(session_id=r.session_id, keyframe_ids=[kf] if kf else [], t=t0, utterance_ids=list(uids))]
+        g.evidence = ev
+        keep.append(g)
+    dropped = {g.id for g in wm.guardrails} - {g.id for g in keep}
+    wm.guardrails = keep
+    for s_ in wm.steps:
+        s_.guardrail_ids = [x for x in s_.guardrail_ids if x not in dropped]
+        if s_.decision and s_.decision.kind == "judgment":
+            uids = verdict.get(f"d:{s_.id}", [])
+            s_.decision.reason_quote_ids = list(uids)
+            if not uids:
+                u = new_unknown("why", f"At “{s_.title}” you {(s_.decision.description or '').rstrip('.')[:90]} — "
+                                       f"what made you do that?", entity=s_.id, priority=0.6, moment=s_.moment,
+                                hypothesis=s_.decision.description)
+                u.meta = {"origin": "builder", "gap": "reason"}
+                unknowns.append(u)
+    return unknowns
+
+
+_MONTHS = {1: "january januar janvier enero январ", 2: "february februar février febrero феврал",
+           3: "march märz mars marzo март", 4: "april avril abril апрел", 5: "may mai mayo мая май",
+           6: "june juni juin junio июн", 7: "july juli juillet julio июл", 8: "august août agosto август",
+           9: "september septembre septiembre сентябр", 10: "october oktober octobre octubre октябр",
+           11: "november novembre noviembre ноябр", 12: "december dezember décembre diciembre декабр"}
+
+
+def _quote_corpus(wm: WorkMap, qids: list[str]) -> str:
+    out = []
+    for qid in qids:
+        q = next((x for x in wm.quotes if x.id == qid), None)
+        if q:
+            out += [q.text] + list(q.translations.values())
+    return " \n ".join(out).lower()
+
+
+def _said_number(x: float, corpus: str) -> bool:
+    from .common import parse_number
+    for m in re.finditer(r"\d[\d.,' \u00a0]*\d|\d", corpus):
+        v = parse_number(m.group(0).strip())
+        if v is not None and abs(v - x) <= max(0.5, abs(x) * 0.005):
+            return True
+        km = re.match(r"\s*(k|тыс|tausend|thousand)", corpus[m.end():m.end() + 9])
+        if km and v is not None and abs(v * 1000 - x) <= max(0.5, abs(x) * 0.005):
+            return True
+    return False
+
+
+def _said_literal(lit: str, corpus: str) -> bool:
+    from .common import norm_label
+    n = norm_label(lit)
+    if not n:
+        return True
+    if n in norm_label(corpus):
+        return True
+    toks = _gtoks(lit)
+    return bool(toks) and toks <= _gtoks(corpus)
+
+
+def _choice_values(wm: WorkMap, r: Replay) -> dict[str, set[str]]:
+    """var → values the expert corrected AWAY from on a captured record (a predicate may legitimately name these)."""
+    from .common import canonical_vars_from_state, norm_label
+    out: dict[str, set[str]] = {}
+    for b, a in _before_after(r):
+        vb, va = canonical_vars_from_state(b, wm), canonical_vars_from_state(a, wm)
+        for k, v in vb.items():
+            if isinstance(v, str) and v and norm_label(str(va.get(k, ""))) != norm_label(v):
+                out.setdefault(k, set()).add(norm_label(_clean_literal(v) or v))
+    return out
+
+
+def literal_probes(wm: WorkMap, r: Replay) -> list[Unknown]:
+    """A string literal or numeric threshold in a predicate that the expert never said (and that is not the value
+    they corrected away from) is probably this case's demo value (a company name, one supplier): keep the predicate
+    but ask in the debrief whether the rule applies only there or more widely."""
+    from .common import norm_label
+    choices = _choice_values(wm, r)
+    out: list[Unknown] = []
+    for g in wm.guardrails:
+        if not g.predicate:
+            continue
+        corpus = _quote_corpus(wm, g.quote_ids)
+        seen: set[tuple] = set()
+
+        def probe(var: str, lit: Any, kind: str) -> None:
+            key = (var, str(lit))
+            if key in seen:
+                return
+            seen.add(key)
+            label = (wm.canonical_vars.get(var) or [var.split(".")[-1].replace("_", " ")])[0]
+            u = Unknown(id=d.new_id("u"), type="limit", scope="company", entity=g.id, priority=0.85,
+                        hypothesis=g.text, created_t=d.now_ms(), moment=g.evidence[0] if g.evidence else None,
+                        meta={"origin": "builder", "probe": kind, "var": var, "literal": lit, "label": label})
+            out.append(u)
+
+        def walk(p: Any) -> None:
+            if isinstance(p, list):
+                for x in p:
+                    walk(x)
+                return
+            if not isinstance(p, dict) or len(p) != 1:
+                return
+            op, args = next(iter(p.items()))
+            if op in ("and", "or", "!"):
+                walk(args)
+                return
+            if not isinstance(args, list) or len(args) != 2:
+                return
+            vars_ = [a["var"] for a in args if isinstance(a, dict) and "var" in a]
+            lits = [a for a in args if not (isinstance(a, dict) and "var" in a)]
+            if len(vars_) != 1 or len(lits) != 1:
+                return
+            var = vars_[0][0] if isinstance(vars_[0], list) else vars_[0]
+            lit = lits[0]
+            if str(var).startswith("prior.") or isinstance(lit, bool):
+                return
+            if isinstance(lit, (int, float)):
+                if str(var).endswith("_month") and 1 <= int(lit) <= 12 and \
+                        any(w in corpus for w in _MONTHS[int(lit)].split()):
+                    return
+                if not _said_number(float(lit), corpus):
+                    probe(var, lit, "threshold")
+            elif isinstance(lit, str):
+                if _said_literal(lit, corpus):
+                    return
+                if any(norm_label(lit) and norm_label(lit) in c for c in choices.get(var, ())):
+                    return  # the wrong choice the expert corrected away from — part of the rule
+                probe(var, lit, "scope")
+
+        walk(g.predicate)
+    return out
+
+
+def _clip_for(session_id: str, uid: str) -> Optional[str]:
+    try:
+        from .clips import clip_for  # type: ignore
+        return clip_for(session_id, uid)
+    except (ImportError, AttributeError):
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 # ---------------- main ----------------
 
 async def build_map(session_id: str, *, workflow_id: Optional[str] = None, expert: Optional[User] = None,
@@ -364,6 +698,8 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     wm, errs = _schema_errors(raw)
     if wm is not None:
         errs = validate_evidence(_with_repairs(wm, r), set(r.keyframes), {u["id"] for u in r.utterances})
+        # guardrail quotes/evidence are fixed by the grounding pass below (never by nearest-in-time utterances)
+        errs = [e for e in errs if not (e.startswith("guardrail ") and "has no evidence moment" in e)]
     if errs and raw is not None:
         raw2 = await _llm_map(r, seed, errs, raw)
         wm2, errs2 = _schema_errors(raw2)
@@ -374,6 +710,8 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
             wm2.steps = [s_ for s_ in wm2.steps if s_.title.strip().lower() not in dropped]
             have = {u.id for u in wm2.open_unknowns}
             wm2.open_unknowns += [u for u in (wm.open_unknowns if wm else []) if u.id not in have]
+            if wm is not None:  # majority guardrails / judgment verdicts survive the repair retry
+                _keep_majority(wm2, wm, (raw or {}).get("_majority") or {})
             wm = wm2
     if wm is None:
         wm = WorkMap.model_validate(_fallback_map(r, {**seed, "name": "Untitled workflow"}))
@@ -405,8 +743,9 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
         g.experts = [expert.id]
         g.approved = False
 
-    # quotes from SAY ids
+    # grounding: every guardrail / judgment call cites the expert's own words (verified, never nearest-in-time)
     utt = {u["id"]: u for u in r.utterances}
+    grounding_unknowns = await apply_grounding(wm, r)
     used: list[str] = []
 
     def qids(ids: list[str]) -> list[str]:
@@ -421,14 +760,13 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     for s in wm.steps:
         if s.decision:
             s.decision.reason_quote_ids = qids(s.decision.reason_quote_ids)
-            if not s.decision.reason_quote_ids and s.decision.kind == "judgment" and s.moment:
-                s.decision.reason_quote_ids = qids(s.moment.utterance_ids)
     for g in wm.guardrails:
-        g.quote_ids = qids(g.quote_ids) or qids([u for m in g.evidence for u in m.utterance_ids])
+        g.quote_ids = qids(g.quote_ids)
     for uid in dict.fromkeys(used):
         u = utt[uid]
         wm.quotes.append(Quote(id="q_" + uid, speaker=expert.name, speaker_id=expert.id, lang=(u.get("lang") or lang)[:2],
-                               text=u["text"], t=u["t"], session_id=session_id, source="live"))
+                               text=u["text"], t=u["t"], session_id=session_id, source="live",
+                               audio_clip=_clip_for(session_id, uid)))
     await translate_quotes(wm.quotes)
 
     # predicates: every var must map to a label that was actually on screen, else the guardrail is fuzzy
@@ -457,8 +795,11 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
                 g.predicate = orient_predicate(g.predicate, wm, r, g.id)
         g.fuzzy = not g.predicate
 
+    # literals / thresholds the expert never said (demo values) → scope probes for the debrief
+    grounding_unknowns += literal_probes(wm, r)
+
     # evidence gaps → open Unknowns (coverage)
-    gaps = []
+    gaps = list(grounding_unknowns)
     for s in wm.steps:
         if not moment_ok(s.moment):
             gaps.append(new_unknown("coverage", f"I missed why or how you did “{s.title}”. Can you explain?",
@@ -493,21 +834,64 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     return wm
 
 
+def _keep_majority(wm2: WorkMap, wm: WorkMap, maj: dict) -> None:
+    """The repair retry re-generates the whole map; keep the self-consistency verdicts: the majority guardrails (the
+    retry's version when it is the same rule, so its fixed evidence is used) and demoted judgment calls."""
+    out = []
+    for g in wm.guardrails:
+        m = next((x for x in wm2.guardrails if (x.predicate and x.predicate == g.predicate) or x.id == g.id
+                  and _jaccard(x.text, g.text) >= GUARD_CLUSTER_JACCARD or _jaccard(x.text, g.text) >= 0.7), None)
+        if m is not None:
+            m = m.model_copy(deep=True)
+            m.id = g.id
+            m.quote_ids = list(dict.fromkeys(m.quote_ids + g.quote_ids))
+        out.append(m or g)
+    wm2.guardrails = out
+    gids = {g.id for g in out}
+    demoted = set(maj.get("demoted") or [])
+    for s_ in wm2.steps:
+        s_.guardrail_ids = [x for x in s_.guardrail_ids if x in gids]
+        if s_.decision and s_.decision.kind == "judgment" and s_.title.strip().lower() in demoted:
+            s_.decision.kind = "routine"
+
+
 async def _same_expert_workflow(wm: WorkMap, expert_id: str, threshold: float = 0.8) -> Optional[str]:
-    """An expert re-recording a workflow they already mapped updates that map instead of creating a near-duplicate
-    (which would split learner lookups). Other experts' maps are only merged via an explicit workflow_id/request."""
+    """A capture that covers an existing workflow updates/merges into it instead of creating a near-duplicate (which
+    would split learner lookups). Same expert: embedding sim ≥ threshold. Another expert: also the same screens —
+    ≥30 % of this map's on-screen labels appear in the candidate's, or the same apps + record kinds."""
     from .common import list_maps, map_doc_text
-    mine = [m for m in list_maps() if any(e.id == expert_id for e in m.experts) and len(m.experts) == 1]
-    if not mine:
+    maps = list_maps()
+    if not maps:
         return None
     try:
-        vecs = await d.embed([map_doc_text(wm)] + [map_doc_text(m) for m in mine], "retrieval.passage")
+        vecs = await d.embed([map_doc_text(wm)] + [map_doc_text(m) for m in maps], "retrieval.passage")
         sims = [d.cosine(vecs[0], v) for v in vecs[1:]]
     except Exception:  # noqa: BLE001
         return None
-    i = max(range(len(mine)), key=lambda k: sims[k])
-    d.log.info("same-expert workflow match %s sim=%.3f", mine[i].workflow_id, sims[i])
-    return mine[i].workflow_id if sims[i] >= threshold else None
+    best: Optional[tuple[float, str]] = None
+    for m, sim in zip(maps, sims):
+        if sim < threshold:
+            continue
+        mine = any(e.id == expert_id for e in m.experts)
+        if not mine and not same_screens(wm, m):
+            continue
+        if best is None or sim > best[0]:
+            best = (sim, m.workflow_id)
+    if best:
+        d.log.info("capture matches existing workflow %s sim=%.3f", best[1], best[0])
+    return best[1] if best else None
+
+
+def same_screens(a: WorkMap, b: WorkMap, min_share: float = 0.3) -> bool:
+    from .common import norm_label
+    la = {norm_label(x) for al in a.canonical_vars.values() for x in al if x}
+    lb = {norm_label(x) for al in b.canonical_vars.values() for x in al if x}
+    if la and len(la & lb) / len(la) >= min_share:
+        return True
+    apps_a, apps_b = {norm_label(x) for x in a.apps}, {norm_label(x) for x in b.apps}
+    ent_a = {norm_label(s_.state_signature.get("entity_type") or "") for s_ in a.steps} - {""}
+    ent_b = {norm_label(s_.state_signature.get("entity_type") or "") for s_ in b.steps} - {""}
+    return bool(apps_a & apps_b) and bool(ent_a & ent_b)
 
 
 def _numeric_literals(p: Any) -> Any:
@@ -670,7 +1054,7 @@ def _with_repairs(wm: WorkMap, r: Replay) -> WorkMap:
     for s in wm.steps:
         s.moment = _repair_moment(s.moment, r)
     for g in wm.guardrails:
-        g.evidence = [m for m in (_repair_moment(m, r) for m in g.evidence) if m]
+        g.evidence = [m for m in (_repair_moment(m, r, link_utterance=False) for m in g.evidence) if m]
     return wm
 
 
@@ -681,7 +1065,7 @@ async def publish_expert_map(wm: WorkMap, session_id: Optional[str] = None) -> W
     maps = [WorkMap.model_validate(x) for x in d.st_call("kv_list", "expert_maps", f"{wm.workflow_id}:", default=[]) or []]
     if len(maps) > 1:
         from .merge import merge_maps
-        merged = await merge_maps(maps)
+        merged = await merge_maps(maps, newest_expert_id=eid)
         prev = load_map(wm.workflow_id)
         if prev:
             merged.exam = prev.exam

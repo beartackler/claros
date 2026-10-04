@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 from claros.models import Decision, Guardrail, Step, Unknown, User, Variant, WorkMap
@@ -96,9 +97,30 @@ def _reason(wm: WorkMap, dec: Decision, lang: str = "en") -> str:
     return dec.description
 
 
-async def merge_maps(maps: list[WorkMap], *, threshold: float = ALIGN_THRESHOLD) -> WorkMap:
+def _recency(m: WorkMap) -> float:
+    return max([q.t for q in m.quotes] or [0.0])
+
+
+def _toks(s: str) -> set[str]:
+    import re
+    return {w for w in re.findall(r"\w+", (s or "").lower()) if len(w) > 2 or w.isdigit()}
+
+
+def near_duplicate_text(a: str, b: str, min_overlap: float = 0.6) -> bool:
+    """Embedding-free dedupe: overlap coefficient of content words (works without Jina)."""
+    x, y = _toks(a), _toks(b)
+    return bool(x and y) and len(x & y) / min(len(x), len(y)) >= min_overlap
+
+
+async def merge_maps(maps: list[WorkMap], *, threshold: float = ALIGN_THRESHOLD,
+                     newest_expert_id: Optional[str] = None) -> WorkMap:
+    """newest_expert_id: the expert who recorded last — conflict questions are addressed to them (default: the map
+    with the latest quote)."""
     if not maps:
         raise ValueError("no maps")
+    if newest_expert_id is None:
+        newest = max(maps, key=_recency)
+        newest_expert_id = newest.experts[0].id if newest.experts else None
     maps = sorted(maps, key=lambda m: len(m.steps), reverse=True)
     base = maps[0].model_copy(deep=True)
     experts: dict[str, User] = {u.id: u for m in maps for u in m.experts}
@@ -134,7 +156,8 @@ async def merge_maps(maps: list[WorkMap], *, threshold: float = ALIGN_THRESHOLD)
             dup = None
             for k, mg in enumerate(merged_g):
                 if (g.predicate and mg.predicate and g.predicate == mg.predicate) or \
-                        d.cosine(v, gvecs[k]) >= GUARD_DUP_THRESHOLD:
+                        d.cosine(v, gvecs[k]) >= GUARD_DUP_THRESHOLD or \
+                        (g.action == mg.action and near_duplicate_text(g.text, mg.text)):
                     dup = mg
                     break
             if dup is None:
@@ -164,6 +187,7 @@ async def merge_maps(maps: list[WorkMap], *, threshold: float = ALIGN_THRESHOLD)
         merged.append(ns)
     sequences: list[list[str]] = [[s.id for s in merged]]
 
+    conflicts: list[tuple] = []
     for mi, m in enumerate(maps[1:], 1):
         other = sorted(m.steps, key=lambda s: s.order)
         m_experts = [e.id for e in m.experts]
@@ -181,7 +205,7 @@ async def merge_maps(maps: list[WorkMap], *, threshold: float = ALIGN_THRESHOLD)
                 tgt.approved = tgt.approved and s.approved
                 eid = (s.experts or m_experts or ["?"])[0]
                 if decisions_conflict(tgt.decision, s.decision):
-                    _add_conflict(out, out, out, tgt, s, experts, eid)
+                    conflicts.append((tgt, s, eid))
                 elif s.decision and tgt.decision and s.decision.description != tgt.decision.description:
                     tgt.variants.append(Variant(expert_id=eid, description=s.decision.description,
                                                 reason_quote_ids=s.decision.reason_quote_ids))
@@ -222,26 +246,71 @@ async def merge_maps(maps: list[WorkMap], *, threshold: float = ALIGN_THRESHOLD)
                         break
         s.after = list(dict.fromkeys(agreed))
     out.steps = merged
+    for tgt, s, eid in conflicts:
+        await _add_conflict(out, tgt, s, experts, eid, newest_expert_id)
     out.coverage = compute_coverage(out)
     return out
 
 
-def _add_conflict(out: WorkMap, map_a: WorkMap, map_b: WorkMap, tgt: Step, s: Step,
-                  experts: dict[str, User], eid_b: str) -> None:
+def _did(dec: Decision) -> str:
+    return (dec.description or dec.to_value or "").strip().rstrip(".")
+
+
+def _lc(s: str) -> str:
+    return s[:1].lower() + s[1:] if s and not s[:2].isupper() else s
+
+
+def conflict_question(other: str, other_did: str, this_did: str) -> str:
+    return f"{other} {_lc(other_did)}; you {_lc(this_did)} — why?"
+
+
+async def _plain_question(other: str, other_did: str, this_did: str, step_title: str) -> str:
+    """Brief style: 'Anna holds December invoices; you submitted with a credit note — why?' (fast LLM, template
+    fallback)."""
+    tpl = conflict_question(other, other_did, this_did)
+    try:
+        r = await d.chat([{"role": "system", "content":
+                           "Rewrite into ONE short spoken question (≤25 words) to an expert, in plain words: first what "
+                           "the other expert does (name them), then what this expert did (address them as 'you'), "
+                           "ending with 'why?'. No ids, no quotes, no field names. Reply JSON {\"question\": \"...\"}."},
+                          {"role": "user", "content": json.dumps({"other_expert": other, "other_did": other_did,
+                                                                  "you_did": this_did, "step": step_title},
+                                                                 ensure_ascii=False)}],
+                         model_role="fast", json_schema={"type": "object"})
+        q = (r or {}).get("question") if isinstance(r, dict) else None
+        if isinstance(q, str) and other.split()[0].lower() in q.lower() and 4 <= len(q.split()) <= 30:
+            return q.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return tpl
+
+
+async def _add_conflict(out: WorkMap, tgt: Step, s: Step, experts: dict[str, User], eid_b: str,
+                        newest_expert_id: Optional[str] = None) -> None:
+    """ONE conflict unknown per disagreement, addressed to the expert who recorded most recently."""
     eid_a = (tgt.experts or ["?"])[0]
     na, nb = _expert_name(experts, eid_a), _expert_name(experts, eid_b)
-    ra = _reason(map_a, tgt.decision)
-    rb = _reason(map_b, s.decision)
+    ra = _reason(out, tgt.decision)
+    rb = _reason(out, s.decision)
     tgt.conflict = (f"{na} does “{tgt.decision.to_value}” because: {ra} — "
                     f"{nb} does “{s.decision.to_value}” because: {rb}")
     tgt.variants.append(Variant(expert_id=eid_b, description=s.decision.description,
                                 reason_quote_ids=s.decision.reason_quote_ids))
-    for eid, mine, theirs, other in ((eid_a, tgt.decision, s.decision, nb), (eid_b, s.decision, tgt.decision, na)):
-        out.open_unknowns.append(Unknown(
-            id=d.new_id("u"), type="conflict", scope="company", entity=tgt.id, priority=0.9,
-            created_t=d.now_ms(), hypothesis=f"{experts[eid].name if eid in experts else eid}: {mine.to_value}",
-            spoken_question=f"{other} does “{theirs.to_value}” at “{tgt.title}”, you do “{mine.to_value}”. Why?",
-            about_event_ids=[], moment=tgt.moment))
+    ask_b = newest_expert_id != eid_a  # default: the expert merged in later
+    ask_id, other_id = (eid_b, eid_a) if ask_b else (eid_a, eid_b)
+    mine, theirs = (s.decision, tgt.decision) if ask_b else (tgt.decision, s.decision)
+    ask_name, other_name = _expert_name(experts, ask_id), _expert_name(experts, other_id)
+    other_why = rb if not ask_b else ra
+    other_first = other_name.split()[0] if other_name else other_name
+    q = await _plain_question(other_first, _did(theirs), _did(mine), tgt.title)
+    out.open_unknowns.append(Unknown(
+        id=d.new_id("u"), type="conflict", scope="company", entity=tgt.id, priority=0.95,
+        created_t=d.now_ms(), hypothesis=f"{ask_name}: {mine.to_value}", spoken_question=q,
+        about_event_ids=[], moment=tgt.moment,
+        meta={"origin": "merge", "ask_expert_id": ask_id, "ask_expert_name": ask_name,
+              "other_expert_id": other_id, "other_expert_name": other_name,
+              "other_did": _did(theirs), "other_why": other_why, "this_did": _did(mine),
+              "step_title": tgt.title}))
 
 
 def consensus(wm: WorkMap) -> dict[str, float]:

@@ -152,7 +152,8 @@ async def test_builder_validates_repairs_and_opens_gaps(monkeypatch, env):
     assert s2.moment.utterance_ids == ["u2"]  # nearest utterance repair
     assert s3.moment is None
     gap_entities = {u.entity for u in wm.open_unknowns if u.type == "coverage"}
-    assert {"s3", "g2"} <= gap_entities
+    assert "s3" in gap_entities
+    assert [g.id for g in wm.guardrails] == ["g1"]  # the rule nobody said is dropped (grounding), not asked about
     q = next(q for q in wm.quotes if q.id == "q_u2")
     assert q.lang == "de" and q.translations["ru"].startswith("Оборудование")
     assert all("private" not in q.text for q in wm.quotes)  # off-record skipped
@@ -175,7 +176,7 @@ async def test_merge_conflict_partial_order_attribution():
     dec = next(s for s in m.steps if s.conflict)
     assert dec.id == "s5" and "Hold" in dec.conflict and "credit note" in dec.conflict
     conf = [u for u in m.open_unknowns if u.type == "conflict"]
-    assert len(conf) == 2
+    assert len(conf) == 1  # one question per disagreement, addressed to the expert who recorded last
     g1 = next(g for g in m.guardrails if g.id == "g1")
     assert set(g1.experts) == {"u_anna", "u_marco"}
     s4 = next(s for s in m.steps if s.id == "s4")
@@ -201,14 +202,22 @@ async def test_debrief_flow(env):
                           "user": User(id="u_anna", name="Anna Keller", role="expert")})()
     debrief.start("deb1", "wf_ap_invoice")
     q1 = await debrief.next_debrief_utterance(sess)
-    assert q1 == "Is 5,000 the limit?"  # guardrails → exceptions → unseen; universal skipped
+    assert q1 == "Is 5,000 the limit?"  # live leftovers first (limit → why → coverage); universal skipped
     r = await debrief.handle_debrief_answer(sess, "Yes, net amount over 5,000.")
     assert "Why cost center 0400?" in r
     r = await debrief.handle_debrief_answer(sess, "not now")
     assert "credit notes" in r
     r = await debrief.handle_debrief_answer(sess, "We never pay without a credit note.")
-    # ledger empty → teach-back
+    # then rules it is unsure about: the December hold is tied to one named supplier
+    assert "Nordwind" in r and "every supplier" in r and "release" in r
+    r = await debrief.handle_debrief_answer(sess, "Every supplier that bills twice, and Frank decides when to release.")
+    m = common.load_map("wf_ap_invoice")
+    g2 = common.guardrail_by_id(m, "g2")
+    assert "Nordwind" not in json.dumps(g2.predicate) and g2.predicate  # scope widened, month condition kept
+    while debrief.get_state(sess).phase == "questions":
+        r = await debrief.handle_debrief_answer(sess, "That's just how we do it here.")
     st = debrief.get_state(sess)
+    assert st.asked <= 6 and st.core_asked >= 3
     assert "[[step:s1]]" in r and debrief._word_count(st.script) <= 140 and r.endswith("right?")
     assert st.phase == "teach_back"
     parts = debrief.split_markers(r)
@@ -216,25 +225,21 @@ async def test_debrief_flow(env):
     m = common.load_map("wf_ap_invoice")
     assert next(u for u in m.open_unknowns if u.spoken_question == "Why cost center 0400?").status == "deferred"
     assert any(q.source == "debrief" for q in m.quotes)
-    # correction patches only affected step
+    # correction patches only the affected step, read back as a diff in plain speech
     before = {s.id: s.model_dump() for s in m.steps}
     r = await debrief.handle_debrief_answer(sess, "No, step 5: hold only if the statement shows a duplicate.")
-    assert "→" in r and "[[step:s5]]" in r
+    assert "[[step:s5]]" in r and "step 5 now" in r and "{" not in r and r.endswith("how it works?")
     after = common.load_map("wf_ap_invoice")
     changed = [s.id for s in after.steps if s.model_dump() != before[s.id]]
     assert changed == ["s5"]
-    # confirm → exam
-    r = await debrief.handle_debrief_answer(sess, "Yes, that's right")
-    assert "Case 1" in r and st.phase == "exam"
-    assert len(st.exam) == 3
-    assert "capex" in st.exam[0].predicted.lower() or "Capital" in st.exam[0].predicted
-    r = await debrief.handle_debrief_answer(sess, "yes")
-    r = await debrief.handle_debrief_answer(sess, "no, it should go on hold")
-    r = await debrief.handle_debrief_answer(sess, "correct")
+    # explicit confirm → published, no exam
+    r = await debrief.handle_debrief_answer(sess, "Yes, that's how it works")
+    assert "Case" not in r and st.phase == "done" and "published" in r
     final = common.load_map("wf_ap_invoice")
-    verdicts = [e.expert_verdict for e in final.exam[-3:]]
-    assert verdicts == ["correct", "wrong", "correct"] and final.exam[-2].correction
-    assert "u_anna" in final.approved_by
+    assert "u_anna" in final.approved_by and not final.exam and all(g.approved for g in final.guardrails)
+    # the skipped question is not left as a list: it needs a second run
+    assert next(u for u in final.open_unknowns if u.spoken_question == "Why cost center 0400?").meta.get(
+        "needs_second_run")
 
 
 def test_exam_boundaries():
@@ -369,7 +374,7 @@ async def test_lookup_and_requests(env):
     acc = c.post(f"/api/requests/{rq['id']}/accept", json={"user": {"id": "e", "name": "E", "role": "expert"}}).json()
     assert acc["request"]["status"] == "accepted" and acc["workflow_id"] == rq["workflow_id"]
     md = c.get("/api/export/wf_ap_invoice.skill.md").text
-    assert md.startswith("---\nname: wf_ap_invoice") and "json-logic" in md and "Stop conditions" in md
+    assert md.startswith("---\nname: ") and "check_action" in md and "Stop conditions" in md
     assert c.get("/api/workflows/wf_ap_invoice/coverage").json()["status"] == "ready"
 
 
