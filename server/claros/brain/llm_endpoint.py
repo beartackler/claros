@@ -274,7 +274,30 @@ def _hypothesis_messages(sid: Optional[str], text: str, lang: str, body: dict) -
                                                      for m in hist[:-1]] + [{"role": "user", "content": text}]
 
 
+def pending_line(body: dict) -> Optional[str]:
+    """The newest ⟦TEXT⟧ line the client sent since the agent last spoke (None if there is none)."""
+    msgs = body.get("messages") or []
+    last_agent = max((i for i, m in enumerate(msgs) if m.get("role") == "assistant"), default=-1)
+    for m in reversed(msgs[last_agent + 1:]):
+        if m.get("role") == "user":
+            mm = LINE_RE.match(_text(m.get("content")))
+            if mm and mm.group(1).strip():
+                return mm.group(1).strip()
+    return None
+
+
+def relay(body: dict) -> Reply:
+    """Relay mode (client sends custom_llm_extra_body.relay): the server already decides every line over the
+    session socket, so the agent only speaks ⟦TEXT⟧ exactly as written and otherwise stays silent.
+    Stateless: works for any server's sessions, no model in the loop, nothing to paraphrase or skip."""
+    line = pending_line(body)
+    return Reply(text=line) if line else _skip(body)
+
+
 async def route(body: dict) -> Reply:
+    extra = body.get("elevenlabs_extra_body") or {}
+    if isinstance(extra, dict) and extra.get("relay"):
+        return relay(body)
     sid = session_id_from(body)
     text = last_user_text(body)
     sess = deps.get_session(sid)

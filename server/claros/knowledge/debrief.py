@@ -9,7 +9,7 @@ phases: questions → teach_back (→ correction loop) → done   (the old self-
   learner-originated items (novel cases, learner questions) are capped at 1 and asked only after the core block.
   Wording: one batched LLM call at start (brief style, action first), deterministic templates as fallback.
   Answers to probes patch the guardrail they are about (text + predicate + owner) and attach the quote.
-- teach_back: ≤140 spoken words (≤60 s) in session lang with [[step:<id>]] markers (→ highlight_step).
+- teach_back: ~90 spoken words asked of the model, ≤140 hard cap (≤60 s) in session lang with [[step:<id>]] markers (→ highlight_step).
 - correction: patches only the affected steps/guardrails, reads back ONLY the diff in natural speech.
 - explicit confirm → approve + publish; still-open core items → deferred, needs_second_run (coverage partial).
 
@@ -35,7 +35,7 @@ from .common import (
     step_by_id,
 )
 
-CONFIG = {"min_questions": 3, "max_questions": 6, "max_seconds": 300, "teachback_words": 140, "exam_cases": 3,
+CONFIG = {"min_questions": 3, "max_questions": 6, "max_seconds": 300, "teachback_words": 140, "teachback_target": 90, "exam_cases": 3,
           "learner_cap": 1, "question_words": 25}
 
 TYPE_RANK = {"limit": 0, "never": 0, "stop_and_ask": 0, "why": 1, "deliberate": 1, "conflict": 1, "coverage": 2}
@@ -818,11 +818,12 @@ async def teach_back(wm: WorkMap, lang: str) -> str:
     guards = [{"rule": g.text, "expert": _first_name(wm, g.quote_ids), "ask": g.owner} for g in wm.guardrails]
     out = await d.chat([
         {"role": "system", "content": f"Write a spoken teach-back of this workflow for the expert to confirm, in "
-                                      f"language '{lang}', at most {CONFIG['teachback_words']} words (under one "
-                                      "minute). Prefix the sentence about each step with its marker [[step:<id>]]. "
-                                      "Say every judgment call and every guardrail briefly, in the expert's terms "
-                                      "(attribute a rule to the expert by first name once or twice). Routine steps "
-                                      "can be merged. End by asking if that's how it works. Plain text only."},
+                                      f"language '{lang}', about {CONFIG['teachback_target']} words (under 40 "
+                                      "seconds). Prefix the sentence about each step with its marker [[step:<id>]]. "
+                                      "You are speaking TO the expert who did this, so address them as "
+                                      "'you' and never use their name. Say every judgment call and every guardrail in "
+                                      "a few words, in the expert's terms; merge or drop routine steps (opening "
+                                      "modules, finding lists, saving). End by asking if that's how it works. Plain text only."},
         {"role": "user", "content": json.dumps({"steps": steps, "guardrails": guards}, ensure_ascii=False)}],
         model_role="fast")
     if isinstance(out, str) and MARKER.search(out):
@@ -1466,8 +1467,9 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
                     _link_answer(wm, u, q, ev)
                     await _rule_from_answer(wm, u, text, q, ev, eid)
             await save_map(wm, sid)
+        skipped = u is not None and (u.meta or {}).get("skipped")
         nxt = await next_debrief_utterance(session)
-        return f"{t('thanks', lang)} {nxt}"
+        return nxt if skipped else f"{t('thanks', lang)} {nxt}"  # a skip is not an answer: no "got it"
 
     if st.phase == "teach_back":
         if is_confirm(text, intent):

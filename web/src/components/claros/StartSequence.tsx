@@ -59,6 +59,7 @@ export function StartSequence({
     setWhy((x) => ({ ...x, [k]: w }));
   };
   // the voice can connect after the wait gave up (slow network, a transient error): then just carry on
+  const [slow, setSlow] = useState(false);
   const greetFailed = st.greet === "denied";
   useEffect(() => {
     if (!greetFailed) return;
@@ -93,7 +94,12 @@ export function StartSequence({
       set("mic", "done");
     }
     set("greet", "active");
-    if (!(await onVoice())) return set("greet", "denied", ["start.voice.denied", "start.voice.fix"]);
+    setSlow(false);
+    const slowTimer = setTimeout(() => setSlow(true), 8000);
+    const ok = await onVoice();
+    clearTimeout(slowTimer);
+    setSlow(false);
+    if (!ok) return set("greet", "denied", ["start.voice.denied", "start.voice.fix"]);
     set("greet", "done");
     onDone();
   };
@@ -169,7 +175,7 @@ export function StartSequence({
                     <Icon className="size-5 shrink-0" aria-hidden /> {t(s.label)}
                   </p>
                   <p className="mt-0.5 text-base font-semibold text-ink-2" aria-live="polite">
-                    {v === "active" ? t(s.active) : v === "done" ? t("start.state.done") : (v === "denied" || v === "warn") && why[s.k] ? t(why[s.k]![0]) : null}
+                    {v === "active" ? t(s.k === "greet" && slow ? "start.state.greet.slow" : s.active) : v === "done" ? t("start.state.done") : (v === "denied" || v === "warn") && why[s.k] ? t(why[s.k]![0]) : null}
                   </p>
                 </div>
               </div>

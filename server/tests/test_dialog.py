@@ -288,3 +288,31 @@ def test_learner_voice_answers_open_nudge_before_intent_routing(offline, monkeyp
     assert r == {"intent": "answer_nudge", "outcome": "correct"} and calls[-1][2] is True
     r = run(dialog.handle_turn("ln", "what's next?"))  # not an answer → normal tutor routing
     assert r["intent"] != "answer_nudge"
+
+
+# ---------------- relay mode (custom LLM speaks only the server's lines) ----------------
+
+def _relay_body(*msgs):
+    return {"elevenlabs_extra_body": {"relay": True, "session_id": "s_x"},
+            "tools": [{"type": "function", "function": {"name": "skip_turn"}}],
+            "messages": [{"role": r, "content": c} for r, c in msgs]}
+
+
+def test_relay_speaks_line_verbatim():
+    from claros.brain.llm_endpoint import relay
+    q = "Which cost centers apply when equipment is not on the shop floor?"
+    r = relay(_relay_body(("system", "prompt"), ("user", f"⟦{q}⟧")))
+    assert r.text == q and not r.tool
+
+
+def test_relay_skips_user_speech_and_old_lines():
+    from claros.brain.llm_endpoint import relay
+    r = relay(_relay_body(("user", "⟦Got it, thanks.⟧"), ("assistant", "Got it, thanks."),
+                          ("user", "Let's take a look at this Feldmark entry.")))
+    assert r.tool == "skip_turn" and not r.text
+
+
+def test_relay_takes_newest_pending_line():
+    from claros.brain.llm_endpoint import relay
+    r = relay(_relay_body(("assistant", "hi"), ("user", "⟦First.⟧"), ("user", "um"), ("user", "⟦Second.⟧")))
+    assert r.text == "Second."

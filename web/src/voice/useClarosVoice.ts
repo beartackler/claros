@@ -74,6 +74,17 @@ async function fetchToken(agent: string): Promise<TokenResp> {
   return { token: (await r.text()).trim() };
 }
 
+// LiveKit logs "error reading from signal stream" whenever a call closes (page change, end of session). It is not
+// a failure, but the Next dev overlay turns it into a red error panel, so it is dropped here.
+if (typeof window !== "undefined" && !(window as unknown as { __clarosConsole?: boolean }).__clarosConsole) {
+  (window as unknown as { __clarosConsole?: boolean }).__clarosConsole = true;
+  const orig = console.error.bind(console);
+  console.error = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].startsWith("error reading from signal stream")) return;
+    orig(...args);
+  };
+}
+
 // A conversation token fetched while the window picker is open, so pressing Start doesn't wait on it.
 // Tokens are short-lived, so a prefetched one is used only within 60 s.
 let prefetched: { agent: string; at: number; p: Promise<TokenResp> } | null = null;
@@ -386,7 +397,7 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     if (userName) vars.user_name = userName;
     const shortLang = (lang || "en").slice(0, 2);
     const common = {
-      customLlmExtraBody: { session_id: sessionId, mode },
+      customLlmExtraBody: { session_id: sessionId, mode, relay: true },
       dynamicVariables: vars,
       ...(["de", "fr", "es", "ru"].includes(shortLang) ? { overrides: { agent: { language: shortLang as "de" | "fr" | "es" | "ru" } } } : {}),
       clientTools: clientTools.current as unknown as Record<string, (p: unknown) => string>,
