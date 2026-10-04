@@ -70,6 +70,9 @@ L = {
     "changed": {"en": "Changed", "de": "Geändert", "fr": "Modifié", "es": "Cambiado", "ru": "Изменено"},
     "right_now": {"en": "Is it right now?", "de": "Stimmt es jetzt?", "fr": "C'est juste maintenant ?",
                   "es": "¿Ahora está bien?", "ru": "Теперь верно?"},
+    "which_one": {"en": "Which one do you mean — “{a}” or “{b}”?", "de": "Welches meinst du — „{a}“ oder „{b}“?",
+                  "fr": "Tu parles de laquelle — « {a} » ou « {b} » ?", "es": "¿Cuál quieres decir — «{a}» o «{b}»?",
+                  "ru": "Что именно — «{a}» или «{b}»?"},
     "nochange": {"en": "I couldn't tell which step to change. Which step do you mean?",
                  "de": "Ich weiß nicht, welchen Schritt ich ändern soll. Welchen meinst du?",
                  "fr": "Je ne sais pas quelle étape modifier. Laquelle ?",
@@ -836,11 +839,7 @@ async def apply_correction(wm: WorkMap, text: str, lang: str, quote_id: Optional
         model_role="smart", json_schema=PATCH_SCHEMA)
     patches = out.get("patches") if isinstance(out, dict) else None
     if not patches:
-        tgt = _fallback_target(wm, text)
-        if tgt is None:
-            return wm, []
-        field_ = "decision.description" if tgt.decision else "title"
-        patches = [{"target": "step", "id": tgt.id, "field": field_, "new": text.strip()}]
+        return _fallback_patch(wm, text, quote_id)
     diffs = []
     for p in patches:
         obj = step_by_id(wm, p.get("id", "")) if p.get("target") == "step" else guardrail_by_id(wm, p.get("id", ""))
@@ -872,16 +871,78 @@ async def apply_correction(wm: WorkMap, text: str, lang: str, quote_id: Optional
         obj.approved = False
         diffs.append({"target": p.get("target"), "id": obj.id, "field": f, "old": old, "new": new,
                       "label": getattr(obj, "title", None) or getattr(obj, "text", "")})
+    if not diffs:  # LLM gave nothing usable (or only rejected predicate patches): deterministic fallback
+        wm, diffs = _fallback_patch(wm, text, quote_id)
     return wm, diffs
+
+
+def rank_targets(wm: WorkMap, text: str) -> list[tuple[float, str, Any]]:
+    """Steps and guardrails ranked by word-stem overlap with the correction (step N wins outright)."""
+    m = _STEP_NUM.search(text or "")
+    steps = ordered_steps(wm)
+    if m and 1 <= int(m.group(1)) <= len(steps):
+        return [(99.0, "step", steps[int(m.group(1)) - 1])]
+    qtext = {q.id: q.text for q in wm.quotes}
+
+    def stems(x: str) -> set[str]:
+        return {w[:5] for w in re.findall(r"\w{4,}", (x or "").lower())}
+    words = stems(text)
+    out: list[tuple[float, str, Any]] = []
+    for g in wm.guardrails:
+        gw = stems(g.text + " " + " ".join(qtext.get(i, "") for i in g.quote_ids))
+        out.append((len(words & gw) / max(1, len(words)) + 0.05, "guardrail", g))  # rules are what experts correct
+    for s_ in steps:
+        sw = stems(s_.title + " " + (s_.decision.description if s_.decision else ""))
+        out.append((len(words & sw) / max(1, len(words)), "step", s_))
+    return sorted([x for x in out if x[0] > 0.1], key=lambda x: -x[0])
+
+
+def _fallback_patch(wm: WorkMap, text: str, quote_id: Optional[str]) -> tuple[WorkMap, list[dict]]:
+    ranked = rank_targets(wm, text)
+    if ranked and ranked[0][1] == "step" and len(ranked) > 1:
+        g = next((o for sc, k, o in ranked[1:] if k == "guardrail" and o.id in ranked[0][2].guardrail_ids
+                  and ranked[0][0] - sc <= 0.1), None)
+        if g is not None:  # step + its own rule are one target, not an ambiguity
+            ranked = [(ranked[0][0], "guardrail", g)] + [x for x in ranked[1:] if x[2] is not g]
+    if not ranked or (len(ranked) > 1 and ranked[0][0] - ranked[1][0] < 0.08 and ranked[0][0] < 99):
+        return wm, []  # ambiguous → diff_readback asks "Which one — X or Y?"
+    _, kind, obj = ranked[0]
+    sent = re.sub(r"^\s*(no|nope|one detail|actually|correction)\b[\s,:;—-]*", "", text.strip(), flags=re.I)
+    sent = (sent[:1].upper() + sent[1:]).rstrip(".") + "." if sent else ""
+    if not sent:
+        return wm, []
+    if kind == "guardrail":
+        old = obj.text
+        if sent.lower().rstrip(".") in old.lower():
+            return wm, []
+        obj.text = old.rstrip(". ") + ". " + sent
+        f, new = "text", obj.text
+        if quote_id:
+            obj.quote_ids = list(dict.fromkeys(obj.quote_ids + [quote_id]))
+    else:
+        if obj.decision is None:
+            obj.decision = Decision(kind="judgment", description=obj.title)
+        old = obj.decision.counterfactual
+        obj.decision.counterfactual = sent
+        f, new = "decision.counterfactual", sent
+        if quote_id:
+            obj.decision.reason_quote_ids = list(dict.fromkeys(obj.decision.reason_quote_ids + [quote_id]))
+    obj.approved = False
+    return wm, [{"target": kind, "id": obj.id, "field": f, "old": old, "new": new,
+                 "label": getattr(obj, "title", None) or getattr(obj, "text", "")}]
 
 
 _ACTION_WORDS = {"block_and_explain": "stop and explain", "warn": "warn", "stop_and_ask": "stop and ask",
                  "hold": "put it on hold"}
 
 
-def diff_readback(wm: WorkMap, diffs: list[dict], lang: str) -> str:
+def diff_readback(wm: WorkMap, diffs: list[dict], lang: str, text: str = "") -> str:
     """Natural speech, ONLY what changed: 'Got it — step 3 now: … Anything else, or is that how it works?'."""
     if not diffs:
+        top = rank_targets(wm, text)[:2] if text else []
+        names = [_short(o.title if k == "step" else o.text.split(":")[0], 60).rstrip(".") for _, k, o in top]
+        if len(names) == 2:
+            return t("which_one", lang, a=names[0], b=names[1])
         return t("nochange", lang)
     bits: list[str] = []
     said_when = False
@@ -1367,7 +1428,7 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
         for df in diffs:
             if df["target"] == "step":
                 await d.send(sid, {"type": "highlight_step", "step_id": df["id"]})
-        return diff_readback(wm, diffs, lang)
+        return diff_readback(wm, diffs, lang, text)
 
     st.phase = "done"
     return t("done", lang)

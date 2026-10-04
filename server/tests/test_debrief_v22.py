@@ -191,3 +191,22 @@ def test_new_rule_needs_the_experts_own_words():
     assert not _stated_by("Foreign-currency invoices require an extra check before booking.", "Yes, that's how I do it.")
     assert _stated_by("Unknown supplier: stop and ask the controller",
                       "If I don't know the supplier, I stop and ask the controller before booking anything.")
+
+
+async def test_correction_without_llm_patches_the_rule_or_asks_which_one(monkeypatch):
+    from claros.knowledge import _deps as d, debrief
+    from claros.models import Decision, Guardrail, Step, WorkMap
+    monkeypatch.setattr(d, "_llm", lambda: None)
+    wm = WorkMap(id="w", workflow_id="wf", name="AP", steps=[
+        Step(id="s2", order=2, title="Correct the expense head to the capex account", guardrail_ids=["gc"],
+             decision=Decision(kind="judgment", description="Move equipment to capex")),
+        Step(id="s5", order=5, title="Route subsidiary invoices for second approval")],
+        guardrails=[Guardrail(id="gc", text="Equipment over 5,000 is capex: never book it to small tools."),
+                    Guardrail(id="gu", text="Anything from the UK subsidiary needs a second approval")])
+    t = "One detail: maintenance and repairs stay an expense even above 5,000 — only new equipment is capex."
+    wm2, diffs = await debrief.apply_correction(wm, t, "en")
+    assert diffs and diffs[0]["id"] == "gc" and "Maintenance and repairs stay an expense" in wm2.guardrails[0].text
+    r = debrief.diff_readback(wm2, diffs, "en", t)
+    assert "One detail" not in r and "small tools" not in r  # only the changed sentence
+    q = debrief.diff_readback(wm, [], "en", "the subsidiary approval is different")
+    assert q.startswith("Which one do you mean")

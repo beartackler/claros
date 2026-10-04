@@ -521,8 +521,8 @@ def well_formed(p: Any) -> bool:
         return False
     if op == "var":
         return isinstance(args, (str, list)) and (not isinstance(args, list) or (args and isinstance(args[0], str)))
-    if op in ("!", "!!") and not isinstance(args, list):
-        return well_formed(args)
+    if op in ("!", "!!"):  # {"!": ["Pending", {"var": x}]} negates the literal → never fires (e2e rebuild)
+        return well_formed(args) if not isinstance(args, list) else (len(args) == 1 and well_formed(args[0]))
     if not isinstance(args, list) or not args:
         return False
     if op in ("==", "===", "!=", "!==", ">", ">=", "<", "<=", "in") and len(args) not in (2, 3):
