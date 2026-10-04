@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Claros intro</title>
+<style>
+  html, body { margin: 0; width: 1920px; height: 1080px; background: #000; overflow: hidden; }
+  .stage { position: absolute; inset: 0; display: grid; place-items: center; }
+  .lockup { display: flex; align-items: center; gap: 44px; }
+  .orb { position: relative; width: 150px; height: 150px; }
+  .orb .ball { position: absolute; inset: 0; border-radius: 50%; background: #6d28d9; border: 6px solid #fbf6ea;
+               transform: scale(0); animation: pop .7s cubic-bezier(.2,1.4,.4,1) .5s forwards, breathe 2.4s ease-in-out 1.4s infinite; }
+  .orb .shine { position: absolute; left: 30px; top: 28px; width: 38px; height: 38px; border-radius: 50%; background: #ede4ff;
+                opacity: 0; animation: fade .3s ease 1.0s forwards; }
+  .orb .ring { position: absolute; inset: 0; border-radius: 50%; border: 5px solid #8b5cf6; opacity: 0;
+               animation: ring 1.6s ease-out 1.1s infinite; }
+  .orb .ring.r2 { animation-delay: 1.65s; }
+  .word { font: 900 210px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: -10px; color: #fbf6ea;
+          opacity: 0; transform: translateX(-24px); animation: slide .7s cubic-bezier(.2,.8,.2,1) 1.0s forwards; }
+  .tag { position: absolute; top: 690px; width: 100%; text-align: center;
+         font: 600 46px/1.3 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #b9b2a5;
+         opacity: 0; animation: fade .6s ease 1.9s forwards; }
+  body.end .tag { color: #fbf6ea; }
+  @keyframes pop { to { transform: scale(1); } }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  @keyframes fade { to { opacity: 1; } }
+  @keyframes slide { to { opacity: 1; transform: none; } }
+  @keyframes ring { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(2.2); opacity: 0; } }
+</style></head>
+<body>
+  <div class="stage"><div class="lockup">
+    <div class="orb"><div class="ring"></div><div class="ring r2"></div><div class="ball"></div><div class="shine"></div></div>
+    <div class="word">claros</div>
+  </div></div>
+  <div class="tag" id="tag"></div>
+  <script>
+    // ?tag=...  sets the line under the logo; ?end=1 for the closing card
+    const q = new URLSearchParams(location.search);
+    document.getElementById("tag").textContent = q.get("tag") || "";
+    if (q.get("end")) document.body.classList.add("end");
+  </script>
+</body></html>

@@ -219,7 +219,7 @@ export function ZoomShot({
   const ctx = useContext(LightboxCtx);
   const t = useT();
   const f = frames[index] ?? frames[0];
-  if (!f) return null;
+  if (!f || !f.keyframeId) return null; // big evidence shots only for real screen moments
   return (
     <motion.button
       type="button"

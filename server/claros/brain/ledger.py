@@ -482,6 +482,8 @@ class Ledger:
 
     async def _open_for(self, e: ScreenEvent, cls: str) -> Optional[Unknown]:
         utype, hyp, hconf, th = self._shape(e, cls)
+        if utype in ("why", "deliberate") and e.kind in ("edit", "select") and not (e.old and e.new):
+            return None  # a value that appeared/vanished (scroll, overlay, autofill) is no "why did you change it?"
         now = deps.now_ms()
         text_key = f"{utype} {e.canonical or e.field or ''} {e.summary or ''} {e.new or ''}"
         # ---- dedupe ----

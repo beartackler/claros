@@ -241,60 +241,23 @@ export function ScreenThumb({
   alt?: string;
   rounded?: boolean;
 }) {
+  const t = useT();
   const [failed, setFailed] = useState(!keyframeId);
   const [prev, setPrev] = useState(keyframeId);
   if (prev !== keyframeId) {
     setPrev(keyframeId);
     setFailed(!keyframeId);
   }
-  const s = (seed + (keyframeId ? [...keyframeId].reduce((a, c) => a + c.charCodeAt(0), 0) : 0)) % 4;
   return (
     <div className={cn("relative aspect-[16/10] overflow-hidden border-2 border-ink bg-[#f7f7f5]", rounded && "rounded-[4px]", className)}>
       {!failed && keyframeId ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={keyframeUrl(keyframeId)} alt={alt ?? title} loading={eager ? "eager" : "lazy"} draggable={false} className="h-full w-full object-cover object-top" onError={() => setFailed(true)} />
       ) : (
-        <svg viewBox="0 0 320 200" className="h-full w-full" role="img" aria-label={alt ?? title}>
-          <rect width="320" height="200" fill="#f7f7f5" />
-          <rect width="320" height="18" fill="#1f2937" />
-          <circle cx="10" cy="9" r="3" fill="#ff8a80" />
-          <circle cx="20" cy="9" r="3" fill="#ffc94a" />
-          <circle cx="30" cy="9" r="3" fill="#6ee7a0" />
-          <rect x="0" y="18" width="54" height="182" fill="#eceae4" />
-          {[0, 1, 2, 3, 4].map((i) => (
-            <rect key={i} x="8" y={30 + i * 16} width={30 + ((i + s) % 3) * 6} height="6" rx="2" fill={i === s % 5 ? "#6d28d9" : "#c9c5bb"} />
-          ))}
-          {title ? (
-            <text x="66" y="38" fontSize="11" fontWeight="700" fill="#111" fontFamily="system-ui, sans-serif">
-              {title.slice(0, 34)}
-            </text>
-          ) : (
-            <rect x="66" y="30" width="110" height="9" rx="2" fill="#a8a49b" />
-          )}
-          <rect x="250" y="28" width="58" height="14" rx="3" fill="#111" />
-          {[0, 1, 2, 3].map((i) => (
-            <g key={i}>
-              <rect x={66 + (i % 2) * 124} y={58 + Math.floor(i / 2) * 26} width="40" height="5" rx="2" fill="#a8a49b" />
-              <rect x={66 + (i % 2) * 124} y={66 + Math.floor(i / 2) * 26} width="112" height="11" rx="2" fill="#fff" stroke="#d6d2c8" />
-            </g>
-          ))}
-          <rect x="66" y="118" width="236" height="70" rx="2" fill="#fff" stroke="#d6d2c8" />
-          {[0, 1, 2].map((i) => (
-            <rect key={i} x="72" y={128 + i * 17} width={120 + ((i + s) % 2) * 40} height="5" rx="2" fill="#cfcbc1" />
-          ))}
-          {highlight && (
-            <g>
-              <rect x="186" y="88" width="120" height="24" rx="3" fill="#ede4ff" stroke="#6d28d9" strokeWidth="2.5" />
-              <text x="192" y="98" fontSize="7" fill="#3b1a85" fontFamily="system-ui, sans-serif">
-                {highlight.label.slice(0, 22)}
-              </text>
-              <text x="192" y="108" fontSize="8.5" fontWeight="700" fill="#111" fontFamily="ui-monospace, monospace">
-                {highlight.from ? `${highlight.from.slice(0, 10)} → ` : ""}
-                {(highlight.to ?? "").slice(0, 12)}
-              </text>
-            </g>
-          )}
-        </svg>
+        // no real screen moment (or it failed to load): say so — never draw a fake window
+        <div className="hatch grid h-full w-full place-items-center" role="img" aria-label={alt ?? title}>
+          <span className="rounded-[3px] border-2 border-ink bg-card px-2 py-1 text-xs font-bold text-ink-2">{t("shot.none")}</span>
+        </div>
       )}
     </div>
   );

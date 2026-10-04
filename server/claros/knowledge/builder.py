@@ -120,8 +120,40 @@ def replay(session_id: str) -> Replay:
                 r.notes.append(nn)
     except Exception:  # noqa: BLE001
         pass
-    r.unknowns = list(unknowns.values())
+    labels = {f.label.strip().lower() for st_ in r.states for f in st_.fields if f.label and len(f.label.strip()) >= 5}
+    labels |= {(st_.entity_type or "").lower() for st_ in r.states if st_.entity_type and len(st_.entity_type) >= 5}
+    r.events, dropped = _net_changes(r.events, labels)
+    r.unknowns = [u for u in unknowns.values()
+                  if not (u.type in ("why", "deliberate") and u.about_event_ids and set(u.about_event_ids) <= dropped)]
     return r
+
+
+def _net_changes(events: list[ScreenEvent], labels: Optional[set[str]] = None) -> tuple[list[ScreenEvent], set[str]]:
+    """Per record and field, only the NET change counts: value when first touched vs. value at the end.
+    Half-typed values ("pl" → "pr" → "prod"), flip-and-back misreads, overlays and values that merely
+    appeared or vanished are not decisions (live: "why did you change the supplier / remove delivery terms?")."""
+    from claros.perception.diff import _same_text
+    groups: dict[tuple, list[ScreenEvent]] = {}
+    for e in events:
+        if e.kind in ("edit", "select", "undo") and (e.field or e.canonical):
+            groups.setdefault((e.entity_id or e.entity_type, e.canonical or e.field), []).append(e)
+    dropped: set[str] = set()
+    for evs in groups.values():
+        first_old, last_new = evs[0].old, evs[-1].new
+        keep_last = bool(first_old) and bool(last_new) and not _same_text(first_old or "", last_new or "")
+        if keep_last and labels and any(lb in (last_new or "").lower() for lb in labels):
+            keep_last = False  # the "new value" is the app's own label text read from elsewhere on screen
+        for e in (evs[:-1] if keep_last else evs):
+            dropped.add(e.id)
+        if keep_last:
+            last = evs[-1]
+            if last.kind == "undo":
+                last.kind = "edit"
+            last.old = first_old
+            label = last.field or last.canonical
+            last.summary = f"{label} changed {first_old} → {last_new}" + (f" on {last.entity_type or ''} {last.entity_id}".rstrip()
+                                                                           if last.entity_id else "")
+    return [e for e in events if e.id not in dropped], dropped
 
 
 # ---------------- prompt ----------------

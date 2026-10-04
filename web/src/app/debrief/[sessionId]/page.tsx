@@ -199,7 +199,7 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
   const q = cur.spoken_question ?? cur.hypothesis ?? "";
   return (
     <>
-      <div key={cur.id} className="claros-enter grid items-start gap-10 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:gap-14">
+      <div key={cur.id} className={cn("claros-enter grid items-start gap-10 xl:gap-14", kf && "xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]")}>
         <div className="min-w-0">
           <p className="tnum text-lg font-bold text-ink-2">{t("db.q.n", { n })}</p>
           <h1 className={cn("mt-6 font-black leading-[1.05] tracking-[-0.04em]", q.length > 80 ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl")}>{q}</h1>
@@ -232,14 +232,17 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
             </Button>
           </div>
         </div>
-        <div className="min-w-0 space-y-4">
-          <ZoomShot
-            group={`db-${cur.id}`}
-            frames={[{ id: kf ?? `synthetic-${cur.id}`, keyframeId: kf, title: step?.title ?? cur.entity ?? "", highlight: step ? stepHighlight(step) : cur.entity ? { label: cur.entity, to: "?" } : null, caption: q }]}
-            priority
-            className="shadow-hard-lg"
-          />
-        </div>
+        {/* only a REAL screen moment from the session; never a drawn placeholder */}
+        {kf ? (
+          <div className="min-w-0 space-y-4">
+            <ZoomShot
+              group={`db-${cur.id}`}
+              frames={[{ id: kf, keyframeId: kf, title: step?.title ?? cur.entity ?? "", highlight: step ? stepHighlight(step) : cur.entity ? { label: cur.entity, to: "?" } : null, caption: q }]}
+              priority
+              className="shadow-hard-lg"
+            />
+          </div>
+        ) : null}
       </div>
       <LookedUpList items={lookedUp} className="mt-14 border-t-2 border-ink pt-6" />
     </>
@@ -314,12 +317,14 @@ function TeachBack({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone:
           {t("db.tb.title")} · {t("db.step", { n: k + 1, total: steps.length })}
         </p>
         <h1 className="mt-4 text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-5xl">{step.decision?.description ?? step.title}</h1>
-        <ZoomShot
-          group={`tb-${step.id}`}
-          frames={[{ id: kf ?? `synthetic-${step.id}`, keyframeId: kf, seed: step.order, title: step.title, highlight: stepHighlight(step), caption: `${step.order}. ${step.title}` }]}
-          className="mt-8 shadow-hard-lg"
-          priority
-        />
+        {kf ? (
+          <ZoomShot
+            group={`tb-${step.id}`}
+            frames={[{ id: kf, keyframeId: kf, seed: step.order, title: step.title, highlight: stepHighlight(step), caption: `${step.order}. ${step.title}` }]}
+            className="mt-8 shadow-hard-lg"
+            priority
+          />
+        ) : null}
         {fixing ? (
           <form
             className="mt-8 space-y-3"
