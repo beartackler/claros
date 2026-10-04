@@ -5,24 +5,32 @@
  * then Claros explains the process back step by step — "That's right" / "Correct this" — then Publish.
  */
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, Mic, PencilLine, SkipForward } from "lucide-react";
 import { Shell } from "@/components/claros/Shell";
 import { useUi, type DictKey } from "@/components/claros/i18n";
 import { LookedUpList, WhyTag, useLatestWhy, useLookedUp } from "@/components/claros/Evidence";
-import { ClarosDot, EmptyState, ErrorState, Loading, SourceNote, useResource } from "@/components/claros/primitives";
+import { ClarosDot, EmptyState, ErrorState, SourceNote, useResource } from "@/components/claros/primitives";
 import { ZoomShot } from "@/components/claros/Lightbox";
+import { MapBuilding } from "@/components/claros/MapBuilding";
 import { sortedSteps, stepHighlight } from "@/components/claros/mapUtils";
 import { useJoinSession, useLive, useLiveStore } from "@/components/claros/live";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { getSession, getWorkflow, latestWorkflowId } from "@/lib/api";
+import { getSession, getWorkflow, latestWorkflowId, publishSession } from "@/lib/api";
+import { stopAllScreenCapture } from "@/capture/useScreenCapture";
+import { endSessionLocal } from "@/voice/useClarosSession";
 import { EXPERT, MOCK_UNKNOWNS } from "@/lib/mock";
 import type { Step, Unknown, WorkMap } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 
 type Stage = "questions" | "teachback" | "publish";
+/** What the debrief can still ask the expert (mirrors the server planner). */
+const askable = (u: Unknown) =>
+  ["open", "asked", "deferred"].includes(u.status) &&
+  !(u.meta as { needs_second_run?: boolean } | undefined)?.needs_second_run &&
+  (u.scope === "company" || u.scope === "personal_judgment");
 const EMPTY = "__empty__";
 type Voice = ReturnType<typeof useLive>["voice"];
 
@@ -52,11 +60,33 @@ function Debrief() {
       await new Promise((r) => setTimeout(r, 1500));
     }
   }, [sessionId]);
+  // the capture's question count ("0 open") must not leak into the debrief and skip its questions;
+  // and the debrief never needs the screen: end any share the capture left running
+  useEffect(() => {
+    useLiveStore.setState({ ledger: null });
+    stopAllScreenCapture();
+  }, [sessionId]);
   useJoinSession(res.data ? sessionId : null, "debrief", EXPERT, lang, res.data?.workflow_id);
   const { voice } = useLive(sessionId, "debrief", lang, EXPERT.name);
   const [stage, setStage] = useState<Stage>("questions");
+  // done (published) or leaving the page: Claros stops listening and talking, and the session closes
+  const voiceEnd = voice.end;
+  const finish = useCallback(() => {
+    voiceEnd();
+    stopAllScreenCapture();
+    void endSessionLocal();
+  }, [voiceEnd]);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      setTimeout(() => { if (!mounted.current) finish(); }, 0); // survives React dev's mount-unmount-mount
+    };
+  }, [finish]);
 
-  if (res.loading) return <Loading label={t("db.building")} rows={3} />;
+  const forceBuilding = useSearchParams().get("building") === "1"; // review flag: hold the map-building wait
+  if (res.loading || forceBuilding) return <MapBuilding sessionId={sessionId} />;
   if (res.error === EMPTY)
     return (
       <EmptyState action={<Link href="/" className={buttonVariants({ variant: "primary", size: "lg" })}>{t("db.empty.cta")}</Link>}>
@@ -77,7 +107,7 @@ function Debrief() {
       </div>
       {stage === "questions" && <Questions map={map} demo={res.source === "mock"} voice={voice} onDone={() => setStage("teachback")} />}
       {stage === "teachback" && <TeachBack map={map} voice={voice} onDone={() => setStage("publish")} />}
-      {stage === "publish" && <Publish map={map} />}
+      {stage === "publish" && <Publish map={map} sessionId={sessionId} onPublished={finish} />}
       <span className="sr-only">{t("debrief.title")}</span>
     </div>
   );
@@ -119,7 +149,10 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
   const { t } = useUi();
   const liveLedger = useLiveStore((s) => s.ledger);
   const queue: Unknown[] = useMemo(
-    () => [...(demo ? MOCK_UNKNOWNS.filter((u) => u.status === "deferred") : []), ...map.open_unknowns].filter((u, i, a) => a.findIndex((x) => x.id === u.id) === i),
+    () =>
+      [...(demo ? MOCK_UNKNOWNS.filter((u) => u.status === "deferred") : []), ...map.open_unknowns.filter(askable)].filter(
+        (u, i, a) => a.findIndex((x) => x.id === u.id) === i,
+      ),
     [map.open_unknowns, demo],
   );
   const [i, setI] = useState(0);
@@ -317,22 +350,33 @@ function TeachBack({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone:
 
 /* ---------------- publish ---------------- */
 
-function Publish({ map }: { map: WorkMap }) {
+function Publish({ map, sessionId, onPublished }: { map: WorkMap; sessionId: string; onPublished: () => void }) {
   const { t } = useUi();
-  const [published, setPublished] = useState(false);
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [second, setSecond] = useState(false);
+  const publish = async () => {
+    setState("busy");
+    const r = await publishSession(sessionId); // the server approves the steps and rules; nothing is "published" locally
+    if (!r) return setState("error");
+    setSecond(r.needs_second_run);
+    setState("done");
+    onPublished();
+  };
+  const published = state === "done";
   return (
     <div className="claros-enter flex flex-col items-start gap-8 py-10">
       <h1 className="max-w-[18ch] text-5xl font-black leading-[1] tracking-[-0.045em] sm:text-7xl">{published ? t("db.published") : t("db.publish")}</h1>
-      <p className="text-2xl text-ink-2">{t("db.publish.sub")}</p>
+      <p className="text-2xl text-ink-2">{published && second ? t("db.published.second") : t("db.publish.sub")}</p>
       {published ? (
         <Link href={`/map/${map.workflow_id}`} className={buttonVariants({ variant: "primary", size: "xl" })}>
           {t("db.view")} <ArrowRight aria-hidden />
         </Link>
       ) : (
-        <Button variant="claros" size="xl" autoFocus onClick={() => setPublished(true)} className="h-20 px-10 text-3xl">
+        <Button variant="claros" size="xl" autoFocus disabled={state === "busy"} onClick={() => void publish()} className="h-20 px-10 text-3xl">
           <Check aria-hidden /> {t("db.publish")}
         </Button>
       )}
+      {state === "error" ? <ErrorState message={t("db.publish.error")} onRetry={() => void publish()} /> : null}
     </div>
   );
 }

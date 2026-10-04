@@ -89,6 +89,22 @@ def register_fixture_keyframes(wm: Any, root: str, lang: Optional[str] = None) -
     return n
 
 
+@router.post("/api/sessions/{sid}/publish")
+async def publish_ep(sid: str) -> dict:
+    """The debrief's Publish button: the expert confirms the map (same as saying "yes, that's how it works")."""
+    from fastapi import HTTPException
+    from .debrief import publish_confirmed
+    sess = _deps.get_session(sid)
+    wid = getattr(sess, "workflow_id", None)
+    wm = load_map(wid) if wid else None
+    if wm is None:
+        raise HTTPException(404, "no map for this session yet")
+    user = getattr(sess, "user", None)
+    eid = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
+    second = await publish_confirmed(wm, sid, eid or "expert")
+    return {"workflow_id": wm.workflow_id, "needs_second_run": second}
+
+
 @router.post("/api/knowledge/seed")
 async def seed_ep() -> dict:
     return {"workflow_ids": sorted(set(await seed_fixtures_async()))}

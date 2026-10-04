@@ -111,6 +111,12 @@ export class ClarosSocket {
     return false;
   }
 
+  /** Same session, new phase (capture → debrief): the server must hear it, or it never starts the debrief. */
+  rehello(hello: Omit<HelloMsg, "type">) {
+    this.hello = { ...this.hello, ...hello };
+    this.rawSend({ type: "hello", ...this.hello }); // if closed, onopen sends the updated hello
+  }
+
   /** Send now, or queue until (re)connected. */
   send(msg: ClientMsg) {
     if (this.rawSend(msg)) return;
@@ -166,7 +172,10 @@ let current: ClarosSocket | null = null;
 const currentListeners = new Set<(s: ClarosSocket | null) => void>();
 
 export function connectSession(hello: Omit<HelloMsg, "type">): ClarosSocket {
-  if (current && current.sessionId === hello.session_id) return current;
+  if (current && current.sessionId === hello.session_id) {
+    current.rehello(hello);
+    return current;
+  }
   current?.close();
   current = new ClarosSocket(hello).connect();
   currentListeners.forEach((l) => l(current));

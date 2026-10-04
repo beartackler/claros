@@ -16,6 +16,13 @@ import { getSocket } from "@/lib/ws";
 import { useClaros } from "@/voice/store";
 import type { WorkerIn, WorkerKeyframe, WorkerOut, WorkerStats } from "./types";
 
+/** Every screen share this tab holds, whichever page started it: the debrief/exit can always end them all. */
+const LIVE_STREAMS = new Set<MediaStream>();
+export function stopAllScreenCapture() {
+  LIVE_STREAMS.forEach((st) => st.getTracks().forEach((t) => t.stop()));
+  LIVE_STREAMS.clear();
+}
+
 export type DisplaySurface = "window" | "browser" | "monitor" | "unknown";
 
 export interface CaptureOptions {
@@ -64,6 +71,7 @@ export function useScreenCapture(opts: CaptureOptions = {}) {
     workerRef.current?.terminate();
     workerRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (streamRef.current) LIVE_STREAMS.delete(streamRef.current);
     streamRef.current = null;
     if (videoRef.current) {
       videoRef.current.srcObject = null;
@@ -123,6 +131,7 @@ export function useScreenCapture(opts: CaptureOptions = {}) {
       return;
     }
     streamRef.current = stream;
+    LIVE_STREAMS.add(stream);
     const track = stream.getVideoTracks()[0];
     try { track.contentHint = "detail"; } catch {}
     const settings = track.getSettings() as MediaTrackSettings & { displaySurface?: string };

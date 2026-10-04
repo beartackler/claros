@@ -1066,8 +1066,21 @@ def observable_vars(wm: WorkMap, r: Replay) -> set[str]:
     return out
 
 
+_VAR_RE = re.compile(r"\{\{?\s*([A-Za-z_][\w.]*)\s*\}?\}")
+
+
+def _human_vars(text: Optional[str]) -> Optional[str]:
+    """'Set the {purchase_invoice.cost_center} for the line' → 'Set the cost center for the line'."""
+    if not text or "{" not in text:
+        return text
+    return _VAR_RE.sub(lambda m: m.group(1).split(".")[-1].replace("_", " "), text)
+
+
 def _with_repairs(wm: WorkMap, r: Replay) -> WorkMap:
     for s in wm.steps:
+        s.title = _human_vars(s.title) or s.title
+        if s.decision is not None and getattr(s.decision, "description", None):
+            s.decision.description = _human_vars(s.decision.description)
         s.moment = _repair_moment(s.moment, r)
     for g in wm.guardrails:
         g.evidence = [m for m in (_repair_moment(m, r, link_utterance=False) for m in g.evidence) if m]

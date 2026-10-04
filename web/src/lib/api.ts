@@ -204,6 +204,15 @@ export async function uploadClip(sessionId: string, body: { event_id: string; t_
   }
 }
 
+/** Debrief "Publish map": the server approves the map; null if it couldn't (never fake success). */
+export async function publishSession(id: string): Promise<{ workflow_id: string; needs_second_run: boolean } | null> {
+  try {
+    return await req<{ workflow_id: string; needs_second_run: boolean }>(`/api/sessions/${encodeURIComponent(id)}/publish`, { method: "POST" }, 15000);
+  } catch {
+    return null;
+  }
+}
+
 export function endSession(id: string): Promise<Result<unknown>> {
   return withFallback(
     () => req<unknown>(`/api/sessions/${encodeURIComponent(id)}/end`, { method: "POST" }),

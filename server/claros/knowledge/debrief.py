@@ -515,9 +515,29 @@ async def word_questions(wm: WorkMap, items: list[Unknown], lang: str) -> None:
         u.meta = m
 
 
+def _covered_fields(wm: WorkMap) -> set[str]:
+    """Fields a grounded rule (expert quote + checkable predicate) already explains, as spoken words
+    ("purchase_invoice.expense_head" → "expense head")."""
+    out: set[str] = set()
+    for g in wm.guardrails:
+        if not g.quote_ids or not g.predicate:
+            continue
+        for var, _, _ in literal_atoms(g.predicate) + [(v, None, None) for v, _ in threshold_atoms(g.predicate)]:
+            words = _tail(var).replace("_", " ").strip().lower()
+            if len(words) >= 4 and words not in ("amount", "total", "value"):
+                out.add(words)
+    return out
+
+
 async def prepare(wm: WorkMap, st: "DebriefState", lang: str) -> None:
     """Once per debrief: add probes + gap questions to the map, word every unworded question in one LLM call."""
     st.prepared = True
+    covered = _covered_fields(wm)
+    for u in wm.open_unknowns:  # capture leftovers the expert already explained, or that were undone: don't re-ask
+        if u.status in OPEN_STATUSES and (u.meta or {}).get("origin") != "debrief" and u.type in ("why", "deliberate"):
+            q = (u.spoken_question or "").lower()
+            if any(f in q for f in covered) or "undid" in q or "revert" in q:
+                u.status = "dropped"
     for u in wm.open_unknowns:  # this IS the second run: what an earlier debrief left over gets asked now
         if (u.meta or {}).get("needs_second_run"):
             u.status = "open"
