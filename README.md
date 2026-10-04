@@ -17,7 +17,7 @@ An expert shares their app window and does real work while talking. Claros stays
 
 Built for the ElevenLabs × Hack-Nation challenge *The AI Apprentice*.
 
-- **Live:** [claros-eta.vercel.app](https://claros-eta.vercel.app) (backend on Render's free tier — the first request may take ~1 min to wake)
+- **Live:** [claros-eta.vercel.app](https://claros-eta.vercel.app)
 - Works on any desktop web or windowed app — no integration, it reads the screen. Tested on ERPNext and Zammad.
 - Voice in English, German, French, Spanish and Russian.
 
