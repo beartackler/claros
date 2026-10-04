@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from . import deps, systemone
-from .ledger import GUARDRAIL_TYPES, get_ledger
+from .ledger import GUARDRAIL_TYPES, LIVE_TARGET, get_ledger
 
 
 @dataclass
@@ -202,13 +202,17 @@ class Gate:
         return {"p_accept": round(p, 3), "priority": prio, "ask_threshold": round(thr, 3),
                 "p_accept_systemone": p_s1}
 
-    def tau(self, lg: Any, u: Any) -> dict:
+    def tau(self, lg: Any, u: Any, boundary: bool = False) -> dict:
         c_fa, c_miss = self.cfg.c_fa, self.cfg.c_miss
         tag = lg.meta.get(u.id, {}).get("tag")
         if u.type in GUARDRAIL_TYPES:
             c_miss *= 2  # missing a guardrail is costly
         if tag == "mandatory" and len(lg.asked_ids) < 3:
             c_miss *= 1.5  # requirement guard: ≥3 live questions
+        elif len(lg.asked_ids) < LIVE_TARGET and boundary:
+            # fewer than 3 live questions so far and the expert just saved / went back to the list: that IS the
+            # natural pause (e2e: a judgment question waited at p≈0.56 < τ 0.75 through two saves and expired)
+            c_miss *= 3
         return {"tau": round(c_fa / (c_fa + c_miss), 3), "c_fa": c_fa, "c_miss": c_miss}
 
     def _prefetch_accept(self, sid: str, lg: Any, u: Any) -> None:
@@ -255,7 +259,8 @@ class Gate:
             e = {"t": now, "unknown_id": u.id, "decision": "blocked", "reasons": bl, "backend": "rules"}
             self._log(sid, e)
             return e
-        pp, pa, tt = self.p_pause(sid, now), self.p_accept(lg, u, now), self.tau(lg, u)
+        pp, pa = self.p_pause(sid, now), self.p_accept(lg, u, now)
+        tt = self.tau(lg, u, pp["boundary"])
         score = pp["p_pause"] * pa["p_accept"]
         age_s = (now - u.created_t) / 1000
         if risk or score > tt["tau"]:

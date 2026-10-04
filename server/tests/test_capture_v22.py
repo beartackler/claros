@@ -148,3 +148,16 @@ def test_looked_up_emitted_when_context_answers(offline, monkeypatch):
                                "url": "https://docs.erpnext.com/docs/user/manual/en/cost-center"}
     assert note_source("onet:43-3031.00") == {"kind": "onet", "title": "O*NET 43-3031.00"}
     assert note_source("llm")["kind"] == "general"
+
+
+def test_tau_relaxes_at_a_task_boundary_until_three_live_questions():
+    from claros.brain.gate import Gate
+    from claros.brain.ledger import Ledger
+    from claros.models import Unknown
+    g, lg = Gate(), Ledger("s_tau")
+    u = Unknown(id="u1", type="why")
+    lg.meta["u1"] = {"tag": "opportunistic"}
+    assert g.tau(lg, u)["tau"] == 0.75
+    assert g.tau(lg, u, boundary=True)["tau"] == 0.5
+    lg.asked_ids = ["a", "b", "c"]
+    assert g.tau(lg, u, boundary=True)["tau"] == 0.75
