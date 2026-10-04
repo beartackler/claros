@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Check, Mic, PencilLine, SkipForward } from "lucide-react";
+import { ArrowRight, Check, Mic, SkipForward } from "lucide-react";
 import { Shell } from "@/components/claros/Shell";
 import { useUi, type DictKey } from "@/components/claros/i18n";
 import { LookedUpList, WhyTag, useLatestWhy, useLookedUp } from "@/components/claros/Evidence";
@@ -17,7 +17,6 @@ import { MapBuilding } from "@/components/claros/MapBuilding";
 import { sortedSteps, stepHighlight } from "@/components/claros/mapUtils";
 import { sendControl, useJoinSession, useLive, useLiveStore } from "@/components/claros/live";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { getSession, getWorkflow, latestWorkflowId, publishSession } from "@/lib/api";
 import { stopAllScreenCapture } from "@/capture/useScreenCapture";
 import { endSessionLocal } from "@/voice/useClarosSession";
@@ -104,7 +103,7 @@ function Debrief() {
         </div>
       </div>
       {stage === "questions" && <Questions map={map} demo={res.source === "mock"} voice={voice} onDone={() => setStage("teachback")} />}
-      {stage === "teachback" && <TeachBack map={map} voice={voice} onDone={() => setStage("publish")} />}
+      {stage === "teachback" && <TeachBack map={map} voice={voice} />}
       {stage === "publish" && <Publish map={map} sessionId={sessionId} onPublished={finish} byVoice={db?.phase === "done" ? { second: !!db.needs_second_run } : null} />}
       <span className="sr-only">{t("debrief.title")}</span>
     </div>
@@ -249,17 +248,13 @@ function Questions({ map, demo, voice, onDone }: { map: WorkMap; demo: boolean; 
   );
 }
 
-/* ---------------- teach-back: step by step, right / correct ---------------- */
+/* ---------------- teach-back: Claros plays it back by voice, the steps follow along ---------------- */
 
-function TeachBack({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone: () => void }) {
+function TeachBack({ map, voice }: { map: WorkMap; voice: Voice }) {
   const { t } = useUi();
   const steps = sortedSteps(map);
   const liveHighlight = useLiveStore((s) => s.highlightedStepId);
   const [k, setK] = useState(0);
-  const [fixing, setFixing] = useState(false);
-  const [fix, setFix] = useState("");
-  const [fixed, setFixed] = useState<Record<string, string>>({});
-  const [ok, setOk] = useState<string[]>([]);
 
   useEffect(() => {
     if (voice.status === "connected") voice.sendText("teach back");
@@ -273,12 +268,6 @@ function TeachBack({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone:
 
   const step = steps[k];
   if (!step) return null;
-  const next = () => {
-    setFixing(false);
-    setFix("");
-    if (k + 1 >= steps.length) onDone();
-    else setK(k + 1);
-  };
   const kf = step.moment?.keyframe_ids?.[0] ?? null;
 
   return (
@@ -300,10 +289,10 @@ function TeachBack({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone:
                 <span
                   className={cn(
                     "tnum grid size-10 shrink-0 place-items-center rounded-base border-2 border-ink font-mono text-base font-black",
-                    fixed[s.id] ? "bg-partial text-on-fill" : ok.includes(s.id) ? "bg-ready text-on-fill" : on ? "bg-claros text-claros-ink" : "bg-ink text-paper",
+                    on ? "bg-claros text-claros-ink" : "bg-ink text-paper",
                   )}
                 >
-                  {ok.includes(s.id) && !fixed[s.id] ? <Check className="size-5" aria-hidden /> : fixed[s.id] ? <PencilLine className="size-5" aria-hidden /> : s.order}
+                  {s.order}
                 </span>
                 <span className="min-w-0">{s.title}</span>
               </button>
@@ -325,47 +314,10 @@ function TeachBack({ map, voice, onDone }: { map: WorkMap; voice: Voice; onDone:
             priority
           />
         ) : null}
-        {fixing ? (
-          <form
-            className="mt-8 space-y-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const v = fix.trim();
-              if (!v) return;
-              if (voice.status === "connected") voice.sendText(`Correction for "${step.title}": ${v}`);
-              setFixed((f) => ({ ...f, [step.id]: v }));
-              next();
-            }}
-          >
-            <Textarea autoFocus rows={2} value={fix} onChange={(e) => setFix(e.target.value)} placeholder={t("db.tb.fix.ph")} aria-label={t("db.tb.fix.ph")} className="bg-card text-lg" />
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" variant="primary" size="lg" disabled={!fix.trim()}>
-                <Check aria-hidden /> {t("db.tb.fix.save")}
-              </Button>
-              <Button type="button" variant="ghost" size="lg" onClick={() => setFixing(false)}>
-                {t("common.close")}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="mt-8 flex flex-wrap gap-4">
-            <Button
-              variant="primary"
-              size="xl"
-              autoFocus
-              onClick={() => {
-                setOk((o) => [...new Set([...o, step.id])]);
-                next();
-              }}
-            >
-              <Check aria-hidden /> {t("db.tb.right")}
-            </Button>
-            <Button variant="secondary" size="xl" onClick={() => setFixing(true)}>
-              <PencilLine aria-hidden /> {t("db.tb.fix")}
-            </Button>
-          </div>
-        )}
-        {fixed[step.id] ? <p className="mt-4 text-lg font-semibold">✎ {fixed[step.id]}</p> : null}
+        {/* voice-only: confirming or correcting happens out loud, the server moves the page on */}
+        <p className="mt-8 flex items-center gap-3 text-xl font-bold text-ink-2">
+          <Mic className="size-6 shrink-0" aria-hidden /> {t("db.tb.say")}
+        </p>
       </section>
     </div>
   );
