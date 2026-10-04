@@ -690,9 +690,9 @@ T: dict[str, dict[str, str]] = {
                     "fr": "Je ne peux pas le dire avec cet écran seul — voici comment {expert} décide :",
                     "es": "No lo puedo saber solo con esta pantalla — así decide {expert}:",
                     "ru": "По одному экрану не скажу — вот как решает {expert}:"},
-    "nudge_fix": {"en": "Good — {expert} always does that first.", "de": "Gut — {expert} macht das immer zuerst.",
-                  "fr": "Bien — {expert} le fait toujours d'abord.", "es": "Bien — {expert} siempre lo hace primero.",
-                  "ru": "Хорошо — {expert} всегда делает это первым."},
+    "nudge_fix": {"en": "Good — that's the step {expert} does here.", "de": "Gut — genau diesen Schritt macht {expert} hier.",
+                  "fr": "Bien — c'est l'étape que fait {expert} ici.", "es": "Bien — ese es el paso que hace {expert} aquí.",
+                  "ru": "Хорошо — именно этот шаг {expert} делает здесь."},
 }
 
 

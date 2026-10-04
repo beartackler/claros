@@ -5,7 +5,6 @@
  * Start (share → mic → Claros asks what you're doing) → live view (orb, captions, current step,
  * large expert-moment card when Claros steps in) → a short summary.
  */
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, CheckCircle2, EyeOff, Hand, MonitorUp, PictureInPicture2, PlayCircle, RotateCw, Split, Square } from "lucide-react";
@@ -19,7 +18,7 @@ import { PipPortal, usePip } from "@/voice/pip";
 import { firstName, isConfirmed, sortedSteps } from "./mapUtils";
 import { useDebug } from "./debug";
 import { SignalsBar, WhyTag, useLatestWhy } from "./Evidence";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { createRequest, createSession, getWorkflow, latestWorkflowId, lookupWorkflow } from "@/lib/api";
 import { EXPERT, LEA } from "@/lib/mock";
 import { writeLocalMastery } from "@/lib/localMastery";
@@ -431,9 +430,10 @@ function Summary({ s, onAgain }: { s: LastSession; onAgain: () => void }) {
         <Button variant="claros" size="xl" onClick={onAgain}>
           <RotateCw aria-hidden /> {t("sum.again")}
         </Button>
-        <Link href="/" className={buttonVariants({ variant: "secondary", size: "xl" })}>
+        {/* the learner session IS the home page: a Link to "/" from "/" goes nowhere — reload to the start view */}
+        <Button variant="secondary" size="xl" onClick={() => window.location.reload()}>
           {t("sum.home")} <ArrowRight aria-hidden />
-        </Link>
+        </Button>
       </div>
     </div>
   );

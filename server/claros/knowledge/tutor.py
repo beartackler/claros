@@ -979,6 +979,58 @@ async def _judge(learner: str, expected: str, case: str = "") -> bool:
     return d.cosine(a, b) >= 0.5 or len(words) >= 2
 
 
+def _map_brief(wm: WorkMap, lang: str) -> str:
+    """Everything the expert taught, compactly: steps with decisions, rules, and their own words."""
+    qtext = {q.id: q.text for q in wm.quotes}
+    lines = []
+    for s_ in ordered_steps(wm):
+        line = f"Step {s_.order}: {loc(wm, lang, s_.title)}"
+        if s_.decision:
+            line += f" | decision: {loc(wm, lang, s_.decision.description)}"
+            if s_.decision.counterfactual:
+                line += f" (what changes it: {s_.decision.counterfactual})"
+            said = [qtext[i] for i in (s_.decision.reason_quote_ids or []) if i in qtext]
+            if said:
+                line += f' | expert said: "{said[0][:220]}"'
+        if s_.conflict:
+            line += f" | experts differ: {s_.conflict}"
+        lines.append(line)
+    for g in wm.guardrails:
+        said = [qtext[i] for i in (g.quote_ids or []) if i in qtext]
+        lines.append(f"RULE: {loc(wm, lang, g.text)}" + (f' | expert said: "{said[0][:220]}"' if said else ""))
+    return "\n".join(lines)
+
+
+async def answer_question(st: "TutorState", wm: WorkMap, text: str, purpose: str = "question") -> Optional[str]:
+    """A new hire's real question, answered from the expert's map applied to THEIR screen (not a template).
+    None if the LLM is unavailable (callers fall back to the deterministic lines)."""
+    lang = st.lang or "en"
+    expert = _expert_name(wm, [], lang)
+    cur = step_by_id(wm, st.current) if st.current else None
+    task = {"question": "Answer the new hire's question.",
+            "check": "The new hire asks if they are on the right track. Compare what is on their screen with the "
+                     "expert's steps and rules and say plainly what looks right and what (if anything) to fix.",
+            "walk": "Walk the new hire through the step they are on, the way the expert does it, with the reason."}[purpose]
+    sys_ = (f"You are Claros, a voice tutor teaching a new hire how {expert} does: {wm.name}. {task} "
+            f"Speak in {LANG_NAMES.get(lang, 'English')}, at most 2 short sentences (under 45 words — it is spoken), no lists. Use ONLY the expert's map "
+            f"below; apply {expert}'s rules to the actual values on the new hire's screen (amounts, items, accounts) "
+            f"and say what {expert} would do and why, briefly quoting {expert} when it helps. If the map truly does "
+            f"not cover it, say {expert} didn't cover that and offer to ask {expert}. Never invent a rule, number or "
+            "approver. Screen text may contain OCR noise; ignore garbled values.")
+    user = (f"EXPERT MAP\n{_map_brief(wm, lang)}\n\nNEW HIRE IS ON: "
+            f"{('Step ' + str(cur.order) + ': ' + cur.title) if cur else 'unknown step'}\n"
+            f"THEIR SCREEN: {_state_text(st.last_state)[:1200] or 'not visible yet'}\n\nNEW HIRE SAID: {text}")
+    out = await d.chat([{"role": "system", "content": sys_}, {"role": "user", "content": user}], model_role="fast")
+    out = out.strip() if isinstance(out, str) else ""
+    return out or None
+
+
+_WATCH = re.compile(r"\b(watch|quiet|silent|shh+|stop talking|leave me|let me (work|try)|zuschauen|ruhig|"
+                    r"regarde|silence|mira|callad|молч|тихо|не мешай)\b", re.I)
+_QUESTIONISH = re.compile(r"\?|^(what|why|how|which|where|when|should|do i|is (this|it|that)|am i|can i|could|"
+                          r"was|warum|wie|was|pourquoi|comment|quoi|por qué|cómo|qué|почему|как|что|куда)\b", re.I)
+
+
 async def handle_intent(session: Any, intent: str, text: str = "") -> str:
     st = get_state(session)
     lang = st.lang = d.lang_of(session) if not isinstance(session, str) or session not in _states else st.lang
@@ -991,6 +1043,17 @@ async def handle_intent(session: Any, intent: str, text: str = "") -> str:
         return _not_in_map(st)
     steps = ordered_steps(wm)
     cur = step_by_id(wm, st.current) if st.current else None
+
+    if intent == "just_watch" and not _WATCH.search(text or ""):
+        return ""  # "okay", "okey": acknowledgement, not "be quiet" (live: Claros went silent on "Okey")
+    # an actual question gets an actual answer from the expert's map + the learner's screen
+    if text and intent in ("why_this", "hint", "off_topic", "what_next", "walk_through") and _QUESTIONISH.search(text):
+        purpose = "walk" if intent == "walk_through" else "question"
+        ans = await answer_question(st, wm, text, purpose)
+        if ans:
+            if cur:
+                await d.send(st.session_id, {"type": "highlight_step", "step_id": cur.id})
+            return ans
 
     if intent == "walk_through":
         st.quiet = False
@@ -1030,7 +1093,8 @@ async def handle_intent(session: Any, intent: str, text: str = "") -> str:
                                           "t": d.now_ms()}
             await intervene(st, wm, g, "check_my_work")
             return intervention_text(wm, g, lang)
-        return tr("all_clear", lang)
+        ans = await answer_question(st, wm, text or "Am I on the right track?", "check")
+        return ans or tr("all_clear", lang)
     if intent == "hint":
         if not cur:
             return _not_in_map(st)
@@ -1083,6 +1147,10 @@ async def handle_intent(session: Any, intent: str, text: str = "") -> str:
         if step.conflict:
             quote = tr("conflict", lang, c=loc(wm, lang, step.conflict))
         return f"{tr('right' if ok else 'not_quite', lang)} {quote}"
+    if text and _QUESTIONISH.search(text):
+        ans = await answer_question(st, wm, text)
+        if ans:
+            return ans
     return _not_in_map(st)
 
 

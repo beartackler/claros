@@ -281,8 +281,8 @@ async def kick_debrief(sid: str) -> list[dict]:
 
 
 async def _learn_turn(sid: str, sess: Any, intent: str, text: str) -> dict:
-    if intent == "off_topic":
-        return {"intent": intent}  # general question / chatter: hosted agent answers or skips
+    if intent == "off_topic" and "?" not in (text or ""):
+        return {"intent": intent}  # chatter: hosted agent skips. A real question goes to the tutor (it has the map)
     fn = deps.knowledge_attr("tutor.handle_intent")
     if not fn:
         return {"intent": intent}
