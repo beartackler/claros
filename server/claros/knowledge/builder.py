@@ -778,7 +778,13 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
 
     # predicates: every var must map to a label that was actually on screen, else the guardrail is fuzzy
     # (a predicate over "item.is_equipment" can never be evaluated on a learner's screen and would never fire)
+    for g in wm.guardrails:  # predicate vars the LLM named but forgot in canonical_vars ("x.amount" vs "x.amount_eur")
+        for v in predicate_vars(g.predicate or {}):
+            if "." in v and not v.startswith(("prior.", "doc.")) and v not in wm.canonical_vars:
+                wm.canonical_vars[v] = []
     observable = observable_vars(wm, r)
+    for k in [k for k, al in wm.canonical_vars.items() if not al]:
+        wm.canonical_vars.pop(k)  # no on-screen label found: stays unobservable (→ fuzzy)
     derived = {base + suf for k in observable if k.endswith("_date") for base in (k[:-5], k)
                for suf in ("_month", "_year")}
     if _has_roles(observable):

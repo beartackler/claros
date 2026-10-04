@@ -182,3 +182,13 @@ async def test_guardrail_dedupe_without_embeddings():
     m = await merge.merge_maps([a, b])
     stops = [g for g in m.guardrails if g.action == "stop_and_ask" and "supplier" in g.text.lower()]
     assert len(stops) == 1 and set(stops[0].experts) == {"u_anna", "u_marco"}
+
+
+def test_predicate_var_missing_from_canonical_vars_is_matched_to_its_screen_label():
+    from claros.knowledge import builder
+    from claros.models import Field_, ScreenState, WorkMap
+    r = builder.Replay("s", states=[ScreenState(seq=1, t=1, fields=[Field_(label="Amount (EUR)", value="8.400,00")])])
+    wm = WorkMap(id="w", workflow_id="wf", name="x", canonical_vars={"inv.amount_eur": ["Amount (EUR)"]})
+    wm.canonical_vars["inv.amount"] = []
+    obs = builder.observable_vars(wm, r)
+    assert "inv.amount" in obs and wm.canonical_vars["inv.amount"] == ["Amount (EUR)"]

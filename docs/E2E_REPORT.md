@@ -1,4 +1,38 @@
-# Claros headless E2E — real ERPNext + real models (2026-10-03)
+# Claros headless E2E — real ERPNext + real models (2026-10-04, run 11: hosted dialog, v2.2 core loop)
+
+Run 11: private server `:8791`, fresh scratch DB, `CLAROS_DIALOG_MODE=hosted` (production path: server pushes `say`,
+the agent speaks it verbatim; the harness simulates the agent + expert, `CLAROS_E2E_HOSTED=1` default). Phases
+`A → B → C → A2 → B2` (`infra/e2e/run_e2e.py`; A2/B2 = second expert "Max Mertens" on the same task). Artifacts:
+`data/fixtures/e2e/{A,B,C,A2,B2}/` (not committed).
+
+## What the judge would see (run 11)
+
+| Moment | Result |
+|---|---|
+| Capture (134 s, 3 invoices) | 3 live asks, all at pauses, all action-first, 2 guardrail-type: "You switched the cost center to Production — why was that needed?", "You put that purchase invoice on hold — why did it need to be held?", "You sent that invoice for a second approval — why does it need two approvals?". Each `ask` carries `why` (e.g. "pause after Save · 1.2 s quiet", "you changed a pre-filled value"); `signals` stream (84 msgs) |
+| Map build | 68 s, 10 steps, 3 guardrails, every guardrail/judgment cites the expert's words (grounding check; ungrounded rules dropped) |
+| Debrief | 4 questions not answered live: "Who confirms a held invoice, and what un-holds it?", "…why does it need two?", "When is Production the right cost center versus the default one?", "You changed the expense head from Tools and Small Equipment to Plants and Machineries. What on the invoice tells you it counts as capex?"; teach-back ≈130 words with step highlights; one correction ("maintenance stays an expense…") read back as the changed rule only; "Yes, that's how it works" → published, coverage READY |
+| Learner (lookup 0.47 s, score 1.08) | €7,200 equipment on small tools → 1 intervention "Erika would stop here. Why do you think?" before submit; €6,100 maintenance → 0 interventions |
+| Second expert (A2/B2) | Max's capture joins the SAME workflow id (shared matcher) and merges; his debrief asks 5 questions, publishes; partial "needs a second run" |
+
+Earlier run-11 iterations (same harness) also produced the brief-style probes "Is that only for Ostwind Precision
+Parts Ltd, or for every supplier like it?" and "Does the 5,000 capex rule apply to other categories too, or only
+equipment invoices?".
+
+## Not verified / still weak
+- **Second-expert disagreement question not exercised e2e:** the A2 script's "different" cost center equals the ERPNext
+  default, so no edit event → no conflict. Conflict wording + resolution are unit-tested only.
+- **Builds still vary:** in the final run the capex and December rules came out fuzzy (LLM named `amount` instead of
+  the canonical `amount_eur`; fixed afterwards in `builder` — re-run pending). The fuzzy judge still caught 7,200 and
+  left 6,100 alone. The UK rule keeps the `Ltd` literal (the expert's answer "the UK company" can't be expressed by a
+  visible field).
+- B2's correction got "I couldn't tell which step to change" once (LLM patch empty) — flaky.
+- First live ask targets the cost-center edit, not the expense-head (capex) edit, in 3/4 runs.
+- MCP is not registered on ElevenLabs (account: `convai_mcp_servers_disabled`); voice clips need the web recorder.
+
+---
+
+# Earlier runs (2026-10-03)
 
 Harness: `infra/e2e/` (`run_e2e.py A|B|C|RU`, Playwright 1440×900 @2x → 1600×1000 JPEG q0.75 keyframes with
 16×9 changed tiles, `activity` typing/navigating/idle, simulated ElevenLabs: `⟦ask:ID|text⟧`/`⟦intervene:…⟧` and user
