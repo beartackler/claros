@@ -74,6 +74,27 @@ async function fetchToken(agent: string): Promise<TokenResp> {
   return { token: (await r.text()).trim() };
 }
 
+// A conversation token fetched while the window picker is open, so pressing Start doesn't wait on it.
+// Tokens are short-lived, so a prefetched one is used only within 60 s.
+let prefetched: { agent: string; at: number; p: Promise<TokenResp> } | null = null;
+export function prefetchVoiceToken(agent = "claros") {
+  const p = fetchToken(agent);
+  p.catch(() => {});
+  prefetched = { agent, at: Date.now(), p };
+}
+function takeToken(agent: string): Promise<TokenResp> {
+  const pf = prefetched;
+  prefetched = null;
+  return pf && pf.agent === agent && Date.now() - pf.at < 60_000 ? pf.p.catch(() => fetchToken(agent)) : fetchToken(agent);
+}
+
+/** Start-up timing in the console, so a slow start shows which step stalled. */
+export function voiceMark(step: string) {
+  const w = window as unknown as { __clarosT0?: number };
+  if (step === "start" || w.__clarosT0 === undefined) w.__clarosT0 = performance.now();
+  console.info(`[claros voice] ${step} +${Math.round(performance.now() - w.__clarosT0)}ms`);
+}
+
 export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowName = "this task", agent = "claros" }: ClarosVoiceOptions) {
   const set = useClaros((s) => s.set);
   const offRecord = useClaros((s) => s.offRecord);
@@ -95,7 +116,10 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
   const conv = useConversation({
     onStatusChange: ({ status }) => {
       statusRef.current = status;
-      if (status === "connected") setTimeout(() => pumpRef.current(), SAY_QUIET_MS);
+      if (status === "connected") {
+        voiceMark("connected");
+        setTimeout(() => pumpRef.current(), SAY_QUIET_MS);
+      }
       set({ voiceStatus: status === "connected" ? "connected" : status === "connecting" ? "connecting" : "disconnected" });
     },
     onError: (message) => {
@@ -346,10 +370,13 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
   const start = useCallback(async () => {
     if (!sessionId) throw new Error("no session");
     set({ voiceStatus: "connecting" });
-    await navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => s.getTracks().forEach((t) => t.stop())).catch(() => {
-      throw new Error("Microphone permission denied");
-    });
+    // no mic pre-check here: the start sequence already asked for permission, and the call opens the mic itself.
+    // Every extra getUserMedia costs seconds on slow devices (Bluetooth headsets, a recorder holding the mic).
+    // Session variables and the voice token are fetched in parallel.
+    voiceMark("voice.start");
+    const tokP = takeToken(agent).then((t) => ({ t }), (e: unknown) => ({ e }));
     const dv = await fetchDialogVars(sessionId);
+    voiceMark("vars");
     const vars: Record<string, string> = {
       session_id: sessionId, mode, lang, user_name: userName || "there", workflow_name: workflowName, workflow_brief: "none yet",
       ...Object.fromEntries(Object.entries(dv).filter(([k]) => k !== "dialog_mode" && k !== "session_id" && k !== "mode")),
@@ -363,8 +390,11 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       clientTools: clientTools.current as unknown as Record<string, (p: unknown) => string>,
     };
     let tok: TokenResp = {};
+    const tr_ = await tokP;
+    voiceMark("token");
     try {
-      tok = await fetchToken(agent);
+      if ("e" in tr_) throw tr_.e;
+      tok = tr_.t;
     } catch (e) {
       const fallbackAgent = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID;
       if (!fallbackAgent) {

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { useScreenCapture } from "@/capture/useScreenCapture";
 import { useClaros } from "@/voice/store";
 import { openSession, sendControl } from "@/voice/useClarosSession";
-import { useClarosVoice } from "@/voice/useClarosVoice";
+import { prefetchVoiceToken, useClarosVoice, voiceMark } from "@/voice/useClarosVoice";
 
 export { useClaros as useLiveStore, sendControl };
 
@@ -71,8 +71,10 @@ export function useMicCheck() {
 /** Ask for the microphone once (permission only; the voice session opens its own stream). */
 export async function requestMic(): Promise<boolean | "missing"> {
   try {
+    voiceMark("mic.ask");
     const s = await navigator.mediaDevices.getUserMedia({ audio: true });
     s.getTracks().forEach((t) => t.stop());
+    voiceMark("mic.ok");
     return true;
   } catch (e) {
     const n = (e as DOMException)?.name;
@@ -85,6 +87,8 @@ export async function requestMic(): Promise<boolean | "missing"> {
  * (the hook swallows the error, so we observe getDisplayMedia around the call).
  */
 export async function shareWindow(capture: ReturnType<typeof useScreenCapture>): Promise<"ok" | "monitor" | "tab" | "cancelled" | "system"> {
+  voiceMark("start");
+  prefetchVoiceToken(); // the voice token loads while the picker is open
   const md = navigator.mediaDevices;
   const orig = md.getDisplayMedia.bind(md);
   let err: DOMException | null = null;
@@ -108,6 +112,7 @@ export async function shareWindow(capture: ReturnType<typeof useScreenCapture>):
     return e && (/system/i.test(e.message) || e.name === "NotReadableError") ? "system" : "cancelled";
   }
   const surface = (stream.getVideoTracks()[0]?.getSettings() as { displaySurface?: string })?.displaySurface;
+  voiceMark("share.ok");
   return surface === "monitor" ? "monitor" : surface === "browser" ? "tab" : "ok";
 }
 
