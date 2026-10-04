@@ -185,12 +185,11 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
   const demoCaption = demo ? MOCK_UNKNOWNS.find((u) => u.status === "asked" && u.about_event_ids.some((id) => events.some((e) => e.id === id)))?.spoken_question : undefined;
 
   const [elapsed, setElapsed] = useState(0);
-  const start = useRef<number | null>(null);
+  const [startAt] = useState(() => Date.now());
   useEffect(() => {
-    start.current ??= Date.now();
-    const h = setInterval(() => setElapsed(Date.now() - (start.current ?? Date.now())), 1000);
+    const h = setInterval(() => setElapsed(Date.now() - startAt), 1000);
     return () => clearInterval(h);
-  }, []);
+  }, [startAt]);
   const mmss = `${String(Math.floor(elapsed / 60000)).padStart(2, "0")}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, "0")}`;
 
   const rec = useOffRecord(voice);
@@ -276,7 +275,7 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
               .slice(0, 3)
               .map((e, i) => (
                 <li key={e.id} className={cn("claros-enter flex items-baseline gap-3 text-xl font-semibold leading-snug", i > 0 && "text-ink-2")}>
-                  <span className="tnum w-14 shrink-0 font-mono text-base">{fmtT(e.t)}</span>
+                  <span className="tnum w-14 shrink-0 font-mono text-base">{fmtT(e.t > 1e11 ? e.t - startAt : e.t)}</span>
                   <span className="min-w-0">
                     {e.summary}
                     {e.old || e.new ? (
@@ -317,7 +316,8 @@ function DemoCaption({ text }: { text: string }) {
   );
 }
 
+/** Time since Start (live events carry server epoch ms; demo events are already relative). */
 function fmtT(ms: number) {
-  const s = Math.floor(ms / 1000);
+  const s = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
