@@ -6,7 +6,7 @@ Field names verified against https://api.elevenlabs.io/openapi.json (2026-10-03)
 
 Dialog surface (default, CLAROS_DIALOG_MODE=hosted): ElevenAgents hosted LLM gemini-3.6-flash (reasoning
 effort minimal), backup cascade glm-52 -> gemini-3.5-flash-lite, TTS eleven_v4_turbo. The server decides what
-to say and pushes ⟦say:ID|TEXT⟧ user messages (see server/claros/brain/dialog.py).
+to say and pushes ⟦TEXT⟧ user messages (see server/claros/brain/dialog.py).
 
 Env (optional):
   CLAROS_DIALOG_MODE -> hosted (default) | custom
@@ -44,8 +44,8 @@ Workflow brief (the only rules you know):
 {{workflow_brief}}
 
 Rules, in priority order:
-1. If the user message is ⟦say:ID|TEXT⟧ (or ⟦ask:ID|TEXT⟧ / ⟦intervene:ID|TEXT⟧): speak TEXT exactly, word for word, nothing before or after. Never read the ⟦⟧ marker, the ID or the "|".
-2. If the user is working, narrating, thinking aloud, reading the screen, talking to someone else, answering your question, confirming or correcting, or giving a command (off the record, strike that, not now, I'm done, stop, just watch, hint, what's next, walk me through, check my work, why): call skip_turn. The server handles it and will send ⟦say⟧. When unsure, call skip_turn.
+1. A user message wrapped in ⟦ ⟧ is your next line, written for you by the Claros server. Reply with ONLY the text inside the brackets, unchanged, then stop: no brackets, no additions, no rephrasing, no second sentence, no follow-up question, no audio tags. Example: user "⟦What made you move that one to capex?⟧" → you say "What made you move that one to capex?" and nothing else.
+2. If the user is working, narrating, thinking aloud, reading the screen, talking to someone else, answering your question, confirming or correcting, or giving a command (off the record, strike that, not now, I'm done, stop, just watch, hint, what's next, walk me through, check my work, why): call skip_turn. The server handles it and will send your next line in ⟦ ⟧. Silence, "..." or a pause: call skip_turn, never ask if they are still there. When unsure, call skip_turn.
 3. If the user asks Claros a general question (not covered by rule 2): answer in at most 2 short sentences using the brief, the latest "Claros live context" updates, or the claros_lookup tool if available. Never invent a rule, threshold, approver or number: if it is not there, say you'll ask the expert.
 4. Always answer in the user's language (call language_detection if it changes). No lists, no preamble.
 5. Call end_call only if the user clearly asks to hang up."""
@@ -212,7 +212,7 @@ def build():
         "prompt": PROMPT,
         "llm": HOSTED_LLM,
         "reasoning_effort": HOSTED_EFFORT,
-        "temperature": 0.2,
+        "temperature": 0.0,
         "max_tokens": 200,
         **tools_block(),
         "ignore_default_personality": True,
@@ -279,7 +279,7 @@ def build():
             },
             "turn": {
                 "turn_eagerness": "patient",
-                "turn_timeout": 30,
+                "turn_timeout": 300,  # people work in silence for minutes; never "are you still there?"
                 "silence_end_call_timeout": -1,
                 "soft_timeout_config": {"timeout_seconds": -1, "use_llm_generated_message": False},
             },

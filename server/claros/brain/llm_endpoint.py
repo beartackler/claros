@@ -40,6 +40,7 @@ register_text = register_intervention
 ASK_RE = re.compile(r"[⟦\[]{1,2}\s*ask\s*:\s*([\w\-]+)\s*(?:\|\s*([^⟧\]]*?))?\s*[⟧\]]{1,2}", re.S)
 SAY_RE = re.compile(r"[⟦\[]{1,2}\s*say\s*:\s*([\w\-]+)\s*(?:\|\s*([^⟧\]]*?))?\s*[⟧\]]{1,2}", re.S)
 INTERVENE_RE = re.compile(r"[⟦\[]{1,2}\s*intervene\s*:\s*([\w\-]+)\s*(?:\|\s*([^⟧\]]*?))?\s*[⟧\]]{1,2}", re.S)
+LINE_RE = re.compile(r"^\s*⟦(?!\s*(?:say|ask|intervene)\s*:)([^⟧]+)⟧\s*$", re.S)  # ⟦TEXT⟧: the line to speak (hosted client format, no ID)
 SESSION_LINE_RE = re.compile(r"claros-session\s*:\s*([\w\-]+)", re.I)
 BUFFER_AFTER_S = 0.9
 
@@ -294,6 +295,9 @@ async def route(body: dict) -> Reply:
                 return Reply(text=t)
         suffix = (m.group(2) or "").strip()
         return Reply(text=suffix) if suffix else _skip(body)
+    m = LINE_RE.match(text)
+    if m:
+        return Reply(text=m.group(1).strip())
     m = INTERVENE_RE.search(text)
     if m:
         t = await _intervention_text(sid, m.group(1)) or (m.group(2) or "").strip()

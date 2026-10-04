@@ -6,7 +6,7 @@
  * - customLlmExtraBody {session_id, mode} + dynamicVariables {session_id, mode, lang, user_name}
  * - forwards final transcripts → `utterance`, VAD crossings → `vad`, mode → `agent_state`
  * - server `say {id,text,kind,step_id?}` (and legacy `ask` / `intervene`, mapped to say) → queued, sent as
- *   sendUserMessage("⟦say:ID|TEXT⟧") only when the agent is listening and the user is quiet; the hosted LLM
+ *   sendUserMessage("⟦TEXT⟧") only when the agent is listening and the user is quiet; the hosted LLM
  *   speaks TEXT verbatim. Segments with step_id highlight that step when sent (deduped vs. the agent's own
  *   highlight_step call). `context_update` → sendContextualUpdate
  * - dynamic variables come from GET {api}/api/dialog/vars?session_id= (mode, user_name, workflow_name, lang, workflow_brief)
@@ -210,7 +210,8 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
       useClaros.getState().pushTool("highlight_step", { step_id: m.step_id });
     }
     set({ caption: m.text });
-    try { convRef.current.sendUserMessage(`⟦say:${m.id}|${markerText(m.text)}⟧`); } catch { sayInFlight.current = null; }
+    // no ID in the marker: if the agent echoes it, TTS can't read out a code
+    try { convRef.current.sendUserMessage(`⟦${markerText(m.text)}⟧`); } catch { sayInFlight.current = null; }
   }, [set]);
   pumpRef.current = pump;
   const enqueueSay = useCallback((m: SayMsg) => {

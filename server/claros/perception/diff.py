@@ -64,6 +64,15 @@ def _lev(a: str, b: str, cap: int = 3) -> int:
     return prev[-1]
 
 
+_CONFUSE = str.maketrans({"0": "o", "1": "l", "|": "l", "5": "s", "8": "b"})
+
+
+def _norm(v: str) -> str:
+    """Comparable form: no trailing arrows/ellipses/dots, lowercase, OCR look-alikes folded."""
+    v = v.strip().rstrip("→›>…. ").strip()
+    return " ".join(v.lower().translate(_CONFUSE).split())
+
+
 def _same_text(a: str, b: str) -> bool:
     """Equal modulo OCR noise / UI truncation: 'Administration - O...' ≈ 'Administration - Ol',
     'Plants and Machineries - OPF' ≈ '… - OPP' (one glyph on a long string)."""
@@ -75,8 +84,16 @@ def _same_text(a: str, b: str) -> bool:
     if (ta or tb) and min(len(a2), len(b2)) >= 4 and (a2.startswith(b2) or b2.startswith(a2)):
         return True  # "EQ-GENERAL: Wo..." vs "EQ-GENERAL", "Administration - O..." vs "Administration - Ol"
     if min(len(a2), len(b2)) >= 12 and not any(ch.isdigit() for ch in a2 + b2):
-        return _lev(a2.lower(), b2.lower()) <= 1
-    return False
+        if _lev(a2.lower(), b2.lower()) <= 1:
+            return True
+    na, nb = _norm(a), _norm(b)
+    if na == nb:
+        return True
+    short, long_ = sorted((na, nb), key=len)
+    # a cut-off cell read as "Plants and Machineries - O" vs "… - OPF": same value, narrower column
+    if len(short) >= 8 and long_.startswith(short) and len(short) >= 0.7 * len(long_):
+        return True
+    return len(short) >= 12 and _lev(na, nb) <= 2 and not any(ch.isdigit() for ch in na + nb)
 
 
 def same_value(p: Any, f: Any) -> bool:
@@ -159,6 +176,11 @@ class Differ:
         win = self._window(cur.t)
         typing = [a for a in win if a.kind == "typing"]
         user = [a for a in win if a.kind in USER_KINDS]
+        if not typing:
+            only_scroll = bool(user) and all(a.kind == "scrolling" for a in user)
+            # without typing, a value that appears or vanishes is a field scrolling in/out or a missed OCR read,
+            # and re-reads while only scrolling are layout shifts — neither is an edit
+            changes = [(k, p, f) for k, p, f in changes if p.value and f.value and not only_scroll]
         sources: dict[str, str] = {}
         for k, p, f in changes:
             spatial_tiles = [tl for a in typing for tl in a.tiles] + (list(changed_tiles or []) if typing else [])

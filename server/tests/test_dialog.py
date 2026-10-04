@@ -262,7 +262,7 @@ def test_agent_config_hosted(monkeypatch):
     pr = cfg["agent"]["prompt"]
     assert pr["llm"] == "gemini-3.6-flash" and pr["reasoning_effort"] == "minimal" and pr["custom_llm"] is None
     assert pr["backup_llm_config"]["order"] == ["glm-52", "gemini-3.5-flash-lite"]
-    assert cfg["tts"]["model_id"] == "eleven_v4_turbo" and "⟦say:ID|TEXT⟧" in pr["prompt"]
+    assert cfg["tts"]["model_id"] == "eleven_v4_turbo" and "wrapped in ⟦ ⟧" in pr["prompt"]
     monkeypatch.setenv("CLAROS_DIALOG_MODE", "custom")
     pr = bc.build()["conversation_config"]["agent"]["prompt"]
     assert pr["llm"] == "custom-llm" and pr["custom_llm"]["url"] == "https://x.example/llm/v1"
