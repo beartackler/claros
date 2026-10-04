@@ -480,11 +480,34 @@ class Ledger:
         return {"app": e.app, "entity_type": e.entity_type, "field": e.field, "value": e.new,
                 "event": e.summary}
 
+    def _merge_same_field(self, e: ScreenEvent, now: float) -> bool:
+        """Typing shows up as a run of edits on one field ("plan" → "plant" → "Plants and Machinery"). A later
+        edit joins the field's open question, which then asks about first old value → latest value."""
+        fld = e.canonical or e.field
+        if not fld or e.kind not in ("edit", "select"):
+            return False
+        ent = e.entity_id or e.entity_type
+        for u in self.unknowns.values():
+            m = self.meta.get(u.id, {})
+            if u.status != "open" or u.entity != ent or (m.get("key") or (None, None))[1] != fld:
+                continue
+            first = m.get("event")
+            merged = e.model_copy(update={"old": (first.old if first is not None and first.old else e.old)})
+            u.about_event_ids.append(e.id)
+            m["event"] = merged
+            if merged.old != merged.new:
+                u.spoken_question = self.make_question(u, merged)
+            u.created_t, u.expires_t = now, now + EXPIRE_MS
+            return True
+        return False
+
     async def _open_for(self, e: ScreenEvent, cls: str) -> Optional[Unknown]:
         utype, hyp, hconf, th = self._shape(e, cls)
         if utype in ("why", "deliberate") and e.kind in ("edit", "select") and not (e.old and e.new):
             return None  # a value that appeared/vanished (scroll, overlay, autofill) is no "why did you change it?"
         now = deps.now_ms()
+        if self._merge_same_field(e, now):
+            return None
         text_key = f"{utype} {e.canonical or e.field or ''} {e.summary or ''} {e.new or ''}"
         # ---- dedupe ----
         vecs = await deps.embed([text_key])

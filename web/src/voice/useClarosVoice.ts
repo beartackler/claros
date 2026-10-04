@@ -66,8 +66,13 @@ const VAD_OFF = 0.35;
 
 type TokenResp = { token?: string; conversation_token?: string; signed_url?: string; agent_id?: string };
 
+// "websocket" (default): plain WebSocket via a signed URL, no LiveKit/WebRTC underneath.
+// "webrtc": LiveKit room via a conversation token (stronger echo cancellation, slower to connect).
+const VOICE_TRANSPORT = process.env.NEXT_PUBLIC_VOICE_TRANSPORT === "webrtc" ? "webrtc" : "websocket";
+
 async function fetchToken(agent: string): Promise<TokenResp> {
-  const r = await fetch(`${API_BASE}/api/el/token?agent=${encodeURIComponent(agent)}`);
+  const path = VOICE_TRANSPORT === "webrtc" ? "token" : "signed-url";
+  const r = await fetch(`${API_BASE}/api/el/${path}?agent=${encodeURIComponent(agent)}`);
   if (!r.ok) throw new Error(`token ${r.status}`);
   const ct = r.headers.get("content-type") ?? "";
   if (ct.includes("json")) return (await r.json()) as TokenResp;

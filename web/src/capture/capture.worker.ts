@@ -22,7 +22,8 @@ const TX = 16, TY = 9; // tile grid
 const TW = AW / TX, TH = AH / TY; // 16x16 px tiles
 const TILE_T = 0.8; // mean abs diff (0..255) for a tile to count as changed
 const MIN_FRAME_GAP = 180; // ms between analysed frames (≈5 fps)
-const SETTLE: Record<string, number> = { typing: 500, scrolling: 400, navigating: 300, other: 300 };
+// typing waits 1.2 s: a shorter pause lands mid-word ("plan" → "plant" → "Plants and Machinery")
+const SETTLE: Record<string, number> = { typing: 1200, scrolling: 400, navigating: 300, other: 300 };
 const MIN_KF_GAP = 200;
 const HEARTBEAT = 10_000;
 const IDLE_AFTER = 1000;

@@ -161,3 +161,19 @@ def test_tau_relaxes_at_a_task_boundary_until_three_live_questions():
     assert g.tau(lg, u, boundary=True)["tau"] == 0.5
     lg.asked_ids = ["a", "b", "c"]
     assert g.tau(lg, u, boundary=True)["tau"] == 0.75
+
+
+def test_typing_run_on_one_field_is_one_question(offline):
+    """Live 2026-10-04: "plan" → "plant" → "Plants and Machiner" opened a question per keystroke read."""
+    lg = ledger_mod.get_ledger("p_typing")
+    steps = [("Tools and Small Equipment - OPP", "plan"), ("plan", "plant"), ("plant", "Plants and Machiner"),
+             ("Plants and Machiner", "Plants and Machineries - OPP")]
+    opened = []
+    for i, (old, new) in enumerate(steps, 1):
+        opened += run(lg.on_events([ev(i, "edit", field="Expense Head", old=old, new=new, source="typed")]))
+    live = [u for u in lg.unknowns.values() if u.status == "open"]
+    assert len(opened) == 1 and len(live) == 1
+    u = live[0]
+    assert len(u.about_event_ids) == 4
+    m = lg.meta[u.id]["event"]
+    assert (m.old, m.new) == ("Tools and Small Equipment - OPP", "Plants and Machineries - OPP")
