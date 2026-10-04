@@ -59,6 +59,18 @@ def _store_log(sid: str, kind: str, payload: Any, t: Optional[float]) -> None:
         log.debug("store.log failed: %s", e)
 
 
+# Claros's own controls (capture bar / pop-out / learner companion). Two or more on one frame = the expert shared
+# a surface that contains Claros (e.g. a Chrome split view with both tabs), and Claros would watch itself.
+SELF_MARKERS = ("done — debrief", "done - debrief", "off the record", "strike that", "how claros decided",
+                "claros noticed", "pop out", "nicht für die akte", "не для записи")
+SELF_CAPTURE_TEXT = "I can see my own window in what you're sharing. Please share only the app window, not Claros."
+
+
+def is_self_capture(lines: list[OcrLine]) -> bool:
+    text = " ".join(ln.text.lower() for ln in lines)
+    return sum(1 for m in SELF_MARKERS if m in text) >= 2
+
+
 @dataclass
 class VisionJob:
     seq: int
@@ -96,6 +108,7 @@ class SessionPipeline:
         self.ctx_handle: Optional[asyncio.TimerHandle] = None
         self.timings: list[dict] = []
         self.closed = False
+        self.self_warned = 0.0
 
     # ---------------- inputs ----------------
     def on_activity(self, msg: dict) -> None:
@@ -128,6 +141,9 @@ class SessionPipeline:
                 log.exception("redaction failed; dropping frame %s", seq)
                 return None
             del jpeg, raw  # raw frame never leaves this scope
+            if is_self_capture(res.lines):
+                await self._warn_self_capture()
+                return None  # Claros watching its own UI: no events, no vision, nothing stored
             kid = None
             if self.persist:
                 kid = await asyncio.to_thread(save_redacted, self.sid, seq, res, t, reason)
@@ -150,6 +166,22 @@ class SessionPipeline:
                                         must=reason in MUST_REASONS or why in ("first", "dialog", "entity", "title"),
                                         why=why))
             return st
+
+    async def _warn_self_capture(self) -> None:
+        now = time.monotonic()
+        if now - self.self_warned < 60:
+            return
+        first = self.self_warned == 0.0
+        self.self_warned = now
+        log.info("session %s: shared surface shows Claros itself; frames ignored", self.sid)
+        try:
+            from claros import ws
+            await ws.send(self.sid, {"type": "status", "level": "warn", "text": SELF_CAPTURE_TEXT})
+            if first:
+                from claros.brain.dialog import say
+                await say(self.sid, SELF_CAPTURE_TEXT, "ack", id=f"selfcap-{self.sid}")
+        except Exception:  # noqa: BLE001
+            log.debug("self-capture warning failed", exc_info=True)
 
     # ---------------- emit ----------------
     def _emit(self, prev: Optional[ScreenState], st: ScreenState,

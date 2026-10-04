@@ -115,7 +115,7 @@ export function ClarosOrb({
     return () => win.cancelAnimationFrame(raf);
   }, [reduced]);
 
-  const size = compact ? 56 : 88;
+  const size = compact ? 56 : 64; // the pop-out is ~380px wide: leave room for all three controls
 
   return (
     <div
@@ -138,7 +138,7 @@ export function ClarosOrb({
             aria-label={`Claros: ${label(state)}`}
             className="rounded-full border-2 border-border will-change-transform"
             style={{
-              width: size, height: size, background: FILL[state],
+              width: size, height: size, backgroundColor: FILL[state],
               backgroundImage: state === "off_record"
                 ? "repeating-linear-gradient(45deg, transparent 0 6px, rgba(255,255,255,.12) 6px 9px)" : undefined,
             }}
@@ -161,7 +161,7 @@ export function ClarosOrb({
             </Badge>
           </div>
           {!compact && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {onOffRecord && (
                 <Button size={state === "off_record" ? "sm" : "xs"} variant={state === "off_record" ? "claros" : "neutral"} onClick={onOffRecord} autoFocus={state === "off_record"}>
                   {state === "off_record" ? <Mic /> : <MicOff />}

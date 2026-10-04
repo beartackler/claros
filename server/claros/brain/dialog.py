@@ -608,9 +608,21 @@ async def on_hello(sid: str, p: Any) -> None:
     if mode == "debrief":
         await asyncio.sleep(0)  # knowledge.debrief.on_hello creates the state first
         await kick_debrief(sid)
+    elif mode in ("capture", "learn") and sid not in _greeted:
+        # "Claros says hi": the agent has no first message (the server owns every line); queued client-side
+        # until the voice session connects. Once per session, never on reconnects.
+        _greeted.add(sid)
+        from .lang import phrase
+        lang = (p.get("lang") or deps.session_lang(sid))[:2]
+        await say(sid, phrase("greet_capture" if mode == "capture" else "greet_learn", lang), "ack",
+                  id=f"greet-{sid}")
+
+
+_greeted: set[str] = set()
 
 
 def reset(sid: Optional[str] = None) -> None:
+    _greeted.clear() if sid is None else _greeted.discard(sid)
     for d_ in (_seen, _locks, _screen, _step, _open, _ctx_last):
         if sid is None:
             d_.clear()

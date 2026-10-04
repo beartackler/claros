@@ -225,7 +225,7 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
         </span>
         <div className="ml-auto flex flex-wrap gap-2">
           {pip.supported ? (
-            <Button variant="outline" onClick={() => void pip.open({ width: 380, height: 240 })} className={cn(offRecord && "border-paper")}>
+            <Button variant="outline" onClick={() => void pip.open({ width: 400, height: 260 })} className={cn(offRecord && "border-paper")}>
               <PictureInPicture2 aria-hidden /> <span className="hidden md:inline">{t("cap.popout")}</span>
             </Button>
           ) : null}
