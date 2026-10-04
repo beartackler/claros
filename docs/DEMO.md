@@ -1,8 +1,8 @@
 # Claros demo script (local, ERPNext)
 
-**ERPNext** in its own Chrome window (maximized — the one you share). **Claros** in a separate Chrome window behind it;
-you work through the Claros **pop-out**, which floats on top. Never put both tabs in one window (Chrome split view):
-sharing that window makes Claros watch itself.
+**ERPNext** and **Claros** each in their **own Chrome window** (side by side is fine — good for an audience),
+and you share only the ERPNext window. Working solo, maximize ERPNext and use the Claros **pop-out** on top.
+Never put both tabs in one window (Chrome split view): sharing that window makes Claros watch itself.
 Lines in quotes are what you say out loud. **Pause** = hands off, silent, 3 seconds — that's when Claros asks.
 
 ## Before each run
