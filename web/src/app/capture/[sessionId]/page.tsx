@@ -161,8 +161,16 @@ function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture
     }
   }, [phase, router, sessionId, capture]);
   // leaving capture by any route (Exit, back button, server phase change) ends the screen share
+  // (deferred: React dev mounts → unmounts → remounts once; only a real unmount may stop the share)
   const stopShare = capture.stop;
-  useEffect(() => () => stopShare(), [stopShare]);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      setTimeout(() => { if (!mounted.current) stopShare(); }, 0);
+    };
+  }, [stopShare]);
   const drip = useDemoDrip(demo && !offRecord);
 
   const [seen, setSeen] = useState<Record<string, Unknown>>({});
