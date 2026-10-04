@@ -113,7 +113,7 @@ app.include_router(el.router)
 
 # ---------------- core REST ----------------
 
-@app.get("/healthz")
+@app.api_route("/healthz", methods=["GET", "HEAD"])
 async def healthz() -> dict:
     return {"ok": True, "env": {k: bool(os.getenv(k)) for k in ENV_KEYS}, "packages": PACKAGE_STATUS,
             "llm_keys": llm.keys_present(), "sqlite_vec": bool(store.has_vec),
