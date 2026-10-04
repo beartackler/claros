@@ -43,7 +43,8 @@ def load_env() -> None:
         os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
-load_env()
+if "pytest" not in sys.modules:  # unit tests must never pick up real API keys
+    load_env()
 
 
 def log(*a: Any) -> None:

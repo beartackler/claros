@@ -3,30 +3,27 @@
 import { Shell } from "@/components/claros/Shell";
 import { useUi } from "@/components/claros/i18n";
 import { EmptyState, ErrorState, Loading, SourceNote, useResource } from "@/components/claros/primitives";
-import { WorkflowCard, useHealth } from "@/components/claros/cards";
+import { MapCard, isJunkWorkflow, useMaps } from "@/components/claros/cards";
 import { listWorkflows } from "@/lib/api";
 
 /** /map — every Work Map, newest first. */
 export default function WorkflowsPage() {
   return (
-    <Shell crumbs={[{ key: "crumb.workflows" }]}>
+    <Shell>
       <Library />
     </Shell>
   );
 }
 
 function Library() {
-  const { t, role } = useUi();
+  const { t } = useUi();
   const wf = useResource(listWorkflows, []);
-  const list = [...(wf.data ?? [])].sort((a, b) => b.updated_at - a.updated_at);
-  const health = useHealth(list);
+  const list = [...(wf.data ?? [])].filter((w) => !isJunkWorkflow(w)).sort((a, b) => b.updated_at - a.updated_at);
+  const maps = useMaps(list);
   return (
     <div>
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-[62ch]">
-          <h1 className="text-4xl font-black leading-[1] tracking-[-0.04em] sm:text-5xl">{t("lib.title")}</h1>
-          <p className="mt-3 leading-relaxed text-ink-2">{t("lib.sub")}</p>
-        </div>
+      <header className="mb-10 flex flex-wrap items-end justify-between gap-4">
+        <h1 className="text-4xl font-black leading-[1] tracking-[-0.04em] sm:text-6xl">{t("nav.maps")}</h1>
         <SourceNote source={wf.source} />
       </header>
       {wf.loading ? (
@@ -34,11 +31,11 @@ function Library() {
       ) : wf.error ? (
         <ErrorState message={wf.error} onRetry={wf.retry} />
       ) : !list.length ? (
-        <EmptyState>{t("state.empty.workflows")}</EmptyState>
+        <EmptyState>{t("eh.maps.empty")}</EmptyState>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {list.map((w) => (
-            <WorkflowCard key={w.workflow_id} w={w} variant={role === "expert" ? "expert" : "learner"} health={health[w.workflow_id]} />
+            <MapCard key={w.workflow_id} w={w} map={maps[w.workflow_id]} />
           ))}
         </div>
       )}

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Fragment, useState } from "react";
-import { Check, ChevronDown, Home, Languages, LibraryBig, LogOut, Menu, Monitor } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Check, ChevronDown, Home, Languages, LibraryBig, LogOut, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EXPERT, LEA } from "@/lib/mock";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -17,51 +17,69 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuList } from "@/components/ui/navigation-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { LANGS, LANG_NAMES, UiProvider, useUi, type DictKey, type Role, type UiLang } from "./i18n";
 import { ClarosDot, ExpertAvatar } from "./primitives";
 import { DebugPanel } from "./debug";
+import { LightboxProvider } from "./Lightbox";
 
-export type Crumb = { key?: DictKey; label?: string; href?: string };
+/** Wide, fluid container shared by every surface (top bar, pages): fills the screen up to 1600px. */
+export const CONTAINER = "mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-10";
 
 export function Shell({
   children,
-  wide,
-  crumbs,
+  back,
   focus,
 }: {
   children: React.ReactNode;
-  wide?: boolean;
-  /** inner pages: Home › … trail under the top bar */
-  crumbs?: Crumb[];
-  /** focused mode (capture, debrief): minimal chrome, no nav */
+  /** inner pages: one back link under the top bar (may depend on the role) */
+  back?: Back | ((role: Role) => Back);
+  /** focused mode (capture, debrief, live session): minimal chrome, no nav */
   focus?: { label: DictKey; detail?: React.ReactNode };
 }) {
   return (
     <UiProvider>
-      <div className="flex min-h-dvh flex-col bg-paper text-ink">
-        {focus ? <FocusBar label={focus.label} detail={focus.detail} /> : <TopBar />}
-        <main id="main" className={cn("mx-auto w-full flex-1 px-4 pb-20 sm:px-6", wide ? "max-w-[1400px]" : "max-w-[1200px]")}>
-          {crumbs?.length ? <Crumbs items={crumbs} /> : <div className="h-6 sm:h-8" />}
-          {children}
-        </main>
-        <DebugPanel />
-      </div>
+      <LightboxProvider>
+        <div className="flex min-h-dvh flex-col bg-paper text-ink">
+          {focus ? <FocusBar label={focus.label} detail={focus.detail} /> : <TopBar />}
+          <main id="main" className={cn(CONTAINER, "flex-1 pb-24")}>
+            {back ? <BackLink back={back} /> : <div className="h-8 sm:h-12" />}
+            {children}
+          </main>
+          <DebugPanel />
+        </div>
+      </LightboxProvider>
     </UiProvider>
   );
 }
 
-const NAV: { href: string; key: DictKey; icon: typeof Home; match: (p: string) => boolean }[] = [
-  { href: "/", key: "nav.home", icon: Home, match: (p) => p === "/" },
-  { href: "/learn", key: "nav.learn", icon: Monitor, match: (p) => p.startsWith("/learn") },
-  { href: "/map", key: "nav.workflows", icon: LibraryBig, match: (p) => p.startsWith("/map") },
-];
+type NavItem = { href: string; key: DictKey; icon: typeof Home; match: (p: string) => boolean };
+const NAV: Record<Role, NavItem[]> = {
+  expert: [
+    { href: "/", key: "nav.home", icon: Home, match: (p) => p === "/" },
+    { href: "/map", key: "nav.maps", icon: LibraryBig, match: (p) => p.startsWith("/map") },
+  ],
+  // learners live on Home (Start + their status); no other destinations
+  learner: [],
+};
+
+type Back = { href: string; label: DictKey };
+function BackLink({ back }: { back: Back | ((role: Role) => Back) }) {
+  const { t, role } = useUi();
+  const { href, label } = typeof back === "function" ? back(role) : back;
+  return (
+    <div className="py-5 sm:py-6">
+      <Link href={href} className="inline-flex items-center gap-1.5 rounded-[4px] text-base font-bold text-ink-2 underline decoration-transparent decoration-2 underline-offset-4 transition-colors hover:text-ink hover:decoration-ink">
+        <ArrowLeft className="size-5" aria-hidden /> {t(label)}
+      </Link>
+    </div>
+  );
+}
 
 function Wordmark() {
   return (
     <Link href="/" className="group flex shrink-0 items-center gap-2 rounded-[4px] pr-1" aria-label="Claros — home">
-      <ClarosDot size={24} className="transition-transform duration-200 group-hover:rotate-12" />
-      <span className="text-[22px] font-black leading-none tracking-[-0.05em]">claros</span>
+      <ClarosDot size={28} className="transition-transform duration-200 group-hover:rotate-12" />
+      <span className="text-[26px] font-black leading-none tracking-[-0.05em]">claros</span>
     </Link>
   );
 }
@@ -76,20 +94,21 @@ function SkipLink() {
 }
 
 function TopBar() {
-  const { t } = useUi();
+  const { t, role } = useUi();
   const path = usePathname() || "/";
   const [menu, setMenu] = useState(false);
+  const nav = NAV[role];
   return (
     <header className="sticky top-0 z-30 border-b-2 border-ink bg-paper/95 backdrop-blur-[2px]">
       <SkipLink />
-      <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-2 px-4 sm:gap-4 sm:px-6">
-        <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label={t("nav.menu")} onClick={() => setMenu(true)}>
+      <div className={cn(CONTAINER, "flex h-[72px] items-center gap-2 sm:gap-4")}>
+        {nav.length ? <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label={t("nav.menu")} onClick={() => setMenu(true)}>
           <Menu />
-        </Button>
+        </Button> : null}
         <Wordmark />
-        <NavigationMenu aria-label={t("nav.primary")} className="ml-4 hidden max-w-none flex-none border-0 bg-transparent p-0 md:flex">
-          <NavigationMenuList className="space-x-1">
-            {NAV.map((n) => {
+        {nav.length ? <NavigationMenu aria-label={t("nav.primary")} className="ml-4 hidden max-w-none flex-none border-0 bg-transparent p-0 md:flex">
+          <NavigationMenuList className="space-x-2">
+            {nav.map((n) => {
               const active = n.match(path);
               return (
                 <NavigationMenuItem key={n.href}>
@@ -97,10 +116,10 @@ function TopBar() {
                     active={active}
                     render={<Link href={n.href} aria-current={active ? "page" : undefined} />}
                     className={cn(
-                      "flex h-10 items-center gap-2 rounded-base border-2 px-3 text-sm font-bold leading-none transition-[background-color,box-shadow,transform] duration-150",
+                      "flex h-11 items-center gap-2 rounded-base border-2 px-3.5 text-base font-bold leading-none",
                       active
-                        ? "border-ink bg-ink text-paper shadow-[3px_3px_0_0_var(--claros)] hover:bg-ink hover:text-paper focus:bg-ink focus:text-paper"
-                        : "border-transparent hover:border-ink hover:bg-card hover:text-ink focus:border-ink focus:bg-card focus:text-ink",
+                        ? "border-ink bg-ink text-paper hover:bg-ink hover:text-paper focus:bg-ink focus:text-paper"
+                        : "press press-sm border-ink bg-card text-ink shadow-hard-sm hover:bg-card hover:text-ink focus:bg-card focus:text-ink",
                     )}
                   >
                     <n.icon className="size-4" aria-hidden />
@@ -110,18 +129,18 @@ function TopBar() {
               );
             })}
           </NavigationMenuList>
-        </NavigationMenu>
+        </NavigationMenu> : null}
         <div className="ml-auto flex items-center gap-2">
           <LangMenu />
           <RoleMenu />
         </div>
       </div>
-      <MobileNav open={menu} onOpenChange={setMenu} path={path} />
+      <MobileNav open={menu} onOpenChange={setMenu} path={path} nav={nav} />
     </header>
   );
 }
 
-function MobileNav({ open, onOpenChange, path }: { open: boolean; onOpenChange: (o: boolean) => void; path: string }) {
+function MobileNav({ open, onOpenChange, path, nav }: { open: boolean; onOpenChange: (o: boolean) => void; path: string; nav: NavItem[] }) {
   const { t } = useUi();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -132,7 +151,7 @@ function MobileNav({ open, onOpenChange, path }: { open: boolean; onOpenChange: 
           </SheetTitle>
         </SheetHeader>
         <nav aria-label={t("nav.primary")} className="flex flex-col gap-2 p-4">
-          {NAV.map((n) => {
+          {nav.map((n) => {
             const active = n.match(path);
             return (
               <Link
@@ -142,7 +161,7 @@ function MobileNav({ open, onOpenChange, path }: { open: boolean; onOpenChange: 
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex h-14 items-center gap-3 rounded-base border-2 border-ink px-4 text-lg font-extrabold",
-                  active ? "bg-ink text-paper shadow-[3px_3px_0_0_var(--claros)]" : "bg-card shadow-hard-sm active:translate-y-px",
+                  active ? "bg-ink text-paper" : "press press-sm bg-card shadow-hard-sm",
                 )}
               >
                 <n.icon className="size-5" aria-hidden />
@@ -161,12 +180,12 @@ function FocusBar({ label, detail }: { label: DictKey; detail?: React.ReactNode 
   return (
     <header className="sticky top-0 z-30 border-b-2 border-ink bg-paper">
       <SkipLink />
-      <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-4 sm:px-6">
+      <div className={cn(CONTAINER, "flex h-16 items-center gap-3")}>
         <Wordmark />
         <span aria-hidden className="h-6 w-0.5 bg-ink" />
-        <p className="min-w-0 truncate text-sm font-extrabold">
+        <p className="min-w-0 truncate text-base font-extrabold">
           {t(label)}
-          {detail ? <span className="ml-2 font-mono text-xs font-medium text-ink-2">{detail}</span> : null}
+          {detail ? <span className="ml-2 text-sm font-semibold text-ink-2">{detail}</span> : null}
         </p>
         <div className="ml-auto flex items-center gap-2">
           <LangMenu />
@@ -179,44 +198,12 @@ function FocusBar({ label, detail }: { label: DictKey; detail?: React.ReactNode 
   );
 }
 
-function Crumbs({ items }: { items: Crumb[] }) {
-  const { t } = useUi();
-  const all: Crumb[] = [{ key: "crumb.home", href: "/" }, ...items];
-  return (
-    <Breadcrumb className="py-4 sm:py-5">
-      <BreadcrumbList className="gap-1 text-sm sm:gap-1.5">
-        {all.map((c, i) => {
-          const label = c.label ?? (c.key ? t(c.key) : "");
-          const last = i === all.length - 1;
-          return (
-            <Fragment key={i}>
-              <BreadcrumbItem className="min-w-0">
-                {last || !c.href ? (
-                  <BreadcrumbPage className="truncate font-bold">{label}</BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink
-                    render={<Link href={c.href} />}
-                    className="rounded-[3px] font-semibold text-ink-2 underline decoration-transparent decoration-2 underline-offset-4 transition-colors hover:text-ink hover:decoration-ink"
-                  >
-                    {label}
-                  </BreadcrumbLink>
-                )}
-              </BreadcrumbItem>
-              {!last ? <BreadcrumbSeparator className="text-ink-2" /> : null}
-            </Fragment>
-          );
-        })}
-      </BreadcrumbList>
-    </Breadcrumb>
-  );
-}
-
 function LangMenu() {
   const { t, lang, setLang } = useUi();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="outline" size="sm" aria-label={`${t("lang.label")}: ${LANG_NAMES[lang]}`} className="gap-1.5 px-2.5 data-popup-open:bg-ink data-popup-open:text-paper" />}
+        render={<Button variant="outline" size="sm" aria-label={`${t("lang.label")}: ${LANG_NAMES[lang]}`} className="gap-1.5 px-3" />}
       >
         <Languages aria-hidden />
         <span className="font-mono uppercase">{lang}</span>
@@ -252,14 +239,14 @@ function RoleMenu() {
           <Button
             variant="outline"
             aria-label={`${t("role.switch")}: ${t(me.label)}`}
-            className="h-10 gap-2 pl-1 pr-2 data-popup-open:bg-ink data-popup-open:text-paper sm:pr-2.5"
+            className="h-11 gap-2 pl-1 pr-2.5"
           />
         }
       >
         <ExpertAvatar user={me.user} size={30} index={role === "expert" ? 0 : 2} />
         <span className="hidden flex-col items-start leading-none lg:flex">
-          <span className="text-[13px] font-extrabold">{me.user.name}</span>
-          <span className="mt-0.5 text-[11px] font-semibold opacity-75">{t(me.label)}</span>
+          <span className="text-sm font-extrabold">{me.user.name}</span>
+          <span className="mt-0.5 text-xs font-semibold opacity-75">{t(me.label)}</span>
         </span>
         <ChevronDown className="size-3.5! opacity-70" aria-hidden />
       </DropdownMenuTrigger>

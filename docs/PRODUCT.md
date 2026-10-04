@@ -1,3 +1,46 @@
+# Claros — product spine (v2, 2026-10-04 — supersedes the learner-pull/LMS framing below where they conflict)
+
+## The journey, per the brief (Capture → Map → Teach). Voice is the product; screens are support.
+EXPERT (one sitting, ~10–15 min):
+1. Start → share the app window + mic in ONE guided gesture. Claros says hi and asks what they're about to do (voice; no form).
+2. CAPTURE: expert works a real task and talks. Claros stays quiet while they type/read/talk, asks 3–5 short questions at natural pauses (≥1 guardrail). Screen: just the floating orb + live captions. Nothing to read.
+3. DEBRIEF (same session, deliberate friction): Claros asks what's still unclear (incl. any disagreement with another expert's earlier run — asked HERE, not left as an "open question"), then explains the process back; expert corrects; confirms "yes, that's how it works".
+4. WORK MAP: the artifact. Clickable timeline: screen moment (big, zoomable), decision, reason in the expert's words, guardrails. Expert can glance and approve; it's also what judges/managers see.
+There are NO lingering "open questions" lists: anything unresolved is resolved in the debrief; if the expert leaves early, the map is marked "needs a second run" — one clear state.
+
+LEARNER (live, on their own screen, real case):
+1. Start → share window + mic in one gesture → "What are you working on?" (voice). Claros recognizes the workflow from screen + speech.
+2. TEACH: learner works; Claros explains steps the way the expert did, asks them to predict the next decision (by voice), steps in BEFORE a guardrail is broken, and replays the expert's screen moment (large card) with the expert's words.
+3. End: a short summary — what they handled on their own, what to practice next. That's the only "report".
+No learner course library, no screenshot quizzes, no click-through LMS. (Nudge cards below are LIVE, triggered by the learner's real work — not a quiz.) If Claros has never seen the workflow, it says so honestly and offers to ask an expert (one tap) — that request is what the expert sees on their home.
+
+## LEARNER live loop (v2.1 — interactive nudges, every action is a signal)
+Claros lives in the floating companion (Document PiP, always on top — it cannot draw over other apps, so the "overlay" IS the companion window, docked beside the app).
+At a decision point Claros SPEAKS a short nudge and the companion shows a NUDGE CARD: the expert's reference (large zoomable screen moment + quote) and 2–4 answer options (e.g. "Capex · Opex · Ask the controller").
+The learner can respond in any way, and every response feeds the tutor policy + mastery (BKT):
+- say it ("capex", "the second one", "B", in any supported language) → matched to an option;
+- click/tap an option (or press 1–4);
+- say/click "I don't know" → Claros explains with the expert's words + moment, lowers mastery for that decision, gives the hint ladder next time;
+- close the card → counts as "skip"; don't re-ask this decision in this case; repeated dismissals → Claros talks less ("just watch" mode), says so once;
+- just act in the app before answering → the action IS the answer (implicit response): right → brief "Yes — that's what Anna does", wrong → explain; guardrail → stop BEFORE submit;
+- ask back ("why?", "show me what Anna did", "what's next?") → answer from the map, open the reference.
+Beyond the happy path:
+- learner diverges from the expert's path: allowed orders (partial order) are fine silently; an unknown path that breaks no guardrail → one light check ("Anna does X here — is this on purpose?"); answer + action recorded as a NOVEL CASE → offered to the expert as a request ("Lea did Y on a Z invoice — is that OK?");
+- experts differ on the decision → both options shown as valid, attributed; no "wrong";
+- low-confidence step match → Claros asks "Are you doing X?" instead of assuming;
+- learner already past the decision when the prompt is ready → turn it into a quick post-hoc check, never a stale question;
+- learner talking to someone else / silence → no nudges; nudges respect the same pause gate as capture;
+- learner too fast toward Submit with a violation → hard stop intervention wins over everything.
+End: short summary — decisions handled unaided / after a hint / caught, and "practice next".
+
+## UI principles
+- Big type, few words. Every screen has one obvious primary action.
+- Wide screens: use the width (two-pane layouts), don't center a narrow column.
+- Screenshots are evidence: always large enough to read, click to zoom (fluid shared-element animation).
+- Buttons press DOWN into their shadow on hover (neobrutalism default), never lift.
+
+---
+
 # Claros — product spine
 
 ## The crux (from the brief)

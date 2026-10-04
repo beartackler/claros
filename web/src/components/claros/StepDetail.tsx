@@ -9,8 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { useUi, type DictKey } from "./i18n";
-import { ExpertAvatar, Flipbook, QuoteBlock, useMediaQuery } from "./primitives";
-import { ConflictBanner } from "./ConflictBanner";
+import { ExpertAvatar, QuoteBlock, useMediaQuery } from "./primitives";
+import { ConflictNote } from "./ConflictBanner";
+import { ShotStrip } from "./Lightbox";
 import { KindChip } from "./chips";
 import { expertById, guardrailsFor, isJudgment, quotesFor, stepHighlight } from "./mapUtils";
 
@@ -48,7 +49,7 @@ export function StepPanel({
   if (desktop)
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" showCloseButton={false} className="w-full gap-0 border-0 border-l-2 border-ink bg-paper p-0 text-ink sm:max-w-[600px]">
+        <SheetContent side="right" showCloseButton={false} className="w-full gap-0 border-0 border-l-2 border-ink bg-paper p-0 text-ink sm:max-w-[720px]">
           {body}
         </SheetContent>
       </Sheet>
@@ -113,13 +114,13 @@ function PanelBody({
   return (
     <div className="flex h-full max-h-full min-h-0 flex-col">
       <header className="flex items-start gap-3 border-b-2 border-ink bg-card px-4 py-3 sm:px-5 sm:py-4">
-        <span className="tnum grid size-10 shrink-0 place-items-center rounded-[4px] border-2 border-ink bg-ink font-mono text-base font-black text-paper">{step.order}</span>
+        <span className="tnum grid size-12 shrink-0 place-items-center rounded-base border-2 border-ink bg-ink font-mono text-lg font-black text-paper">{step.order}</span>
         <div className="min-w-0 flex-1">
-          <Desc className="text-xs font-semibold text-ink-2">
+          <Desc className="text-sm font-semibold text-ink-2">
             {t("map.step", { n: index + 1 })} / {total}
             {step.state_signature.app || step.state_signature.view ? ` · ${[step.state_signature.app, step.state_signature.view].filter(Boolean).join(" · ")}` : ""}
           </Desc>
-          <Title className="mt-0.5 text-lg font-extrabold leading-snug tracking-[-0.02em] sm:text-xl">{step.title}</Title>
+          <Title className="mt-0.5 text-xl font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl">{step.title}</Title>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="outline" size="icon-sm" onClick={onPrev} disabled={!onPrev} aria-label={t("common.prev")}>
@@ -136,7 +137,7 @@ function PanelBody({
       <div ref={scroller} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5">
         <StepDetail map={map} step={step} flash={flash} onApprove={(v) => onApprove(step.id, v)} />
         {onNext ? (
-          <Button variant="secondary" className="mt-8 w-full justify-between" onClick={onNext}>
+          <Button variant="secondary" size="lg" className="mt-8 w-full justify-between" onClick={onNext}>
             {t("common.next")} <ArrowRight />
           </Button>
         ) : null}
@@ -151,7 +152,7 @@ function Block({ id, title, children, flash, className }: { id: string; title?: 
       data-section={id}
       className={cn("rounded-[6px] transition-[box-shadow] duration-500", flash === id && "shadow-[0_0_0_4px_var(--claros)]", className)}
     >
-      {title ? <h3 className="mb-2 flex items-center gap-2 text-sm font-extrabold">{title}</h3> : null}
+      {title ? <h3 className="mb-3 flex items-center gap-2 text-base font-extrabold text-ink-2">{title}</h3> : null}
       {children}
     </section>
   );
@@ -175,55 +176,53 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
   const reasons = quotesFor(map, step.decision?.reason_quote_ids);
   const guards = guardrailsFor(map, step);
   const notes = step.context_note_ids.map((id) => map.context_notes.find((n) => n.id === id)).filter(Boolean) as ContextNote[];
-  const frames = step.moment?.keyframe_ids ?? [];
+  const frames = (step.moment?.keyframe_ids ?? []).map((id, i, all) => ({
+    id,
+    keyframeId: id,
+    seed: step.order + i,
+    title: step.title,
+    highlight: i === all.length - 1 ? stepHighlight(step) : null,
+    caption: `${step.order}. ${step.title}`,
+  }));
+  if (!frames.length) frames.push({ id: `synthetic-${step.id}`, keyframeId: "", seed: step.order, title: step.state_signature.view ?? step.title, highlight: stepHighlight(step), caption: `${step.order}. ${step.title}` });
 
   return (
-    <div className="space-y-6">
-      <Block id="screen" flash={flash} title={t("map.screen")}>
-        <Flipbook ids={frames} title={step.state_signature.view ?? ""} highlight={stepHighlight(step)} />
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-ink-2">
+    <div className="space-y-8">
+      <Block id="screen" flash={flash}>
+        <ShotStrip group={`step-${step.id}`} frames={frames} />
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-semibold text-ink-2">
           {step.experts.map((id) => (
             <span key={id} className="inline-flex items-center gap-1.5">
-              <ExpertAvatar user={expertById(map, id)} size={20} index={Math.max(0, map.experts.findIndex((e) => e.id === id))} />
+              <ExpertAvatar user={expertById(map, id)} size={24} index={Math.max(0, map.experts.findIndex((e) => e.id === id))} />
               {expertById(map, id).name}
             </span>
           ))}
         </div>
       </Block>
 
-      {!step.approved ? (
-        <div className="hatch-partial rounded-[6px] border-2 border-dashed border-ink p-3">
-          <KindChip kind="unconfirmed">{t("map.unconfirmed")}</KindChip>
-          <p className="mt-1.5 text-sm">{t("map.unconfirmed.sub")}</p>
-        </div>
-      ) : null}
-
       {step.conflict ? (
         <Block id="conflict" flash={flash}>
-          <ConflictBanner map={map} step={step} />
+          <ConflictNote map={map} step={step} detailed />
         </Block>
       ) : null}
 
       {step.decision && !step.conflict ? (
         <Block id="decision" flash={flash} title={isJudgment(step) ? <KindChip kind="judgment" size="sm">{t("chip.judgment")}</KindChip> : t("map.decision")}>
-          <div className="rounded-[6px] border-2 border-ink bg-card p-4">
-            <p className="font-bold leading-snug">{step.decision.description}</p>
-            {step.decision.from_value || step.decision.to_value ? (
-              <p className="mt-2 flex flex-wrap items-center gap-2 font-mono text-sm">
-                {step.decision.from_value ? <span className="text-ink-2 line-through decoration-2">{step.decision.from_value}</span> : null}
-                <ArrowRight className="size-4" aria-hidden />
-                <span className="rounded-[3px] bg-claros-soft px-1.5 font-bold">{step.decision.to_value}</span>
-              </p>
-            ) : null}
-            {step.decision.counterfactual ? (
-              <p className="mt-3 border-t-2 border-dashed border-ink/30 pt-2 text-sm">
-                <span className="font-bold">{t("map.counterfactual")}:</span> {step.decision.counterfactual}
-              </p>
-            ) : null}
-          </div>
+          <p className="text-2xl font-extrabold leading-snug tracking-[-0.02em]">{step.decision.description}</p>
+          {step.decision.from_value || step.decision.to_value ? (
+            <p className="mt-3 flex flex-wrap items-center gap-2 font-mono text-lg">
+              {step.decision.from_value ? <span className="text-ink-2 line-through decoration-2">{step.decision.from_value}</span> : null}
+              <ArrowRight className="size-5" aria-hidden />
+              <span className="rounded-[3px] bg-claros-soft px-1.5 font-bold">{step.decision.to_value}</span>
+            </p>
+          ) : null}
+          {step.decision.counterfactual ? (
+            <p className="mt-3 text-lg">
+              <span className="font-bold">{t("map.counterfactual")}:</span> {step.decision.counterfactual}
+            </p>
+          ) : null}
           {reasons.length ? (
-            <div className="mt-3 space-y-2">
-              <p className="text-sm font-extrabold">{t("map.reason")}</p>
+            <div className="mt-4 space-y-3">
               {reasons.map((q) => (
                 <QuoteBlock key={q.id} quote={q} />
               ))}
@@ -234,28 +233,19 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
 
       {guards.length ? (
         <div className="space-y-3">
-          <h3 className="text-sm font-extrabold">{t("map.rules")}</h3>
+          <h3 className="text-base font-extrabold text-ink-2">{t("map.rules")}</h3>
           {guards.map((g) => (
             <Block key={g.id} id={`guard-${g.id}`} flash={flash}>
-              <div className="rounded-[6px] border-2 border-ink bg-ink p-4 text-paper shadow-hard-sm">
-                <p className="flex flex-wrap items-center gap-2 text-xs font-bold">
+              <div className="rounded-base border-2 border-ink bg-ink p-4 text-paper">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-bold">
                   <KindChip kind="guardrail" size="sm" className="border-paper">
                     {t(("guard." + g.action) as DictKey)}
                   </KindChip>
                   {g.owner ? <span>· {t("map.owner")}: {g.owner}</span> : null}
-                  {!g.approved ? <span className="rounded-[3px] bg-partial px-1 text-on-fill">{t("map.unconfirmed")}</span> : null}
                 </p>
-                <p className="mt-2 font-semibold leading-snug">{g.text}</p>
-                {g.experts.length ? (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs opacity-80">
-                    {g.experts.map((id) => (
-                      <ExpertAvatar key={id} user={expertById(map, id)} size={18} index={Math.max(0, map.experts.findIndex((e) => e.id === id))} className="border-paper" />
-                    ))}
-                    {g.experts.map((id) => expertById(map, id).name).join(", ")}
-                  </p>
-                ) : null}
+                <p className="mt-2 text-lg font-semibold leading-snug">{g.text}</p>
                 {role === "expert" && g.predicate ? (
-                  <code className="mt-2 block overflow-x-auto rounded-[3px] bg-paper/10 p-1.5 font-mono text-[11px]">{JSON.stringify(g.predicate)}</code>
+                  <code className="mt-3 block overflow-x-auto rounded-[3px] bg-paper/10 p-2 font-mono text-xs">{JSON.stringify(g.predicate)}</code>
                 ) : null}
               </div>
               {quotesFor(map, g.quote_ids).map((q) => (
@@ -268,37 +258,21 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
         </div>
       ) : null}
 
-      {step.variants.length && !step.conflict ? (
-        <Block id="variants" flash={flash} title={t("map.variants")}>
-          <ul className="space-y-2">
-            {step.variants.map((v) => (
-              <li key={v.expert_id} className="flex items-start gap-2 rounded-[4px] border-2 border-ink bg-card p-2.5 text-sm">
-                <ExpertAvatar user={expertById(map, v.expert_id)} size={22} index={Math.max(0, map.experts.findIndex((e) => e.id === v.expert_id))} />
-                <span>
-                  <span className="font-bold">{expertById(map, v.expert_id).name}:</span> {v.description}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Block>
-      ) : null}
-
       {notes.length ? (
         <Block id="context" flash={flash} title={t("map.context")}>
           <ul className="space-y-2">
             {notes.map((n) => {
               const c = citation(n, t("scope.universal"));
               return (
-                <li key={n.id} className="rounded-[4px] border-2 border-dashed border-ink bg-card p-3 text-sm leading-relaxed">
+                <li key={n.id} className="rounded-base border-2 border-dashed border-ink bg-card p-3 text-base">
                   {n.text}
-                  <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-ink-2">
-                    <span className="rounded-[3px] border border-ink/40 px-1">{t(("scope." + n.scope) as DictKey)}</span>
+                  <span className="mt-1.5 block text-sm font-semibold text-ink-2">
                     {c.href ? (
                       <a href={c.href} target="_blank" rel="noreferrer" className="underline decoration-2 underline-offset-2 hover:text-ink">
                         {c.label}
                       </a>
                     ) : (
-                      <span>{c.label}</span>
+                      c.label
                     )}
                   </span>
                 </li>
@@ -309,13 +283,11 @@ export function StepDetail({ map, step, flash, onApprove }: { map: WorkMap; step
       ) : null}
 
       {role === "expert" ? (
-        <label className="flex items-center justify-between gap-3 rounded-[6px] border-2 border-ink bg-card p-3 text-sm font-bold">
+        <label className="flex items-center justify-between gap-3 rounded-base border-2 border-ink bg-card p-4 text-lg font-bold">
           {t("map.approve")}
           <Switch checked={step.approved} onCheckedChange={(v) => onApprove(Boolean(v))} aria-label={t("map.approve")} />
         </label>
       ) : null}
-
-      <p className="text-center text-xs font-semibold text-ink-2">{t("map.nothingMore")}</p>
     </div>
   );
 }

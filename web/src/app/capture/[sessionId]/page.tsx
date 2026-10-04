@@ -1,16 +1,21 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Ban, BookmarkPlus, Check, CircleDot, Eye, EyeOff, HelpCircle, Mic, MicOff, MonitorUp, Square } from "lucide-react";
+/**
+ * Expert capture: one Start (share → mic → Claros says hi), then nothing to read —
+ * a big orb, live captions, and the one control that matters (Done → debrief, same session).
+ */
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { Eye, EyeOff, PictureInPicture2, Square } from "lucide-react";
 import { Shell } from "@/components/claros/Shell";
-import { LANGS, LANG_NAMES, useUi, type DictKey, type UiLang } from "@/components/claros/i18n";
-import { ClarosDot, ClarosSays, EmptyState, Meter, Panel, SectionHeader } from "@/components/claros/primitives";
-import { sendControl, useJoinSession, useLive, useLiveStore, useMicCheck } from "@/components/claros/live";
-import { ClarosCompanion } from "@/voice/ClarosCompanion";
+import { LANGS, LANG_NAMES, useUi, type UiLang } from "@/components/claros/i18n";
+import { LiveCaptions, LiveOrb, requestMic, sendControl, useJoinSession, useLive, useLiveStore, waitVoice } from "@/components/claros/live";
+import { StartSequence, type ShareResult } from "@/components/claros/StartSequence";
+import { ClarosOrb } from "@/voice/ClarosOrb";
+import { useOrbState } from "@/voice/ClarosCompanion";
+import { PipPortal, usePip } from "@/voice/pip";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { endSession } from "@/lib/api";
+import { endSession, listRequests } from "@/lib/api";
 import { EXPERT, MOCK_EVENTS, MOCK_UNKNOWNS } from "@/lib/mock";
 import type { ScreenEvent, Unknown } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
@@ -18,157 +23,92 @@ import { cn } from "@/lib/utils";
 const BUDGET = 5;
 
 export default function CapturePage() {
-  const { sessionId } = useParams<{ sessionId: string }>();
   return (
-    <Shell wide focus={{ label: "focus.capture", detail: sessionId }}>
-      <Capture />
+    <Shell focus={{ label: "focus.capture" }}>
+      <Suspense fallback={null}>
+        <Capture />
+      </Suspense>
     </Shell>
   );
 }
 
 function Capture() {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const { lang } = useUi();
+  const params = useSearchParams();
+  const { t, lang } = useUi();
   const [speakLang, setSpeakLang] = useState<UiLang>(lang);
-  const [live, setLive] = useState(false);
+  const [live, setLive] = useState(params.get("demo") === "1");
+  const [forWhom, setForWhom] = useState<string | null>(null);
   // follow the UI language until recording starts (prefs hydrate after first render)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!live) setSpeakLang(lang);
   }, [lang, live]);
-  useJoinSession(live ? sessionId : null, "capture", EXPERT, speakLang);
-  const { capture, voice } = useLive(live ? sessionId : null, "capture", speakLang, EXPERT.name);
+  // recording for a learner's request: say whose
+  const requestId = params.get("request");
+  useEffect(() => {
+    if (!requestId) return;
+    listRequests().then((r) => {
+      const req = r.data.find((x) => x.id === requestId);
+      if (req) setForWhom(`${req.requested_by.name.split(" ")[0]} · ${req.workflow_hint}`);
+    });
+  }, [requestId]);
 
-  return live ? (
-    <LiveNotebook sessionId={sessionId} capture={capture} voice={voice} />
-  ) : (
-    <Preflight
-      speakLang={speakLang}
-      setSpeakLang={setSpeakLang}
-      sharing={capture.active}
-      surface={capture.surface}
-      onShare={() => capture.start().catch(() => {})}
-      onStart={() => {
-        setLive(true);
-        // voice starts after the session is joined; degrade silently without a server
-        setTimeout(() => voice.start().catch(() => {}), 50);
-      }}
-    />
-  );
+  useJoinSession(sessionId, "capture", EXPERT, speakLang);
+  const { capture, voice } = useLive(sessionId, "capture", speakLang, EXPERT.name);
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
+
+  const onShare = async (): Promise<ShareResult> => {
+    await capture.start();
+    if (!capture.stream.current) return "cancelled";
+    const surface = (capture.stream.current.getVideoTracks()[0]?.getSettings() as { displaySurface?: string })?.displaySurface;
+    return surface === "monitor" ? "monitor" : "ok";
+  };
+  const onVoice = async () => {
+    try {
+      await voiceRef.current.start();
+    } catch {
+      return false;
+    }
+    return waitVoice();
+  };
+
+  if (!live)
+    return (
+      <StartSequence
+        persona="expert"
+        title={t("eh.title")}
+        sub={forWhom ?? t("eh.sub")}
+        privacy="start.privacy.expert"
+        onShare={onShare}
+        onMic={requestMic}
+        onVoice={onVoice}
+        onDone={() => setLive(true)}
+        onSkipVoice={() => setLive(true)}
+        aside={
+          <label className="flex items-center gap-2 text-base font-bold">
+            {t("start.speak")}
+            <select
+              value={speakLang}
+              onChange={(e) => setSpeakLang(e.target.value as UiLang)}
+              className="h-11 rounded-base border-2 border-ink bg-card px-2 text-base text-ink shadow-hard-sm focus-visible:outline-3 focus-visible:outline-claros"
+            >
+              {LANGS.map((l) => (
+                <option key={l} value={l}>
+                  {LANG_NAMES[l]}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
+      />
+    );
+
+  return <LiveCapture sessionId={sessionId} capture={capture} voice={voice} />;
 }
 
-/* ---------------- pre-flight ---------------- */
-
-function Preflight(p: {
-  speakLang: UiLang;
-  setSpeakLang: (l: UiLang) => void;
-  sharing: boolean;
-  surface: string;
-  onShare: () => void;
-  onStart: () => void;
-}) {
-  const { t } = useUi();
-  const mic = useMicCheck();
-  const [consent, setConsent] = useState(false);
-  const list = (k: DictKey) => t(k).split("|");
-  return (
-    <div className="mx-auto max-w-4xl">
-      <ClarosSays>
-        <h1 className="text-4xl font-black leading-[0.95] tracking-[-0.04em]">{t("capture.preflight.title")}</h1>
-        <p className="mt-3 max-w-[56ch] text-ink-2">{t("capture.preflight.sub")}</p>
-      </ClarosSays>
-
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <Panel className="p-4">
-          <h2 className="flex items-center gap-2 font-extrabold">
-            <Mic className="size-5" aria-hidden /> {t("capture.preflight.mic")}
-          </h2>
-          <div className="mt-3 flex items-center gap-3">
-            <Button variant={mic.state === "ok" ? "outline" : "secondary"} size="sm" onClick={mic.check} loading={mic.state === "checking"} className={cn(mic.state === "ok" && "bg-ready text-on-fill hover:bg-ready")}>
-              {mic.state === "ok" ? (
-                <>
-                  <Check aria-hidden /> {t("capture.preflight.mic.ok")}
-                </>
-              ) : (
-                t("capture.preflight.mic.test")
-              )}
-            </Button>
-            <div className="h-3 flex-1 overflow-hidden rounded-[3px] border-2 border-ink bg-card" aria-hidden>
-              <div className="h-full bg-claros transition-[width] duration-75" style={{ width: `${Math.round(mic.level * 100)}%` }} />
-            </div>
-          </div>
-          {mic.state === "denied" ? <p className="mt-2 text-sm font-semibold text-danger">{t("capture.preflight.mic.denied")}</p> : null}
-        </Panel>
-
-        <Panel className="p-4">
-          <h2 className="flex items-center gap-2 font-extrabold">
-            <MonitorUp className="size-5" aria-hidden /> {t("capture.preflight.window")}
-          </h2>
-          <p className="mt-1 text-sm text-ink-2">{t("capture.preflight.window.sub")}</p>
-          <Button variant={p.sharing ? "outline" : "secondary"} size="sm" onClick={p.onShare} className={cn("mt-3", p.sharing && "bg-ready text-on-fill hover:bg-ready")}>
-            {p.sharing ? (
-              <>
-                <Check aria-hidden /> {p.surface}
-              </>
-            ) : (
-              <>
-                <MonitorUp aria-hidden /> {t("learn.invoke.share")}
-              </>
-            )}
-          </Button>
-          {p.sharing && p.surface === "monitor" ? <p className="mt-2 text-sm font-bold text-danger">{t("capture.preflight.monitor")}</p> : null}
-        </Panel>
-
-        <Panel className="p-4">
-          <h2 className="flex items-center gap-2 font-extrabold">
-            <Eye className="size-5" aria-hidden /> {t("capture.preflight.captured")}
-          </h2>
-          <ul className="mt-2 space-y-1.5 text-sm">
-            {list("capture.preflight.captured.list").map((x) => (
-              <li key={x} className="flex gap-2">
-                <Check className="mt-0.5 size-4 shrink-0" aria-hidden /> {x}
-              </li>
-            ))}
-          </ul>
-        </Panel>
-        <Panel tone="ink" className="p-4">
-          <h2 className="flex items-center gap-2 font-extrabold">
-            <EyeOff className="size-5" aria-hidden /> {t("capture.preflight.never")}
-          </h2>
-          <ul className="mt-2 space-y-1.5 text-sm">
-            {list("capture.preflight.never.list").map((x) => (
-              <li key={x} className="flex gap-2">
-                <Ban className="mt-0.5 size-4 shrink-0" aria-hidden /> {x}
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      </div>
-
-      <div className="mt-6 flex flex-col gap-4 rounded-base border-2 border-ink bg-card p-4 shadow-hard sm:flex-row sm:items-center">
-        <label className="flex items-center gap-2 text-sm font-bold">
-          {t("capture.preflight.lang")}
-          <select value={p.speakLang} onChange={(e) => p.setSpeakLang(e.target.value as UiLang)} className="h-9 rounded-[4px] border-2 border-ink bg-card px-2 text-ink">
-            {LANGS.map((l) => (
-              <option key={l} value={l}>
-                {LANG_NAMES[l]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-1 items-start gap-2 text-sm font-semibold">
-          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-5 accent-[var(--claros)]" />
-          {t("capture.preflight.consent")}
-        </label>
-        <Button variant="claros" size="lg" disabled={!consent} onClick={p.onStart}>
-          <CircleDot aria-hidden /> {t("capture.preflight.start")}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- live notebook ---------------- */
+/* ---------------- live: orb + captions, nothing to read ---------------- */
 
 type Live = ReturnType<typeof useLive>;
 
@@ -182,17 +122,18 @@ function useDemoDrip(enabled: boolean) {
   return n;
 }
 
-function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; capture: Live["capture"]; voice: Live["voice"] }) {
+function LiveCapture({ sessionId, capture, voice }: { sessionId: string; capture: Live["capture"]; voice: Live["voice"] }) {
   const { t } = useUi();
   const router = useRouter();
   const wsStatus = useLiveStore((s) => s.wsStatus);
   const liveEvents = useLiveStore((s) => s.events);
   const ledger = useLiveStore((s) => s.ledger);
-  const caption = useLiveStore((s) => s.caption);
   const offRecord = useLiveStore((s) => s.offRecord);
-  const agentMode = useLiveStore((s) => s.agentMode);
   const phase = useLiveStore((s) => s.phase);
+  const caption = useLiveStore((s) => s.caption);
   const demo = wsStatus !== "open" && liveEvents.length === 0;
+  const orb = useOrbState();
+  const pip = usePip();
 
   // Server moves the session to debrief (voice "I'm done", end_task, or POST end) → follow it.
   useEffect(() => {
@@ -200,20 +141,16 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
   }, [phase, router, sessionId]);
   const drip = useDemoDrip(demo && !offRecord);
 
-  // Collect unknowns seen via ledger.top (live) or mock ledger (demo).
   const [seen, setSeen] = useState<Record<string, Unknown>>({});
   useEffect(() => {
     const top = ledger?.top;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (top) setSeen((s) => ({ ...s, [top.id]: top }));
   }, [ledger?.top]);
-
   const events: ScreenEvent[] = demo ? MOCK_EVENTS.slice(0, drip) : liveEvents;
   const unknowns: Unknown[] = demo ? MOCK_UNKNOWNS.filter((u) => u.about_event_ids.some((id) => events.some((e) => e.id === id))) : Object.values(seen);
-  const asked = unknowns.filter((u) => u.status === "asked" || u.status === "answered");
-  const saved = demo ? unknowns.filter((u) => u.status === "deferred").length : ledger?.saved_for_later ?? 0;
-  const [inspect, setInspect] = useState<string | null>(null);
-  const inspected = unknowns.find((u) => u.id === inspect) ?? null;
+  const asked = unknowns.filter((u) => u.status === "asked" || u.status === "answered").length;
+  const demoCaption = demo ? MOCK_UNKNOWNS.find((u) => u.status === "asked" && u.about_event_ids.some((id) => events.some((e) => e.id === id)))?.spoken_question : undefined;
 
   const [elapsed, setElapsed] = useState(0);
   const start = useRef<number | null>(null);
@@ -242,217 +179,97 @@ function LiveNotebook({ sessionId, capture, voice }: { sessionId: string; captur
     router.push(`/debrief/${sessionId}`);
   };
 
-  const feedRef = useRef<HTMLOListElement>(null);
-  useEffect(() => {
-    feedRef.current?.lastElementChild?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [events.length]);
-
   return (
-    <div className="relative">
-      {/* status strip */}
-      <div className={cn("mb-5 flex flex-wrap items-center gap-3 rounded-base border-2 border-ink p-3 shadow-hard", offRecord ? "bg-ink text-paper" : "bg-card")}>
-        <span className={cn("inline-flex items-center gap-2 font-extrabold", offRecord && "opacity-80")}>
-          <span className={cn("size-3 rounded-full border-2", offRecord ? "border-paper" : "border-ink bg-missing motion-safe:animate-pulse")} aria-hidden />
-          {offRecord ? t("capture.offrecord.on") : t("capture.live")}
+    <div>
+      {/* status row */}
+      <div className={cn("flex flex-wrap items-center gap-3 rounded-base border-2 border-ink p-3 sm:p-4", offRecord ? "bg-ink text-paper" : "bg-card shadow-hard")}>
+        <span className="inline-flex items-center gap-2.5 text-lg font-extrabold">
+          <span className={cn("size-3.5 rounded-full border-2", offRecord ? "border-paper" : "border-ink bg-missing motion-safe:animate-pulse")} aria-hidden />
+          {offRecord ? t("cap.off") : t("cap.live")}
+          <span className="tnum font-mono text-base font-bold opacity-80">{mmss}</span>
         </span>
-        <span className="tnum font-mono text-sm">{mmss}</span>
+        <span className="inline-flex items-center gap-2 text-base font-bold" aria-label={t("cap.asked", { n: asked, max: BUDGET })}>
+          <span className="flex gap-1" aria-hidden>
+            {Array.from({ length: BUDGET }).map((_, i) => (
+              <span key={i} className={cn("size-3 rounded-full border-2", offRecord ? "border-paper" : "border-ink", i < asked ? "bg-claros" : "bg-transparent")} />
+            ))}
+          </span>
+          <span className="hidden sm:inline">{t("cap.asked", { n: asked, max: BUDGET })}</span>
+        </span>
         <div className="ml-auto flex flex-wrap gap-2">
-          <Button
-            variant={voice.status === "connected" ? "claros" : "outline"}
-            size="sm"
-            onClick={() => (voice.status === "connected" ? voice.end() : voice.start().catch(() => {}))}
-            aria-pressed={voice.status === "connected"}
-            className={cn(offRecord && voice.status !== "connected" && "border-paper bg-transparent text-paper hover:bg-paper/10")}
-          >
-            {voice.status === "connected" ? <Mic aria-hidden /> : <MicOff aria-hidden />}
-            {t("capture.voice")}
+          {pip.supported ? (
+            <Button variant="outline" onClick={() => void pip.open({ width: 380, height: 240 })} className={cn(offRecord && "border-paper")}>
+              <PictureInPicture2 aria-hidden /> <span className="hidden md:inline">{t("cap.popout")}</span>
+            </Button>
+          ) : null}
+          <Button variant="outline" onClick={toggleOff} aria-pressed={offRecord} className={cn(offRecord && "border-paper")}>
+            {offRecord ? <Eye aria-hidden /> : <EyeOff aria-hidden />}
+            {offRecord ? t("cap.resume") : t("cap.off")}
           </Button>
-          <Button variant="primary" size="sm" onClick={finish} loading={ending} className={cn(offRecord && "border-paper bg-paper text-ink")}>
-            {!ending ? <Square aria-hidden /> : null} {t("capture.end")}
+          <Button variant="primary" onClick={finish} loading={ending} className={cn(offRecord && "border-paper")}>
+            {!ending ? <Square aria-hidden /> : null} {t("cap.end")}
           </Button>
         </div>
       </div>
 
-      {caption && !offRecord ? (
-        <div className="claros-enter mb-5 rounded-base border-2 border-ink bg-claros p-3 text-claros-ink shadow-hard" aria-live="polite">
-          <ClarosSays speaking={agentMode === "speaking"}>
-            <p className="pt-0.5 font-bold">{caption}</p>
-          </ClarosSays>
+      {/* orb + captions */}
+      <div className="grid min-h-[52vh] items-center gap-10 py-12 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-20 lg:py-16">
+        <div className="justify-self-center">
+          <LiveOrb size={260} getLevel={() => Math.max(voice.getOutputLevel(), voice.getInputLevel() * 0.5)} speaking={voice.isSpeaking} off={offRecord} />
         </div>
+        <div className="min-w-0">{offRecord ? <p className="text-4xl font-black tracking-[-0.03em]">{t("cap.off")}</p> : demoCaption && !caption ? <DemoCaption text={demoCaption} /> : <LiveCaptions idle={t("cap.idle")} />}</div>
+      </div>
+
+      {/* what Claros noticed — one line each, newest first */}
+      {events.length && !offRecord ? (
+        <section aria-labelledby="noticed" className="border-t-2 border-ink pt-6">
+          <h2 id="noticed" className="text-base font-extrabold text-ink-2">
+            {t("cap.noticed")}
+          </h2>
+          <ol className="mt-3 space-y-2" aria-live="polite">
+            {[...events]
+              .reverse()
+              .slice(0, 3)
+              .map((e, i) => (
+                <li key={e.id} className={cn("claros-enter flex items-baseline gap-3 text-xl font-semibold leading-snug", i > 0 && "text-ink-2")}>
+                  <span className="tnum w-14 shrink-0 font-mono text-base">{fmtT(e.t)}</span>
+                  <span className="min-w-0">
+                    {e.summary}
+                    {e.old || e.new ? (
+                      <span className="ml-2 font-mono text-base">
+                        <span className="line-through decoration-2 opacity-70">{e.old}</span> → <span className="rounded-[2px] bg-claros-soft px-1 font-bold text-ink">{e.new}</span>
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+          </ol>
+        </section>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section aria-labelledby="nb">
-          <SectionHeader id="nb" level={3} title={t("capture.notebook")} aside={demo ? <Badge variant="dashed" className="font-mono text-[11px]">{t("data.demo")}</Badge> : null} />
-          <Panel className={cn("p-0", offRecord && "opacity-40")}>
-            <p className="border-b-2 border-ink px-4 py-2 text-sm font-bold">{t("capture.events")}</p>
-            {events.length === 0 ? (
-              <div className="p-4">
-                <EmptyState>{t("capture.empty.events")}</EmptyState>
-              </div>
-            ) : (
-              <ol ref={feedRef} className="max-h-[52vh] divide-y-2 divide-dashed divide-ink/25 overflow-y-auto" aria-live="polite">
-                {events.map((e) => {
-                  const qs = unknowns.filter((u) => u.about_event_ids.includes(e.id));
-                  return (
-                    <li key={e.id} className="claros-enter px-4 py-3">
-                      <div className="flex items-start gap-3">
-                        <span className="tnum mt-0.5 w-12 shrink-0 font-mono text-xs text-ink-2">{fmtT(e.t)}</span>
-                        <Badge variant="tag" className="mt-0.5 uppercase">{e.kind}</Badge>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold leading-snug">{e.summary}</p>
-                          {e.old || e.new ? (
-                            <p className="mt-1 font-mono text-xs">
-                              <span className="text-ink-2 line-through decoration-2">{e.old}</span> → <span className="rounded-[2px] bg-claros-soft px-1 font-bold">{e.new}</span>
-                            </p>
-                          ) : null}
-                          {qs.length ? (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {qs.map((u) => (
-                                <UnknownPill key={u.id} u={u} active={inspect === u.id} onClick={() => setInspect(u.id)} />
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </Panel>
-        </section>
-
-        <aside className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Panel className="p-3">
-              <p className="text-xs font-bold">{t("capture.asked")}</p>
-              <p className="tnum mt-1 text-4xl font-black">{asked.length}</p>
-            </Panel>
-            <Panel tone="paper" className="p-3">
-              <p className="flex items-center gap-1 text-xs font-bold">
-                <BookmarkPlus className="size-3.5" aria-hidden /> {t("capture.saved")}
-              </p>
-              <p key={saved} className="ledger-tick tnum mt-1 text-4xl font-black">
-                {saved}
-              </p>
-            </Panel>
-          </div>
-          <p className="-mt-2 text-xs text-ink-2">{t("capture.saved.sub")}</p>
-
-          <Panel className="p-3">
-            <Meter value={asked.length / BUDGET} tone="claros" label={`${t("capture.budget")} · ${t("capture.budget.sub", { used: asked.length, max: BUDGET })}`} />
-          </Panel>
-
-          <div className="rounded-base border-2 border-claros bg-card p-4 shadow-claros">
-            <p className="flex items-center gap-2 font-extrabold">
-              <HelpCircle className="size-5 text-claros" aria-hidden /> {t("capture.why")}
-            </p>
-            {inspected ? (
-              <WhyInspector u={inspected} />
-            ) : (
-              <>
-                <p className="mt-2 text-sm text-ink-2">{t("capture.why.none")}</p>
-                {unknowns.length ? (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {unknowns.map((u) => (
-                      <UnknownPill key={u.id} u={u} active={false} onClick={() => setInspect(u.id)} />
-                    ))}
-                  </div>
-                ) : null}
-              </>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={toggleOff}
-            aria-pressed={offRecord}
-            className={cn(
-              "flex w-full items-center justify-center gap-3 rounded-[10px] border-[3px] border-ink py-6 text-2xl font-black tracking-[-0.02em] shadow-hard-lg transition-[transform,box-shadow] duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0_0_var(--ink)] active:translate-x-1.5 active:translate-y-1.5 active:shadow-none",
-              offRecord ? "bg-paper text-ink" : "bg-ink text-paper",
-            )}
-          >
-            {offRecord ? <Eye className="size-7" aria-hidden /> : <EyeOff className="size-7" aria-hidden />}
-            {offRecord ? t("capture.offrecord.resume") : t("capture.offrecord")}
-          </button>
-        </aside>
-      </div>
-      <ClarosCompanion voice={voice} />
+      <PipPortal pipWindow={pip.pipWindow}>
+        <ClarosOrb
+          state={orb.state}
+          curiousCount={orb.curious}
+          caption={caption}
+          onOffRecord={toggleOff}
+          onNotNow={() => sendControl("not_now")}
+          getLevel={() => Math.max(voice.getOutputLevel(), voice.getInputLevel() * 0.5)}
+        />
+      </PipPortal>
     </div>
+  );
+}
+
+function DemoCaption({ text }: { text: string }) {
+  return (
+    <p key={text} className="claros-enter text-balance text-3xl font-black leading-[1.12] tracking-[-0.03em] sm:text-4xl 2xl:text-5xl" aria-live="polite">
+      {text}
+    </p>
   );
 }
 
 function fmtT(ms: number) {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
-const STATUS_STYLE: Record<string, string> = {
-  asked: "bg-claros text-claros-ink",
-  answered: "bg-claros text-claros-ink",
-  deferred: "bg-paper-2",
-  resolved: "bg-card border-dashed",
-  open: "bg-card",
-  dropped: "bg-card opacity-60",
-};
-
-function UnknownPill({ u, active, onClick }: { u: Unknown; active: boolean; onClick: () => void }) {
-  const { t } = useUi();
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-[4px] border-2 border-ink px-2 py-0.5 text-xs font-bold transition-transform duration-150 hover:-translate-y-px",
-        STATUS_STYLE[u.status],
-        active && "outline-3 outline-offset-1 outline-claros",
-      )}
-    >
-      {u.status === "asked" ? <ClarosDot size={10} /> : null}
-      <span className="truncate">{u.spoken_question ?? u.entity ?? u.type}</span>
-      <span className="font-mono text-[10px] font-semibold opacity-80">· {t(("scope." + u.scope) as DictKey)}</span>
-    </button>
-  );
-}
-
-function WhyInspector({ u }: { u: Unknown }) {
-  const { t } = useUi();
-  const gate = useMemo(() => {
-    if (u.status === "resolved") return t("capture.why.gate.resolved", { source: u.resolution_source?.split(":")[0] ?? "llm" });
-    if (u.status === "deferred") return t("capture.why.gate.deferred");
-    return t("capture.why.gate.pause", { s: 2.4 });
-  }, [u, t]);
-  const costsExpert = u.scope === "company" || u.scope === "personal_judgment";
-  return (
-    <dl className="mt-3 space-y-2.5 text-sm">
-      {u.spoken_question ? <p className="font-bold">“{u.spoken_question}”</p> : null}
-      <div className="flex justify-between gap-3">
-        <dt className="font-semibold text-ink-2">{t("capture.why.scope")}</dt>
-        <dd>
-          <Badge variant={costsExpert ? "expert" : "tag"}>{t(("scope." + u.scope) as DictKey)}</Badge>
-        </dd>
-      </div>
-      {u.hypothesis ? (
-        <div>
-          <dt className="font-semibold text-ink-2">{t("capture.why.hypothesis")}</dt>
-          <dd className="mt-0.5">
-            {u.hypothesis} <span className="tnum font-mono text-xs">({Math.round((u.hypothesis_confidence ?? 0) * 100)}%)</span>
-          </dd>
-        </div>
-      ) : null}
-      <div>
-        <dt className="mb-1 font-semibold text-ink-2">{t("capture.why.priority")}</dt>
-        <dd>
-          <Meter value={u.priority} label={u.type} tone="claros" />
-        </dd>
-      </div>
-      <div>
-        <dt className="font-semibold text-ink-2">{t("capture.why.gate")}</dt>
-        <dd className="mt-0.5 font-mono text-xs">{gate}</dd>
-      </div>
-      {u.resolution ? <p className="rounded-[3px] border-2 border-dashed border-ink p-2 text-xs">{u.resolution}</p> : null}
-    </dl>
-  );
 }

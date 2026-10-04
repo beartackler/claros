@@ -81,7 +81,7 @@ def replay(session_id: str) -> Replay:
                     r.events.append(ev)
                     if ev.keyframe_id:
                         r.keyframes.setdefault(ev.keyframe_id, ev.t)
-            elif "utterance" in kind and isinstance(p, dict) and p.get("text"):
+            elif "utterance" in kind and isinstance(p, dict) and p.get("text") and p["text"] != "[off the record]":
                 uid = p.get("id") or p.get("event_id") or f"utt_{e.get('id')}"
                 r.utterances.append({"id": str(uid), "t": float(p.get("t_start", p.get("t", e.get("t") or 0)) or 0),
                                      "t_end": p.get("t_end"), "role": p.get("role", "user"),
@@ -434,7 +434,8 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
         derived |= set(PRIOR_VARS)  # session memory (records seen earlier) is evaluable at runtime
     for g in wm.guardrails:
         if g.predicate:
-            g.predicate = _numeric_literals(g.predicate)
+            g.predicate = _drop_identifier_literals(_numeric_literals(g.predicate), g.id)
+        if g.predicate:
             vs = predicate_vars(g.predicate)
             probe = {v: 1 for v in vs}
             bad = [v for v in vs if v not in observable | derived and not v.startswith("doc.")]
@@ -576,6 +577,38 @@ def orient_predicate(pred: dict, wm: WorkMap, r: Replay, gid: str = "") -> Optio
     return None
 
 
+_ID_VAR = re.compile(r"(?:_no|_id|_number|_num|_ref|_reference)$")
+
+
+def _drop_identifier_literals(pred: Any, gid: str = "") -> Optional[dict]:
+    """A record identifier compared with a literal ("-A" in supplier_invoice_no, == "ACC-PINV-…") copies the demo
+    case, not the rule (eval: the December re-bill rule became `prior.same_supplier_amount AND '-A' in
+    invoice_no`, which can never fire on the next re-bill). Drop such atoms; keep the rest of an AND."""
+    def is_id_atom(p: Any) -> bool:
+        if not isinstance(p, dict) or len(p) != 1:
+            return False
+        op, args = next(iter(p.items()))
+        if op not in ("in", "==", "===", "!=", "!==") or not isinstance(args, list) or len(args) != 2:
+            return False
+        vars_ = [a["var"] for a in args if isinstance(a, dict) and "var" in a]
+        lits = [a for a in args if not (isinstance(a, dict) and "var" in a)]
+        return len(vars_) == 1 and len(lits) == 1 and isinstance(lits[0], str) and \
+            bool(_ID_VAR.search(str(vars_[0][0] if isinstance(vars_[0], list) else vars_[0]).lower()))
+
+    if is_id_atom(pred):
+        d.log.info("guardrail %s predicate is an identifier literal → fuzzy", gid)
+        return None
+    if isinstance(pred, dict) and len(pred) == 1 and next(iter(pred)) in ("and", "or"):
+        op, args = next(iter(pred.items()))
+        keep = [a for a in (args or []) if not is_id_atom(a)]
+        if len(keep) != len(args or []):
+            d.log.info("guardrail %s: dropped %d identifier-literal atom(s)", gid, len(args) - len(keep))
+        if not keep:
+            return None
+        return keep[0] if len(keep) == 1 else {op: keep}
+    return pred
+
+
 def tautological(pred: Any, wm: WorkMap) -> bool:
     """{"==":[{"var":"line.amount"},{"var":"invoice.paid_december_amount"}]} where both vars alias the same label
     ('Amount (EUR)') is always true on screen — it would fire on every invoice."""
@@ -608,6 +641,13 @@ def observable_vars(wm: WorkMap, r: Replay) -> set[str]:
         for f in s_.fields:
             base = re.sub(r"\s*\[\d+\]$", "", f.label or "")
             seen.setdefault(norm_label(base), base)
+    # a "label" that is really a value the vision model mis-read as a label must not back a predicate var (Zammad
+    # eval: the ticket title "Charged twice for annual plan" and "4 hours 56 minutes ago" became
+    # ticket.charge_amount / ticket.days_since_charge): drop labels equal to a screen's title/view, relative times,
+    # and digit-heavy strings
+    titles = {norm_label(x) for s_ in r.states for x in (s_.view, s_.entity_id) if x}
+    _VALUEISH = re.compile(r"(?i)\b(ago|назад|vor|il y a|hace)\b|\d{2,}.*\d{2,}|^\W*\d")
+    seen = {k: v for k, v in seen.items() if k not in titles and not _VALUEISH.search(v)}
     out: set[str] = set()
     for k, aliases in list(wm.canonical_vars.items()):
         ok = [a for a in aliases if norm_label(re.sub(r"\s*\*$", "", a)) in seen or norm_label(a) in seen]

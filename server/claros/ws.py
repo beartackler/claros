@@ -121,7 +121,12 @@ async def _handle(session_id: str, msg: dict, b: Bus) -> None:
             s.off_record = False
         sessions.save(s)
     t = msg.get("t", msg.get("t_start"))
-    store.log(session_id, f"ws.in.{typ}", _loggable(msg), t if isinstance(t, (int, float)) else None)
+    rec = _loggable(msg)
+    if s is not None and getattr(s, "off_record", False) and typ == "utterance" and rec.get("text"):
+        # off the record: nothing said may be stored (eval: the transcript of an off-record utterance was persisted
+        # in the session log); the brain still sees it live so "back on the record" works by voice
+        rec = {**rec, "text": "[off the record]"}
+    store.log(session_id, f"ws.in.{typ}", rec, t if isinstance(t, (int, float)) else None)
     b.publish(session_id, f"ws.in.{typ}", msg)
 
 

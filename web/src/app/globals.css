@@ -44,6 +44,30 @@
   --shadow-hard: 4px 4px 0 0 var(--ink);
   --shadow-hard-lg: 6px 6px 0 0 var(--ink);
   --shadow-claros: 6px 6px 0 0 var(--claros);
+
+  /* v2 type scale: 18px body, bigger steps. Every text-* utility in the app inherits this. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.35;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 1.125rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.3125rem;
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 2.375rem;
+  --text-3xl--line-height: 1.1;
+  --text-4xl: 3rem;
+  --text-4xl--line-height: 1.02;
+  --text-5xl: 3.75rem;
+  --text-5xl--line-height: 1;
+  --text-6xl: 4.75rem;
+  --text-6xl--line-height: 0.96;
+  --text-7xl: 6rem;
+  --text-7xl--line-height: 0.92;
 }
 
 :root {
@@ -81,6 +105,8 @@
     background: var(--paper);
   }
   body {
+    font-size: 1.125rem;
+    line-height: 1.5;
     font-weight: var(--font-weight-base);
     color: var(--foreground);
     background: var(--paper);
@@ -109,6 +135,37 @@
     scrollbar-color: var(--ink) var(--paper-2);
   }
 }
+
+/* Pressables (neobrutalism default): the slab sits on a hard shadow and presses DOWN into it on hover
+   and press — it never lifts. Size of the travel = size of the shadow (--press). Toggled-on / open
+   controls stay pressed in. Unlayered so it wins over utility shadows. */
+.press {
+  --press: 4px;
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease-out;
+}
+.press-sm { --press: 2px; }
+.press-lg { --press: 6px; }
+.press-xl { --press: 8px; }
+@media (hover: hover) {
+  .press:hover:not(:disabled):not([data-disabled]):not([aria-disabled="true"]) {
+    transform: translate(var(--press), var(--press));
+    box-shadow: none;
+  }
+}
+.press:active:not(:disabled):not([data-disabled]),
+.press[data-popup-open],
+.press[aria-pressed="true"],
+.press[aria-current="page"],
+.press[data-state="on"] {
+  transform: translate(var(--press), var(--press));
+  box-shadow: none;
+}
+/* a card whose stretched button is focused/pressed presses the whole card */
+.press-within { --press: 4px; transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1); }
+@media (hover: hover) {
+  .press-within:hover { transform: translate(var(--press), var(--press)); box-shadow: none; }
+}
+.press-within:has(:active) { transform: translate(var(--press), var(--press)); box-shadow: none; }
 
 .tnum {
   font-variant-numeric: tabular-nums;

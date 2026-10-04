@@ -99,15 +99,15 @@ export function SectionHeader({
 }) {
   const H = level === 2 ? "h2" : "h3";
   return (
-    <div className={cn("mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2", className)}>
+    <div className={cn("mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-2", className)}>
       <div className="min-w-0">
-        <H id={id} className={cn("flex items-center gap-2.5 font-extrabold tracking-[-0.02em]", level === 2 ? "text-xl sm:text-2xl" : "text-lg")}>
+        <H id={id} className={cn("flex items-center gap-2.5 font-extrabold tracking-[-0.02em]", level === 2 ? "text-2xl sm:text-3xl tracking-[-0.03em]" : "text-xl")}>
           {title}
           {count != null && count > 0 ? (
-            <span className="tnum inline-grid h-6 min-w-6 place-items-center rounded-full border-2 border-ink bg-ink px-1.5 text-xs font-black text-paper">{count}</span>
+            <span className="tnum inline-grid h-8 min-w-8 place-items-center rounded-full border-2 border-ink bg-claros px-2 text-sm font-black text-claros-ink">{count}</span>
           ) : null}
         </H>
-        {sub ? <p className="mt-1 max-w-[68ch] text-sm leading-relaxed text-ink-2">{sub}</p> : null}
+        {sub ? <p className="mt-1 max-w-[60ch] text-base text-ink-2">{sub}</p> : null}
       </div>
       {aside}
     </div>
@@ -222,7 +222,7 @@ export function AvatarStack({ users, size = 28, max = 4 }: { users: Pick<User, "
 
 /* ---------------- screen moments ---------------- */
 
-type Highlight = { label: string; from?: string | null; to?: string | null } | null;
+export type Highlight = { label: string; from?: string | null; to?: string | null } | null;
 
 /** Keyframe from the server; falls back to a neutral synthetic app window so the story still reads offline. */
 export function ScreenThumb({
@@ -233,7 +233,9 @@ export function ScreenThumb({
   seed = 0,
   alt,
   rounded = true,
+  eager,
 }: {
+  eager?: boolean;
   keyframeId?: string | null;
   title?: string;
   highlight?: Highlight;
@@ -253,7 +255,7 @@ export function ScreenThumb({
     <div className={cn("relative aspect-[16/10] overflow-hidden border-2 border-ink bg-[#f7f7f5]", rounded && "rounded-[4px]", className)}>
       {!failed && keyframeId ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={keyframeUrl(keyframeId)} alt={alt ?? title} loading="lazy" className="h-full w-full object-cover object-top" onError={() => setFailed(true)} />
+        <img src={keyframeUrl(keyframeId)} alt={alt ?? title} loading={eager ? "eager" : "lazy"} draggable={false} className="h-full w-full object-cover object-top" onError={() => setFailed(true)} />
       ) : (
         <svg viewBox="0 0 320 200" className="h-full w-full" role="img" aria-label={alt ?? title}>
           <rect width="320" height="200" fill="#f7f7f5" />
@@ -301,58 +303,15 @@ export function ScreenThumb({
   );
 }
 
-/** Flip through several keyframes ("what the expert saw"). Respects reduced motion (manual only). */
-export function Flipbook({ ids, title, highlight, autoPlay = true }: { ids: string[]; title?: string; highlight?: Highlight; autoPlay?: boolean }) {
-  const t = useT();
-  const frames = ids.length ? ids : [""];
-  const [i, setI] = useState(0);
-  const [playing, setPlaying] = useState(autoPlay && frames.length > 1);
-  useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!playing || reduce || frames.length < 2) return;
-    const h = setInterval(() => setI((x) => (x + 1) % frames.length), 1100);
-    return () => clearInterval(h);
-  }, [playing, frames.length]);
-  return (
-    <div>
-      <ScreenThumb keyframeId={frames[i] || null} seed={i} title={title} highlight={i === frames.length - 1 ? highlight : null} />
-      {frames.length > 1 ? (
-        <div className="mt-2 flex items-center gap-2">
-          <Button variant="outline" size="icon-xs" onClick={() => setPlaying((p) => !p)} aria-label={playing ? t("quote.pause") : t("quote.play")}>
-            {playing ? <Pause /> : <Play />}
-          </Button>
-          <div className="flex flex-1 gap-1">
-            {frames.map((_, k) => (
-              <button
-                key={k}
-                type="button"
-                aria-pressed={k === i}
-                aria-label={`${k + 1} / ${frames.length}`}
-                onClick={() => {
-                  setPlaying(false);
-                  setI(k);
-                }}
-                className={cn("h-3 flex-1 rounded-[2px] border-2 border-ink transition-colors", k === i ? "bg-ink" : "bg-card hover:bg-paper-2")}
-              />
-            ))}
-          </div>
-          <span className="tnum font-mono text-[11px] text-ink-2">
-            {i + 1}/{frames.length}
-          </span>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 /* ---------------- quotes ---------------- */
 
-export function QuoteBlock({ quote, compact }: { quote: Quote; compact?: boolean }) {
+export function QuoteBlock({ quote, compact, size = "md", onDark }: { quote: Quote; compact?: boolean; size?: "md" | "lg"; onDark?: boolean }) {
   const t = useT();
   const { lang } = useUi();
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const translation = quote.lang !== lang ? quote.translations?.[lang] ?? quote.translations?.en : null;
+  const translation = quote.lang !== lang ? quote.translations?.[lang] ?? null : null;
+  useEffect(() => () => audioRef.current?.pause(), []);
   const toggle = () => {
     if (!quote.audio_clip) return;
     if (!audioRef.current) {
@@ -367,22 +326,28 @@ export function QuoteBlock({ quote, compact }: { quote: Quote; compact?: boolean
       audioRef.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
     }
   };
-  const srcKey = (["live", "debrief", "doc", "inbox"].includes(quote.source) ? `quote.src.${quote.source}` : "quote.src.live") as DictKey;
+  const lg = size === "lg";
   return (
-    <figure className={cn("rounded-[4px] border-2 border-ink bg-expert-soft", compact ? "p-2.5" : "p-3.5")}>
-      <div className="flex items-start gap-2.5">
+    <figure className={cn("rounded-base border-2 border-ink bg-expert-soft text-ink", compact ? "p-3" : lg ? "p-5 sm:p-6" : "p-4")}>
+      <div className="flex items-start gap-3">
         {quote.audio_clip ? (
-          <Button variant="outline" size="icon-xs" onClick={toggle} aria-label={playing ? t("quote.pause") : t("quote.play")} className="mt-0.5 rounded-full bg-expert text-on-fill">
-            {playing ? <Pause /> : <Play />}
-          </Button>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={playing ? t("quote.pause") : t("quote.play")}
+            aria-pressed={playing}
+            className={cn("press grid shrink-0 place-items-center rounded-full border-2 border-ink bg-expert text-on-fill shadow-hard", lg ? "size-14" : "size-11")}
+          >
+            {playing ? <Pause className={lg ? "size-6" : "size-5"} aria-hidden /> : <Play className={cn("translate-x-px", lg ? "size-6" : "size-5")} aria-hidden />}
+          </button>
         ) : null}
         <blockquote className="min-w-0 flex-1">
-          <p lang={quote.lang} className={cn("font-semibold leading-snug", compact ? "text-sm" : "text-[15px]")}>
+          <p lang={quote.lang} className={cn("font-bold tracking-[-0.01em]", compact ? "text-base leading-snug" : lg ? "text-2xl leading-tight sm:text-3xl" : "text-lg leading-snug")}>
             “{quote.text}”
           </p>
           {translation ? (
-            <p lang={lang} className="mt-1.5 text-sm leading-snug text-ink-2">
-              <span className="mr-1.5 rounded-[3px] border border-ink/40 px-1 font-mono text-[10px] uppercase">
+            <p lang={lang} className={cn("mt-2 text-ink-2", lg ? "text-lg" : "text-base")}>
+              <span className="mr-2 rounded-[3px] border-2 border-ink/30 px-1 align-[1px] font-mono text-xs font-bold uppercase">
                 {quote.lang}→{lang}
               </span>
               {translation}
@@ -390,10 +355,9 @@ export function QuoteBlock({ quote, compact }: { quote: Quote; compact?: boolean
           ) : null}
         </blockquote>
       </div>
-      <figcaption className="mt-2 flex items-center gap-1.5 text-xs font-semibold">
-        <ExpertAvatar user={{ id: quote.speaker_id, name: quote.speaker }} size={20} />
+      <figcaption className={cn("mt-3 flex items-center gap-2 font-bold", lg ? "text-base" : "text-sm", onDark && "text-ink")}>
+        <ExpertAvatar user={{ id: quote.speaker_id, name: quote.speaker }} size={lg ? 30 : 24} />
         {quote.speaker}
-        <span className="text-ink-2">· {t(srcKey)}</span>
       </figcaption>
     </figure>
   );

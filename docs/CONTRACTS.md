@@ -140,3 +140,10 @@ is **epoch milliseconds** (float). Session-clock `t` fields are also ms.
   `claros.{perception,brain,knowledge,context}` and calls `register(bus)` + `include_router` if present
   (wrapped in try/except so a missing package never breaks boot).
 - Session state object: `claros/session.py` (server-core) `Session{id, mode, user, lang, workflow_id, clock_offset, off_record: bool, ...}` with `sessions.get(id)`.
+
+## Learner nudges (v2.1)
+Server → client: `nudge {id, step_id, kind: predict|why|check|diverge|confirm_step, question, options:[{id,label}], allow_dont_know: true, reference: {keyframe_ids, quote:{text, speaker, lang, translation?}}, spoken: text}`
+  (client shows the nudge card in the companion AND speaks `spoken` via the say queue).
+Client → server: `nudge_response {id, via: voice|click|key|close|implicit, choice_id?|null, dont_know?: bool, text?: string, t}`.
+Server → client: `nudge_result {id, outcome: correct|incorrect|dont_know|skipped|implicit_correct|implicit_incorrect, feedback_spoken, show_reference: bool}` then card closes or shows the reference.
+Voice answers arrive as normal `utterance`s; the server matches them to the open nudge (ordinals "first/second/B", option labels, translations; decision model choice) before intent routing.

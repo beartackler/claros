@@ -205,7 +205,11 @@ class SystemOne:
                 log.info("systemone %s unreachable: %s", b, e)
                 self._mark_down(b, 60)
             except asyncio.TimeoutError:
+                # a backend that times out ate the whole budget; skip it for a while so the next one gets a chance
+                # (eval: a slow local Ollama timed out 254× and every fuzzy-guardrail decision fell to rules → no-op)
                 log.info("systemone %s timed out", b)
+                if b != "llm":
+                    self._mark_down(b, 30)
             except httpx.HTTPStatusError as e:
                 log.info("systemone %s HTTP %s: %s", b, e.response.status_code, e.response.text[:200])
                 if e.response.status_code >= 500:

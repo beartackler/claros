@@ -84,6 +84,10 @@ def truth(variant: str) -> Optional[bool]:
     eur += [float(x.replace(",", ".")) for x in re.findall(r"(?:eur|€)\s*(\d+(?:[.,]\d+)?)", v)]
     if eur:
         return max(eur) > 50
+    # exam cases like "Charged twice for annual plan = 48, … = 13.44": a bare number on a refund case is the amount
+    bare = [float(x) for x in re.findall(r"=\s*(\d+(?:\.\d+)?)\b(?!\s*(?:minutes?|hours?|days?))", v)]
+    if bare:
+        return bare[0] > 50
     return None
 
 
@@ -93,7 +97,9 @@ def debrief_reply(text: str) -> str:
     if m:
         want = truth(m.group(1))
         stops = bool(re.search(r"escalat|tier ?(2|two)|stop|ask|block|hold|hand", m.group(2)))
-        if want is None or want == stops:
+        if want is None:  # a real expert does not confirm a case they cannot make sense of (was: "Yes, correct.")
+            return "I can't tell from that description — what's the amount and how long ago was the charge?"
+        if want == stops:
             return "Yes, correct."
         return ("No, that one must go to tier two — it's outside the tier one limits." if want else
                 "No, that's fine for tier one to refund directly.")
@@ -217,7 +223,7 @@ async def phase_a(tag: str) -> None:
 
     t_start = time.monotonic()
     async with async_playwright() as p:
-        b, page = await new_browser(p, EXPERT["id"])
+        b, page = await new_browser(p, "expert@helpdesk.example")
         D = Driver(page, c)
         # 1. 240 EUR double charge → escalate
         log("A1 240 EUR → tier 2")
@@ -371,6 +377,10 @@ async def phase_c(tag: str, lang: str) -> None:
         results |= {"lookup": lk, "lookup_ms": round((time.perf_counter() - t0) * 1000), "expected_workflow": wid}
         log("lookup", json.dumps(lk, ensure_ascii=False)[:300])
         mwid = ((lk or {}).get("match") or {}).get("workflow_id") or wid
+        results["lookup_matched_this_run_map"] = mwid == wid
+        if wid and mwid != wid:  # several maps of the same workflow exist (separate experts are not merged): learn
+            log(f"lookup chose {mwid}, using this run's map {wid}")  # on THIS run's map so before/after compare maps
+            mwid = wid
         c = await ClarosClient.create("learn", LEARNER, lang, workflow_id=mwid)
         save_state(tag, **{f"learn_session_{lang}": c.session_id})
         D = Driver(page, c)
@@ -415,7 +425,10 @@ async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("phase")
     ap.add_argument("--tag", default="before")
+    ap.add_argument("--expert-id", default=None, help="fresh expert id → fresh workflow (no merge into older maps)")
     a = ap.parse_args()
+    if a.expert_id:
+        EXPERT["id"] = a.expert_id
     ph = a.phase.upper()
     if ph == "A":
         await phase_a(a.tag)

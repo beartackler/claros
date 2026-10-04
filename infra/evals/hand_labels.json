@@ -1,6 +1,44 @@
 {
- "what made you stop on on hold? who decides then?": {"guardrail": true, "answerable_from_screen": false, "duplicate_of": null, "well_formed": true, "rule": "R_dup"},
- "what made you stop on pending second approval? who decides then?": {"guardrail": true, "answerable_from_screen": false, "duplicate_of": null, "well_formed": true, "rule": "R_uk"},
- "why 3 high for priority here?": {"guardrail": false, "answerable_from_screen": false, "duplicate_of": null, "well_formed": false, "rule": "R_cb"},
- "what made you stop on tier 2 support? who decides then?": {"guardrail": true, "answerable_from_screen": false, "duplicate_of": null, "well_formed": true, "rule": "R_limit"}
+ "what made you stop on on hold? who decides then?": {
+  "guardrail": true,
+  "answerable_from_screen": false,
+  "duplicate_of": null,
+  "well_formed": true,
+  "rule": "R_dup"
+ },
+ "what made you stop on pending second approval? who decides then?": {
+  "guardrail": true,
+  "answerable_from_screen": false,
+  "duplicate_of": null,
+  "well_formed": true,
+  "rule": "R_uk"
+ },
+ "why 3 high for priority here?": {
+  "guardrail": false,
+  "answerable_from_screen": false,
+  "duplicate_of": null,
+  "well_formed": false,
+  "rule": "R_cb"
+ },
+ "what made you stop on tier 2 support? who decides then?": {
+  "guardrail": true,
+  "answerable_from_screen": false,
+  "duplicate_of": null,
+  "well_formed": true,
+  "rule": "R_limit"
+ },
+ "why plants and machineries for expense head here?": {
+  "guardrail": true,
+  "answerable_from_screen": false,
+  "duplicate_of": null,
+  "well_formed": true,
+  "rule": "R_capex"
+ },
+ "what made you stop on 3 high? who decides then?": {
+  "guardrail": true,
+  "answerable_from_screen": false,
+  "duplicate_of": null,
+  "well_formed": false,
+  "rule": "R_cb"
+ }
 }

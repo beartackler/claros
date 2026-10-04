@@ -35,7 +35,7 @@ export function KindChip({
   const k = KIND[kind];
   const cls = cn(
     "inline-flex max-w-full items-center gap-1.5 rounded-[4px] border-2 border-ink font-bold",
-    size === "sm" ? "px-1.5 py-0 text-[11px] [&_svg]:size-3" : "px-2 py-1 text-xs [&_svg]:size-3.5",
+    size === "sm" ? "px-1.5 py-0.5 text-xs [&_svg]:size-3.5" : "px-2 py-1 text-sm [&_svg]:size-4",
     k.cls,
     className,
   );
@@ -59,7 +59,7 @@ export function KindChip({
         onClick();
       }}
       title={title}
-      className={cn(cls, "pointer-events-auto relative z-[2] shadow-hard-sm transition-[transform,box-shadow] duration-150 hover:-translate-x-px hover:-translate-y-px hover:shadow-[3px_3px_0_0_var(--ink)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none")}
+      className={cn(cls, "press press-sm pointer-events-auto relative z-[2] shadow-hard-sm")}
     >
       {inner}
     </button>

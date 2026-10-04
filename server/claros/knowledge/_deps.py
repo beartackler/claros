@@ -328,7 +328,8 @@ async def onet_match(text: str, **kw: Any) -> Any:
         return None
 
 
-async def decide(question: str, context: str, options: list[str]) -> tuple[Optional[str], float]:
+async def decide(question: str, context: str, options: list[str], timeout: Optional[float] = None
+                 ) -> tuple[Optional[str], float]:
     """claros.brain.systemone.decide adapter → (label, confidence)."""
     try:
         from claros.brain import systemone  # type: ignore
@@ -336,7 +337,8 @@ async def decide(question: str, context: str, options: list[str]) -> tuple[Optio
     except Exception:  # noqa: BLE001
         return None, 0.0
     try:
-        r = await maybe_await(fn(question, context=context, options=options))
+        kw = {"timeout": timeout} if timeout else {}
+        r = await maybe_await(fn(question, context=context, options=options, **kw))
     except TypeError:
         try:
             r = await maybe_await(fn(f"{question}\n\n{context}", options))

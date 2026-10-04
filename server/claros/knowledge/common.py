@@ -212,7 +212,9 @@ def parse_date(s: Any) -> Optional[tuple[int, int, int]]:
 
 
 def norm_label(s: str) -> str:
-    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode() or (s or "")
+    # strip accents but keep letters of every script (the old ascii-encode turned every Cyrillic label into "",
+    # so all Russian labels collided on one key)
+    s = "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
     return re.sub(r"[^\w]+", " ", s.lower(), flags=re.UNICODE).strip()
 
 

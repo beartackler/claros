@@ -21,7 +21,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("phase")
     ap.add_argument("--tag", default="before")
+    ap.add_argument("--expert-id", default=None, help="fresh expert id → fresh workflow (no merge into older maps)")
     a = ap.parse_args()
+    if a.expert_id:
+        run_e2e.EXPERT = {**run_e2e.EXPERT, "id": a.expert_id}
     out = EVAL_DATA / "erpnext" / a.tag
     out.mkdir(parents=True, exist_ok=True)
     run_e2e.OUT = out

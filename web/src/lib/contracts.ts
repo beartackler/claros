@@ -335,9 +335,28 @@ export interface ControlMsg {
   action: ControlAction;
 }
 
+// ---------- learner nudges (v2.1, docs/CONTRACTS.md "Learner nudges") ----------
+export type NudgeKind = "predict" | "why" | "check" | "diverge" | "confirm_step";
+export interface NudgeOption { id: string; label: string; /** experts-differ: whose way this is */ expert_id?: string | null }
+export interface NudgeMsg {
+  type: "nudge"; id: string; step_id?: string | null; kind: NudgeKind; question: string;
+  options: NudgeOption[]; allow_dont_know: boolean;
+  reference?: { keyframe_ids: string[]; quote?: { text: string; speaker: string; lang: string; translation?: string | null } | null } | null;
+  spoken?: string;
+}
+export interface NudgeResultMsg {
+  type: "nudge_result"; id: string;
+  outcome: "correct" | "incorrect" | "dont_know" | "skipped" | "implicit_correct" | "implicit_incorrect";
+  feedback_spoken?: string; show_reference?: boolean;
+}
+export interface NudgeResponseMsg {
+  type: "nudge_response"; id: string; via: "voice" | "click" | "key" | "close" | "implicit";
+  choice_id?: string | null; dont_know?: boolean; text?: string; t: number;
+}
+
 export type ClientMsg =
   | HelloMsg | ClockSyncOut | ActivityMsg | KeyframeMsg | VadMsg
-  | UtteranceMsg | AgentStateMsg | ControlMsg;
+  | UtteranceMsg | AgentStateMsg | ControlMsg | NudgeResponseMsg;
 
 // ---------- WebSocket: server → client ----------
 
@@ -368,7 +387,8 @@ export interface SayMsg { type: "say"; id: string; text: string; kind: SayKind; 
 
 export type ServerMsg =
   | SayMsg | EventsMsg | LedgerMsg | AskMsg | InterveneMsg | ContextUpdateMsg
-  | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn | ServerControlMsg | PhaseMsg;
+  | ShowMomentMsg | HighlightStepMsg | MapUpdatedMsg | StatusMsg | ClockSyncIn | ServerControlMsg | PhaseMsg
+  | NudgeMsg | NudgeResultMsg;
 
 export type ServerMsgType = ServerMsg["type"];
 export type ServerMsgOf<T extends ServerMsgType> = Extract<ServerMsg, { type: T }>;
