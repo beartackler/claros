@@ -24,6 +24,7 @@ from claros.models import (
 
 from . import _deps as d
 from .common import (
+    PRIOR_VARS,
     OPEN_STATUSES, checks_pass, eval_predicate, guardrail_by_id, load_map, ordered_steps, predicate_vars, save_map,
     step_by_id,
 )
@@ -625,7 +626,8 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
                     u.extracted_rule = ExtractedRule(**{k: (str(rule[k]) if rule.get(k) is not None else None)
                                                         for k in ("condition", "threshold", "action", "escalate_to")})
                     pred = rule.get("predicate") if isinstance(rule.get("predicate"), dict) else None
-                    if pred and not all(v in wm.canonical_vars or v.startswith("doc.") for v in predicate_vars(pred)):
+                    if pred and not all(v in wm.canonical_vars or v.startswith("doc.") or v in PRIOR_VARS
+                                            for v in predicate_vars(pred)):
                         rule["predicate"] = None  # unobservable vars would never evaluate on a learner screen
                     dup = _similar_guardrail(wm, rule.get("guardrail_text") or "", text) \
                         if rule.get("guardrail_text") else None

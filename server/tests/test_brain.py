@@ -485,3 +485,24 @@ def test_capture_end_moves_to_debrief(offline, client):
     ask = next(m[2] for m in offline.sent if m[2].get("type") == "ask")
     ch = _sse(client.post("/llm/v1/chat/completions", json=_body(f"⟦ask:{ask['unknown_id']}⟧", sid="c10")))
     assert _content(ch) == "Thanks! Let's do a quick debrief."
+
+
+def test_first_ask_never_uses_truncated_or_fragment_values(offline):
+    """e2e A: first ask said "Why Plants and Machineries - OPF for Expense Head here?" (OCR-cut grid cell)."""
+    from claros.brain.ledger import speakable_value
+    assert speakable_value("Plants and Machineries - OPF") == "Plants and Machineries"
+    assert speakable_value("Tools and Small Equipment - O...") == "Tools and Small Equipment"
+    assert speakable_value("Ol") is None and speakable_value("OPF") is None
+    assert speakable_value("0400") == "0400" and speakable_value("VIS-25-1187-A") == "VIS-25-1187-A"
+    # the full value from the entity model wins over a truncated cell
+    assert speakable_value("Tools and Small Equ...", ["Tools and Small Equipment - OPP"]) == "Tools and Small Equipment"
+    lg = ledger_mod.get_ledger("s_opf")
+    opened = run(lg.on_events([ev(1, "edit", field="Expense Head", old="Tools and Small Equipment - O...",
+                                  new="Plants and Machineries - OPF", source="typed")]))
+    q = opened[0].spoken_question
+    assert "OPF" not in q and "..." not in q and "…" not in q and "Plants and Machineries" in q
+    # a value that is only a fragment → ask about the field label instead
+    lg2 = ledger_mod.get_ledger("s_frag")
+    opened = run(lg2.on_events([ev(1, "edit", field="Cost Center", old="Administration - Ol", new="Ol", source="typed")]))
+    q = opened[0].spoken_question
+    assert q == "Why this Cost Center here?"

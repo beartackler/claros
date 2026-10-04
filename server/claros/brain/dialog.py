@@ -309,6 +309,15 @@ def _load_map(workflow_id: Optional[str]) -> Any:
         return None
 
 
+def _loc(wm: Any, lang: str, text: Optional[str]) -> Optional[str]:
+    """Map text in the session language when the tutor has translated it (cache only, never blocks)."""
+    try:
+        from claros.knowledge import tutor
+        return tutor.loc(wm, (lang or "en")[:2], text)
+    except Exception:  # noqa: BLE001
+        return text
+
+
 def _steps(wm: Any) -> list:
     return sorted(getattr(wm, "steps", None) or [], key=lambda s: getattr(s, "order", 0))
 
@@ -326,7 +335,8 @@ def context_text(sid: str) -> str:
     if step_id:
         steps = _steps(wm)
         st = next((s for s in steps if s.id == step_id), None)
-        parts.append(f"Current step {st.order}/{len(steps)}: {st.title}" if st else f"Current step: {step_id}")
+        title = _loc(wm, deps.session_lang(sid), st.title) if st else None
+        parts.append(f"Current step {st.order}/{len(steps)}: {title}" if st else f"Current step: {step_id}")
     mode = getattr(sess, "mode", "capture")
     if mode in ("capture", "debrief"):
         n = _open.get(sid)
@@ -563,6 +573,10 @@ async def lookup_ep(q: str = "", session_id: str = "") -> dict:
         return {"found": False, "workflow": wm.name, "items": [],
                 "answer": "Not in the captured map. Do not guess; say you will ask the expert."}
     h = hits[0]
+    lang = deps.session_lang(session_id) if session_id else "en"
+    if h["kind"] in ("guardrail", "quote"):
+        h = {**h, "original": h["text"], "text": _loc(wm, lang, h["text"])}
+        hits[0] = h
     who = f" ({h['expert']})" if h.get("expert") else ""
     flag = "" if h.get("confirmed", True) else " [not yet confirmed by the expert]"
     if h.get("conflict"):

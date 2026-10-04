@@ -1,49 +1,49 @@
 {
-  "session_id": "s_a735ce278e04",
+  "session_id": "s_6c6243d9c1b3",
   "frames": [
     {
       "seq": 0,
-      "t": 1791077947922.373,
+      "t": 1791079238692.949,
       "reason": "boundary",
       "bytes": 109835,
       "tiles": 1,
       "label": "open FMT-2026-0274 (7,200)",
-      "ui_ms": 1448,
+      "ui_ms": 1429,
       "redacted_file": "frames/000_boundary.jpg"
     },
     {
       "seq": 1,
-      "t": 1791077953408.2507,
+      "t": 1791079244147.887,
       "reason": "settle",
       "bytes": 108629,
       "tiles": 5,
       "label": "expense head (opex) Tools and Small Equipment",
-      "ui_ms": 3323,
+      "ui_ms": 3295,
       "redacted_file": "frames/001_settle.jpg"
     },
     {
       "seq": 2,
-      "t": 1791077958322.5442,
+      "t": 1791079249015.5088,
       "reason": "settle",
       "bytes": 110631,
       "tiles": 5,
       "label": "cost center (opex) Administration",
-      "ui_ms": 3271,
+      "ui_ms": 3226,
       "redacted_file": "frames/002_settle.jpg"
     },
     {
       "seq": 3,
-      "t": 1791077965575.43,
+      "t": 1791079257903.999,
       "reason": "boundary",
       "bytes": 110631,
       "tiles": 1,
       "label": "save",
-      "ui_ms": 611,
+      "ui_ms": 607,
       "redacted_file": "frames/003_boundary.jpg"
     },
     {
       "seq": 4,
-      "t": 1791077965998.6829,
+      "t": 1791079258330.533,
       "reason": "toast",
       "bytes": 110631,
       "tiles": 1,
@@ -52,47 +52,47 @@
     },
     {
       "seq": 5,
-      "t": 1791077985298.108,
+      "t": 1791079280644.408,
       "reason": "boundary",
       "bytes": 167833,
       "tiles": 10,
       "label": "list",
-      "ui_ms": 1365,
+      "ui_ms": 1352,
       "redacted_file": "frames/005_boundary.jpg"
     },
     {
       "seq": 6,
-      "t": 1791077987490.315,
+      "t": 1791079282798.6062,
       "reason": "boundary",
       "bytes": 108117,
       "tiles": 10,
       "label": "open VIS-26-0731 (6,100 maintenance)",
-      "ui_ms": 826,
+      "ui_ms": 819,
       "redacted_file": "frames/006_boundary.jpg"
     },
     {
       "seq": 7,
-      "t": 1791077992997.302,
+      "t": 1791079288282.327,
       "reason": "settle",
       "bytes": 107368,
       "tiles": 5,
       "label": "keep opex: re-select Repairs and Maintenance",
-      "ui_ms": 3371,
+      "ui_ms": 3322,
       "redacted_file": "frames/007_settle.jpg"
     },
     {
       "seq": 8,
-      "t": 1791077995236.6409,
+      "t": 1791079290533.1663,
       "reason": "boundary",
       "bytes": 107368,
       "tiles": 1,
       "label": "save",
-      "ui_ms": 609,
+      "ui_ms": 605,
       "redacted_file": "frames/008_boundary.jpg"
     },
     {
       "seq": 9,
-      "t": 1791077995666.7688,
+      "t": 1791079290964.232,
       "reason": "toast",
       "bytes": 107368,
       "tiles": 1,
@@ -102,17 +102,17 @@
   ],
   "turns": [
     {
-      "t": 1791077939959.042,
+      "t": 1791079231287.483,
       "sent": "проведи меня через обработку этого счёта поставщика",
-      "text": "В этом процессе 8 шагов. Шаг 1: Open the supplier purchase invoice and check the pre-filled expense account",
+      "text": "В этом процессе 8 шагов. Шаг 1: Откройте счёт поставщика и проверьте классификацию его позиций",
       "tool": null,
-      "ttft_ms": 10,
-      "total_ms": 11,
+      "ttft_ms": 491,
+      "total_ms": 492,
       "kind": "user"
     },
     {
-      "t": 1791077948758.6738,
-      "sent": "⟦intervene:g_capex_5000|Erika здесь бы остановился. Как думаешь, почему?⟧",
+      "t": 1791079239538.281,
+      "sent": "⟦intervene:g_capex|Erika здесь бы остановился. Как думаешь, почему?⟧",
       "text": "Erika здесь бы остановился. Как думаешь, почему?",
       "tool": null,
       "ttft_ms": 2,
@@ -120,55 +120,46 @@
       "kind": "intervene"
     },
     {
-      "t": 1791077951473.3171,
-      "sent": "⟦intervene:g_double_bill_december|Erika здесь бы остановился. Как думаешь, почему?⟧",
-      "text": "Erika здесь бы остановился. Как думаешь, почему?",
-      "tool": null,
-      "ttft_ms": 5,
-      "total_ms": 5,
-      "kind": "intervene"
-    },
-    {
-      "t": 1791077960428.795,
+      "t": 1791079251120.811,
       "sent": "что дальше?",
-      "text": "Шаг 2: Reclassify equipment purchases from small tools to capital equipment accounts",
+      "text": "Шаг 2: Переклассифицируйте позиции кап оборудования из Small tools в Plants and Machineries с центром затрат Production",
       "tool": null,
-      "ttft_ms": 5,
-      "total_ms": 5,
+      "ttft_ms": 3,
+      "total_ms": 4,
       "kind": "user"
     },
     {
-      "t": 1791077972606.657,
+      "t": 1791079264936.579,
       "sent": "не записывай",
       "text": "Не записываю.",
       "tool": null,
-      "ttft_ms": 899,
-      "total_ms": 900,
+      "ttft_ms": 1308,
+      "total_ms": 1308,
       "kind": "user"
     },
     {
-      "t": 1791077975771.7332,
+      "t": 1791079268507.4329,
       "sent": "почему это капитальные затраты?",
-      "text": "Erika сказал(а): «Этот поставщик каждый декабрь выставляет счёт дважды; придержите его, пока не подтвердят. Та же сумма, просто суффикс к старому номеру счёта.»",
+      "text": "Erika сказал(а): «Оборудование дороже 5 000 здесь всегда относится к капитальным вложениям (capex), поэтому оно идёт в «Машины и оборудование» и на центр затрат Производства, но никак не на мелкий инструмент.»",
       "tool": null,
-      "ttft_ms": 6,
-      "total_ms": 6,
+      "ttft_ms": 4,
+      "total_ms": 5,
       "kind": "user"
     },
     {
-      "t": 1791077994097.811,
-      "sent": "⟦ask:ex-s2|Reclassify equipment purchases from small tools to capital equipment accounts. Erika сказал(а): «Оборудование дороже 5 000 у нас всегда относится к капвложениям, значит оно идёт на «Здания и оборудование» и в центр затрат «Производство», но никак не в мелкий инструмент.»⟧",
-      "text": "Reclassify equipment purchases from small tools to capital equipment accounts. Erika сказал(а): «Оборудование дороже 5 000 у нас всегда относится к капвложениям, значит оно идёт на «Здания и оборудование» и в центр затрат «Производство», но никак не в мелкий инструмент.»",
+      "t": 1791079289381.2769,
+      "sent": "⟦ask:ex-step_2|Переклассифицируйте позиции кап оборудования из Small tools в Plants and Machineries с центром затрат Production. Erika сказал(а): «Списано на мелкий инструмент — для компрессора это неверно.»⟧",
+      "text": "Переклассифицируйте позиции кап оборудования из Small tools в Plants and Machineries с центром затрат Production. Erika сказал(а): «Списано на мелкий инструмент — для компрессора это неверно.»",
       "tool": null,
-      "ttft_ms": 3,
-      "total_ms": 3,
+      "ttft_ms": 2,
+      "total_ms": 2,
       "kind": "ask"
     }
   ],
   "lookup": {
     "match": {
       "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e",
-      "score": 0.862,
+      "score": 0.853,
       "coverage": {
         "status": "partial",
         "steps_with_evidence": 1.0,
@@ -177,7 +168,7 @@
         "open_unknowns": 1,
         "conflicts": 0
       },
-      "name": "Purchase invoice review and booking"
+      "name": "Booking purchase invoices: capex classification, duplicate holds, UK approvals"
     },
     "onet": {
       "occupation_code": "13-2011.00",
@@ -201,86 +192,74 @@
         "Google Docs",
         "Google Sheets"
       ],
-      "score": 0.2756
+      "score": 0.2254
     },
     "action": "teach_confirmed"
   },
-  "lookup_ms": 499,
+  "lookup_ms": 503,
   "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e",
   "intervene_7200": [
     {
       "type": "intervene",
-      "guardrail_id": "g_capex_5000",
+      "guardrail_id": "g_capex",
       "text": "Erika здесь бы остановился. Как думаешь, почему?",
       "moment": {
         "session_id": "s_f69df28f34d4",
         "keyframe_ids": [
-          "s_f69df28f34d4_1",
           "s_f69df28f34d4_2"
         ],
-        "t": 1791077669.0,
+        "t": 1791077682900.0,
         "utterance_ids": [
-          "u_01ebf117",
           "u_8aa4cced"
         ]
       },
       "action": "block_and_explain",
-      "quote": "Erika сказал(а): «Оборудование дороже 5 000 у нас всегда относится к капвложениям, значит оно идёт на «Здания и оборудование» и в центр затрат «Производство», но никак не в мелкий инструмент.»",
-      "trigger": "predicate",
-      "_at": 1791077948758.6482
-    },
-    {
-      "type": "intervene",
-      "guardrail_id": "g_double_bill_december",
-      "text": "Erika здесь бы остановился. Как думаешь, почему?",
-      "moment": {
-        "session_id": "s_f69df28f34d4",
-        "keyframe_ids": [
-          "s_f69df28f34d4_8"
-        ],
-        "t": 1791077708.0,
-        "utterance_ids": [
-          "u_ad410982"
-        ]
+      "rule": "Закупки оборудования выше порога капитализации должны попадать на счёт Plants and Machineries с центром затрат Production, но никогда — в small tools",
+      "quote": "Erika сказал(а): «Оборудование дороже 5 000 здесь всегда относится к капитальным вложениям (capex), поэтому оно идёт в «Машины и оборудование» и на центр затрат Производства, но никак не на мелкий инструмент.»",
+      "quote_original": {
+        "id": "q_u_8aa4cced",
+        "speaker": "Erika Expert",
+        "lang": "en",
+        "text": "Equipment over 5,000 is always capex here, so it goes to Plants and Machineries and the Production cost center, never to small tools."
       },
-      "action": "hold",
-      "quote": "Erika сказал(а): «Этот поставщик каждый декабрь выставляет счёт дважды; придержите его, пока не подтвердят. Та же сумма, просто суффикс к старому номеру счёта.»",
-      "trigger": "fuzzy",
-      "_at": 1791077949212.7202
+      "lang": "ru",
+      "trigger": "predicate",
+      "escalated": false,
+      "_at": 1791079239538.2551
     }
   ],
   "off_record_ack": [
     {
       "type": "control",
       "action": "off_record_on",
-      "_at": 1791077973505.28
+      "_at": 1791079266243.405
     }
   ],
   "intervene_6100": [],
   "intents": [
     {
       "say": "проведи меня через обработку этого счёта поставщика",
-      "reply": "В этом процессе 8 шагов. Шаг 1: Open the supplier purchase invoice and check the pre-filled expense account",
+      "reply": "В этом процессе 8 шагов. Шаг 1: Откройте счёт поставщика и проверьте классификацию его позиций",
       "tool": null,
-      "ttft_ms": 10
+      "ttft_ms": 491
     },
     {
       "say": "что дальше?",
-      "reply": "Шаг 2: Reclassify equipment purchases from small tools to capital equipment accounts",
+      "reply": "Шаг 2: Переклассифицируйте позиции кап оборудования из Small tools в Plants and Machineries с центром затрат Production",
       "tool": null,
-      "ttft_ms": 5
+      "ttft_ms": 3
     },
     {
       "say": "не записывай",
       "reply": "Не записываю.",
       "tool": null,
-      "ttft_ms": 899
+      "ttft_ms": 1308
     },
     {
       "say": "почему это капитальные затраты?",
-      "reply": "Erika сказал(а): «Этот поставщик каждый декабрь выставляет счёт дважды; придержите его, пока не подтвердят. Та же сумма, просто суффикс к старому номеру счёта.»",
+      "reply": "Erika сказал(а): «Оборудование дороже 5 000 здесь всегда относится к капитальным вложениям (capex), поэтому оно идёт в «Машины и оборудование» и на центр затрат Производства, но никак не на мелкий инструмент.»",
       "tool": null,
-      "ttft_ms": 6
+      "ttft_ms": 4
     }
   ]
 }

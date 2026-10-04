@@ -249,6 +249,10 @@ def canonical_vars_from_state(state: ScreenState, wm: WorkMap) -> dict[str, Any]
             if canon in out:
                 continue
             out[canon] = _norm_value(f)
+            if canon.endswith(("_month", "_year")):  # a month/year var read straight off a date label
+                dt = parse_date(f.normalized if isinstance(f.normalized, str) else f.value)
+                if dt:
+                    out[canon] = dt[1] if canon.endswith("_month") else dt[0]
             if canon.endswith("_date"):
                 dt = parse_date(f.normalized if isinstance(f.normalized, str) else f.value)
                 if dt:
@@ -259,6 +263,141 @@ def canonical_vars_from_state(state: ScreenState, wm: WorkMap) -> dict[str, Any]
         if v is not None:
             out.setdefault(k, v)
     return out
+
+
+# ---------------- session memory: records seen earlier (cross-entity context) ----------------
+# Generic, app-agnostic: roles are inferred from canonical var NAMES (…supplier/vendor/customer/party → party,
+# …amount/total → amount, …_date → month). Lets a rule like "same amount as one already paid" become a predicate.
+PRIOR_VARS: dict[str, str] = {
+    "prior.count": "number of OTHER records seen earlier in this session (list rows or opened records)",
+    "prior.same_supplier": "true if an earlier-seen record has the same supplier/party",
+    "prior.same_amount": "true if an earlier-seen record has the same amount",
+    "prior.same_supplier_amount": "true if an earlier-seen record has the same supplier/party AND the same amount",
+    "prior.same_supplier_amount_in_month": "true if an earlier-seen record has the same supplier/party, the same "
+                                           "amount AND a date in the same calendar month",
+}
+_PARTY = ("supplier", "vendor", "customer", "party", "payee", "counterparty", "client", "requester")
+_NOT_PARTY = ("_no", "_id", "_number", "_date", "_month", "_year", "_ref", "_group", "_type")
+_AMOUNT = ("amount", "total", "grand_total", "net_total")
+
+
+def _tail(k: str) -> str:
+    return k.split(".")[-1].lower()
+
+
+def _party_values(v: dict[str, Any]) -> set[str]:
+    out = set()
+    for k, x in v.items():
+        t = _tail(k)
+        if isinstance(x, str) and x.strip() and any(p in t for p in _PARTY) and not t.endswith(_NOT_PARTY):
+            out.add(norm_label(re.sub(r"\s*(\.\.\.|…)$", "", x)))
+    return {x for x in out if x}
+
+
+def _amount_values(v: dict[str, Any]) -> set[float]:
+    out = set()
+    for k, x in v.items():
+        t = _tail(k)
+        if any(t == a or t.endswith("_" + a) or t.endswith(a) for a in _AMOUNT) and not t.endswith(_NOT_PARTY):
+            n = x if isinstance(x, (int, float)) and not isinstance(x, bool) else parse_number(x)
+            if n:
+                out.add(round(float(n), 2))
+    return out
+
+
+def _months(v: dict[str, Any]) -> set[tuple[int, int]]:
+    out = set()
+    for k, x in v.items():
+        if k.endswith("_date"):
+            dt = parse_date(x if isinstance(x, str) else None)
+            if dt:
+                out.add((dt[0], dt[1]))
+    return out
+
+
+_IDLIKE = re.compile(r"^(?=.*\d)(?=.*[A-Za-z])[\w./-]{5,}$")
+
+
+def _ids(v: dict[str, Any], ent: Optional[str] = None) -> set[str]:
+    out = {str(x).strip() for x in v.values() if isinstance(x, str) and _IDLIKE.match(x.strip()) and
+           re.search(r"[-/]", x)}
+    if ent:
+        out.add(ent)
+    return out
+
+
+def _party_eq(a: set[str], b: set[str]) -> bool:
+    for x in a:
+        for y in b:
+            if x == y or (min(len(x), len(y)) >= 8 and (x.startswith(y) or y.startswith(x))):
+                return True
+    return False
+
+
+def entity_snapshot(vars_: dict[str, Any]) -> dict[str, Any]:
+    """What to remember about a record: its canonical values (not the doc.* screen metadata)."""
+    return {k: v for k, v in vars_.items() if not k.startswith(("doc.", "prior.")) and v not in (None, "")}
+
+
+def rows_as_entities(state: ScreenState, wm: WorkMap) -> list[dict[str, Any]]:
+    """Table rows visible on screen (list views, grids) → canonical-var snapshots, one per row."""
+    exact: dict[str, list[str]] = {}
+    for canon, labels in wm.canonical_vars.items():
+        for lab in labels:
+            exact.setdefault(norm_label(lab), []).append(canon)
+    out = []
+    for tb in state.tables or []:
+        cols = [exact.get(norm_label(re.sub(r"\s*\*$", "", str(c))), []) for c in (tb.get("columns") or [])]
+        if not any(cols):
+            continue
+        for row in tb.get("rows") or []:
+            if not isinstance(row, list):
+                continue
+            snap: dict[str, Any] = {}
+            for canons, cell in zip(cols, row):
+                for c in canons:
+                    if cell not in (None, "") and c not in snap:
+                        n = parse_number(cell) if re.search(r"\d", str(cell)) and not parse_date(str(cell)) else None
+                        snap[c] = n if n is not None and not re.search(r"[A-Za-z]{2,}", str(cell)) else str(cell)
+            if len(snap) >= 2:
+                out.append(snap)
+    return out
+
+
+def prior_vars(cur: dict[str, Any], seen: dict[str, dict[str, Any]], cur_id: Optional[str] = None) -> dict[str, Any]:
+    """prior.* vars for the current record from records seen earlier in the session (never itself)."""
+    party, amts, months, ids = _party_values(cur), _amount_values(cur), _months(cur), _ids(cur, cur_id)
+    out = {k: False for k in PRIOR_VARS}
+    out["prior.count"] = 0
+    matches: list[str] = []
+    for key, snap in seen.items():
+        if key == cur_id or (ids & _ids(snap, key)):
+            continue  # the same record (e.g. its own list row)
+        out["prior.count"] += 1
+        sp = _party_eq(party, _party_values(snap))
+        sa = bool(amts & _amount_values(snap))
+        sm = bool(months & _months(snap))
+        out["prior.same_supplier"] |= sp
+        out["prior.same_amount"] |= sa
+        if sp and sa:
+            out["prior.same_supplier_amount"] = True
+            matches.append(key)
+            if sm:
+                out["prior.same_supplier_amount_in_month"] = True
+    out["prior.match_ids"] = matches
+    return out
+
+
+def seen_summary(seen: dict[str, dict[str, Any]], cur_id: Optional[str] = None, n: int = 8) -> str:
+    lines = []
+    for key, snap in list(seen.items())[-n:]:
+        if key == cur_id:
+            continue
+        party = next(iter(sorted(_party_values(snap))), None)
+        amt = next(iter(sorted(_amount_values(snap))), None)
+        dt = next((str(v) for k, v in snap.items() if k.endswith("_date")), None)
+        lines.append(" · ".join(str(x) for x in (key, party, amt, dt) if x is not None))
+    return "\n".join(lines)
 
 
 def predicate_vars(p: Any) -> set[str]:
@@ -381,6 +520,13 @@ T: dict[str, dict[str, str]] = {
         "fr": "{expert} s'arrêterait ici. À ton avis, pourquoi ?",
         "es": "{expert} se detendría aquí. ¿Por qué crees?",
         "ru": "{expert} здесь бы остановился. Как думаешь, почему?",
+    },
+    "intervene_submit": {
+        "en": "Before you submit this: {expert} would not let it through like this. Take another look.",
+        "de": "Bevor du das abschickst: So würde {expert} es nicht durchlassen. Schau noch einmal hin.",
+        "fr": "Avant de valider : {expert} ne laisserait pas passer ça comme ça. Regarde encore.",
+        "es": "Antes de enviarlo: {expert} no lo dejaría pasar así. Revísalo otra vez.",
+        "ru": "Прежде чем сохранять: {expert} бы это так не пропустил(а). Посмотри ещё раз.",
     },
     "said": {"en": "{expert} said: “{q}”", "de": "{expert} sagte: „{q}“", "fr": "{expert} a dit : « {q} »",
              "es": "{expert} dijo: «{q}»", "ru": "{expert} сказал(а): «{q}»"},

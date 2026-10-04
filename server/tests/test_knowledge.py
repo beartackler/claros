@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from claros.knowledge import _deps as d
 from claros.knowledge import builder, common, debrief, export, lookup, mcp, merge, tutor
-from claros.models import ScreenState, User, WorkMap
+from claros.models import Guardrail, ScreenState, User, WorkMap
 
 FIX = Path(__file__).resolve().parents[2] / "data" / "fixtures"
 
@@ -416,3 +416,141 @@ async def test_guardrail_specs_and_submit_rearm(env):
     assert len(env.out("intervene")) == 1
     await tutor.on_screen_events("learn5", [{"id": "e9", "seq": 3, "t": 3, "kind": "submit", "summary": "submit"}])
     assert len(env.out("intervene")) == 2  # hard stop again before submit
+
+
+# ---------------- tutor: language, rule choice, dedupe, session memory (e2e open issues) ----------------
+
+def _both_rules_fields():
+    # violates g1 (equipment > 5,000 not on a capital account) AND g2 (Nordwind in December)
+    return [("Supplier", "Nordwind Logistik GmbH"), ("Posting Date", "15.12.2026"), ("Item Group", "Equipment"),
+            ("Amount", "7,300.00"), ("Expense Account", "Office Supplies")]
+
+
+async def test_tutor_speaks_learner_language_and_keeps_original_quote(monkeypatch, env):
+    await seed()
+    calls = []
+
+    async def fake_chat(messages, *, model_role="smart", json_schema=None):
+        payload = json.loads(messages[-1]["content"])
+        if "rules" in payload:
+            return None
+        calls.append(payload)
+        return {k: f"RU[{v}]" for k, v in payload.items()}
+    monkeypatch.setattr(d, "chat", fake_chat)
+    tutor.start("ru1", "wf_ap_invoice", "ru", {"id": "l9", "name": "Ivan", "role": "learner"})
+    r = await tutor.handle_intent("ru1", "walk_through", "проведи меня")
+    assert "Шаг 1: RU[Open the next draft purchase invoice from the inbox]" in r
+    assert "Open the next" not in r.replace("RU[Open the next", "")
+    tutor.get_state("ru1").current = "s1"
+    r = await tutor.handle_intent("ru1", "what_next", "")
+    assert r.startswith("Шаг 2: RU[")
+    # cached per (map version, lang): a second learner session does not translate again
+    n = len(calls)
+    tutor.start("ru2", "wf_ap_invoice", "ru")
+    await tutor.handle_intent("ru2", "walk_through", "")
+    assert len(calls) == n == 1
+    # intervention: translated rule + quote, expert's original kept
+    await tutor.on_screen_state("ru1", _state(1, fields=_both_rules_fields()))
+    iv = next(m for m in env.out("intervene") if m["guardrail_id"] == "g1")
+    assert iv["rule"].startswith("RU[") and iv["lang"] == "ru"
+    assert iv["quote_original"]["id"] == "aq2" and iv["quote_original"]["lang"] == "de"
+    assert "Anna" in iv["quote"] and "«" in iv["quote"]
+
+
+async def test_tutor_why_uses_the_violated_rules_own_quote(env):
+    """e2e RU: two rules intervened on one record; "why is this capex?" was answered with the double-billing quote."""
+    await seed()
+    tutor.start("why1", "wf_ap_invoice", "en")
+    await tutor.on_screen_state("why1", _state(1, fields=_both_rules_fields()))
+    iv = {m["guardrail_id"]: m for m in env.out("intervene")}
+    assert set(iv) == {"g1", "g2"}
+    wm = common.load_map("wf_ap_invoice")
+    # each intervention carries its own guardrail's quote
+    assert iv["g1"]["quote_original"]["id"] == "aq2" and iv["g2"]["quote_original"]["id"] == "aq3"
+    assert tutor.get_state("why1").pending["guardrail_id"] == "g2"  # last intervention = double billing
+    r = await tutor.handle_intent("why1", "why_this", "why is this capex?")
+    capex = common.quote_by_id(wm, "aq2").translations["en"]
+    assert capex in r and "Nordwind" not in r
+    r = await tutor.handle_intent("why1", "why_this", "why should I hold the Nordwind one in December?")
+    assert "Nordwind" in r
+
+
+async def test_tutor_intervention_dedupe_and_one_escalation_on_save(env):
+    await seed()
+    tutor.start("dd1", "wf_ap_invoice", "en")
+    fields = [("Item Group", "Equipment"), ("Amount", "7,300.00"), ("Expense Account", "Office Supplies")]
+    for i in range(3):  # repeated frames of the same violating state
+        await tutor.on_screen_state("dd1", _state(i, fields=fields))
+    assert len(env.out("intervene")) == 1
+    save = [{"id": "e1", "seq": 5, "t": 5, "kind": "save", "summary": "saved"}]
+    await tutor.on_screen_events("dd1", save)
+    iv = env.out("intervene")
+    assert len(iv) == 2 and iv[-1]["escalated"] and iv[-1]["text"].startswith("Before you submit")
+    await tutor.on_screen_events("dd1", [{**save[0], "id": "e2", "seq": 6}])
+    await tutor.on_screen_state("dd1", _state(7, fields=fields))
+    assert len(env.out("intervene")) == 2  # same violating state: never repeated
+    # OCR variants of the same value do not count as a change
+    await tutor.on_screen_state("dd1", _state(8, fields=[("Item Group", "Equipment"), ("Amount", "7.300,00"),
+                                                         ("Expense Account", "Office Supplies - O...")]))
+    assert len(env.out("intervene")) == 2
+    # the violating value changes → a new intervention
+    await tutor.on_screen_state("dd1", _state(9, fields=[("Item Group", "Equipment"), ("Amount", "9,100.00"),
+                                                         ("Expense Account", "Office Supplies")]))
+    assert len(env.out("intervene")) == 3 and not env.out("intervene")[-1]["escalated"]
+
+
+async def test_tutor_session_memory_prior_same_supplier_amount(env):
+    wm = fx()
+    wm.guardrails.append(Guardrail(
+        id="g_dup", text="Same supplier and same amount as an invoice from the same month: put it on hold.",
+        quote_ids=["aq3"], action="hold",
+        predicate={"and": [{"var": "prior.same_supplier_amount_in_month"}, {"==": [{"var": "invoice.posting_month"}, 12]}]}))
+    await builder.publish_expert_map(wm)
+    tutor.start("mem1", "wf_ap_invoice", "en")
+
+    def inv(seq, ent, amount, date, supplier="Velt Industrieservice GmbH"):
+        return _state(seq, ent=ent, fields=[("Supplier", supplier), ("Grand Total", amount), ("Posting Date", date)])
+    # the list view shows the earlier (paid) invoice as a row
+    lst = {**_state(1, view="Purchase Invoice list", ent=None), "tables": [{
+        "name": "list", "columns": ["Supplier", "Grand Total", "Posting Date"],
+        "rows": [["Velt Industrieservice GmbH", "€ 2.850,00", "04.12.2025"], ["Kornfeld Energie GmbH", "€ 640,00", "02.12.2025"]]}]}
+    await tutor.on_screen_state("mem1", inv(0, "PINV-OCT", "6.100,00", "06.10.2026"))
+    await tutor.on_screen_state("mem1", lst)
+    await tutor.on_screen_state("mem1", inv(2, "PINV-DEC-A", "2.850,00", "22.12.2025"))
+    dup = [m for m in env.out("intervene") if m["guardrail_id"] == "g_dup"]
+    assert len(dup) == 1
+    st = tutor.get_state("mem1")
+    v = tutor.current_vars(st, tutor._wm(st))
+    assert v["prior.same_supplier_amount_in_month"] is True and v["prior.count"] >= 2
+    # same supplier, different amount (the 6,100 trap) → no intervention
+    await tutor.on_screen_state("mem1", inv(3, "PINV-DEC-B", "6.100,00", "23.12.2025"))
+    assert len([m for m in env.out("intervene") if m["guardrail_id"] == "g_dup"]) == 1
+    # a record never matches its own list row
+    p = common.prior_vars({"invoice.supplier": "Velt", "invoice.grand_total": 2850.0, "invoice.supplier_invoice_no": "VIS-1-A"},
+                          {"row1": {"invoice.supplier": "Velt", "invoice.grand_total": 2850.0,
+                                    "invoice.supplier_invoice_no": "VIS-1-A"}}, "PINV-1")
+    assert p["prior.same_supplier_amount"] is False
+
+
+async def test_fuzzy_guardrail_sees_records_from_earlier_in_session(monkeypatch, env):
+    await seed()
+    seen_ctx = []
+
+    async def fake_decide(q, context, options):
+        seen_ctx.append(context)
+        return "cannot_tell", 0.9
+    monkeypatch.setattr(d, "decide", fake_decide)
+    tutor.start("fz1", "wf_ap_invoice", "en")
+    st = tutor.get_state("fz1")
+    await tutor.on_screen_state("fz1", _state(1, ent="PINV-A", fields=[("Supplier", "Unknown GmbH"), ("Grand Total", "990,00")]))
+    await tutor.on_screen_state("fz1", _state(2, ent="PINV-B", fields=[("Supplier", "Unknown GmbH"), ("Grand Total", "990,00")]))
+    st.current = "s2"
+    await tutor.check_guardrails(st, tutor._wm(st))
+    assert seen_ctx and "PINV-A" in seen_ctx[-1] and '"prior.same_supplier_amount": true' in seen_ctx[-1]
+
+
+def test_month_var_aliasing_a_date_label():
+    wm = fx()
+    wm.canonical_vars["invoice.posting_month"] = ["Posting Date *"]
+    st = ScreenState.model_validate(_state(1, fields=[("Posting Date *", "22.12.2025")]))
+    assert common.canonical_vars_from_state(st, wm)["invoice.posting_month"] == 12

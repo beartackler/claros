@@ -343,7 +343,14 @@ export type ClientMsg =
 export interface EventsMsg { type: "events"; items: ScreenEvent[] }
 export interface LedgerMsg { type: "ledger"; open: number; saved_for_later: number; top?: Unknown | null }
 export interface AskMsg { type: "ask"; unknown_id: string; text: string }
-export interface InterveneMsg { type: "intervene"; guardrail_id: string; text: string; moment: Moment }
+export interface InterveneMsg {
+  type: "intervene"; guardrail_id: string; text: string; moment: Moment;
+  /** learner-language rule text + expert quote line ("Anna said: «…»"), original quote kept for display */
+  rule?: string; quote?: string | null; lang?: string; trigger?: string;
+  quote_original?: { id: string; speaker: string; lang: string; text: string } | null;
+  /** true = the one firmer reminder on save/submit of a still-violating record */
+  escalated?: boolean;
+}
 export interface ContextUpdateMsg { type: "context_update"; text: string }
 export interface ShowMomentMsg { type: "show_moment"; moment: Moment }
 export interface HighlightStepMsg { type: "highlight_step"; step_id: string }

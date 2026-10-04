@@ -21,7 +21,20 @@ from .common import compute_coverage, list_maps, load_map, map_doc_text
 router = APIRouter()
 
 MATCH_THRESHOLD = 0.35
-W = {"fts": 0.3, "emb": 0.4, "onet": 0.15, "app": 0.15}
+W = {"fts": 0.3, "emb": 0.4, "onet": 0.15, "app": 0.15, "screen": 0.25}
+
+
+def screen_overlap(m: WorkMap, ss: Optional[ScreenState]) -> float:
+    """Share of the map's recorded on-screen labels visible on the learner's screen (recorded on THIS screen)."""
+    if ss is None or not m.canonical_vars:
+        return 0.0
+    from .common import norm_label
+    labels = {norm_label(re.sub(r"\s*\*$", "", a)) for al in m.canonical_vars.values() for a in al}
+    labels.discard("")
+    on = {norm_label(re.sub(r"\s*\*$", "", f.label or "")) for f in ss.fields}
+    for tb in ss.tables or []:
+        on |= {norm_label(re.sub(r"\s*\*$", "", str(c))) for c in tb.get("columns") or []}
+    return len(labels & on) / len(labels) if labels else 0.0
 
 
 class LookupReq(BaseModel):
@@ -56,7 +69,8 @@ async def lookup(utterance: str, screen_state: Optional[ScreenState] = None, lan
         if onet and m.onet and onet.occupation_code == m.onet.occupation_code:
             s_onet = 1.0 if (onet.task_id and onet.task_id == m.onet.task_id) else 0.7
         s_app = 1.0 if (screen_state and screen_state.app and screen_state.app in m.apps) else 0.0
-        score = W["fts"] * s_fts + W["emb"] * s_emb + W["onet"] * s_onet + W["app"] * s_app
+        score = W["fts"] * s_fts + W["emb"] * s_emb + W["onet"] * s_onet + W["app"] * s_app + \
+            W["screen"] * screen_overlap(m, screen_state)
         if best is None or score > best[0]:
             best = (score, m)
     if best and best[0] >= MATCH_THRESHOLD:
@@ -64,6 +78,11 @@ async def lookup(utterance: str, screen_state: Optional[ScreenState] = None, lan
         out["match"] = {"workflow_id": best[1].workflow_id, "score": round(best[0], 3),
                         "coverage": cov.model_dump(mode="json"), "name": best[1].name}
         out["action"] = {"ready": "learn", "partial": "teach_confirmed"}.get(cov.status, "request")
+        try:  # the learner is about to start: translate the map for their language in the background
+            from .tutor import prewarm
+            prewarm(best[1], lang)
+        except Exception:  # noqa: BLE001
+            pass
     return out
 
 

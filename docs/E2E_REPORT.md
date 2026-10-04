@@ -74,3 +74,41 @@ Brain / knowledge
 - Fallback LLM providers have no keys; any Isoquant outage = no vision/map build.
 - ERPNext v16 hides Accounting Dimensions for drafts: harness sets a per-user grid column preference
   (Expense Head, Cost Center) and models "hold" as tag + comment (no draft hold field).
+
+## Run 10 — dialog/tutor fixes (B, C, RU re-run on a private :8788 server, scratch copy of the DB)
+
+| Check | Result |
+|---|---|
+| B: map build | 19.6 s, 8 steps, 3 guardrails; **duplicate rule is now a predicate**: `{"and":[{"var":"prior.same_supplier_amount"},{"==":[{"var":"invoice.posting_month"},12]}]}` (was fuzzy); capex + UK predicates as before; debrief → teach-back → 3 exam cases → published, READY |
+| C: lookup | the recorded map, score 0.85 (the seeded `wf_ap_invoice` fixture had won at 0.71 after the B rebuild renamed the map — lookup now adds the share of the map's recorded on-screen labels visible on the learner's screen) |
+| C: 7,200 equipment on opex | **1** `intervene` (g_capex, own quote "Equipment over 5,000 is always capex…", `quote_original`, `rule`); no repeat |
+| C: 6,100 maintenance | 0 interventions (double-billing no longer judged by the LLM on screens without a matching earlier record) |
+| RU | every spoken line Russian: "Шаг 1: Откройте счёт поставщика…", "Шаг 2: Переклассифицируйте позиции…"; 1 intervention (was 2: capex + false double-billing); "почему это капитальные затраты?" → the capex quote (was the double-billing quote); 6,100 → 0 |
+
+Fixes (all generic, no ERPNext code):
+1. **Learner language** (`knowledge/tutor.py`): map text (step titles, decisions, conflicts, guardrail text, quotes
+   without a stored translation) is GLM-translated once per (workflow, map version, lang) — kv `i18n` + a string-level
+   cache so a new version only translates new strings; prewarmed on lookup match / learn hello / map update, awaited
+   (≤20 s) before speaking. `intervene` now carries `rule` + `quote` (learner lang) and `quote_original` (expert's
+   words). `dialog.context_text`/`lookup` use the cached translations. Rule choice: the quote is the guardrail's own
+   best-matching quote (stray "Okay, let's do it." quotes skipped); `why_this` picks among rules that intervened on
+   this record / pending / current step by the question (GLM, fallback word overlap) instead of "last intervention".
+2. **Dedupe**: `fired[(guardrail, entity)] = {sig}` with an OCR-stable signature of the predicate's values; re-fires
+   only when the violating values change (cleared when the predicate is definitively false); save/submit/approve of
+   the same violating state → one `escalated` "Before you submit this: Erika would not let it through…", never a repeat.
+3. **No fragment values in asks** (`brain/ledger.py`): `speakable_value` drops ellipsized words, trailing `- OPF`
+   style ≤3-char fragments and <4-char non-numeric values, prefers a full value from the entity model (event history,
+   current screen fields/grid cells); fallback "Why this Expense Head here?". "Plants and Machineries - OPF" →
+   "Why Plants and Machineries for Expense Head here?". Spoken values are cut at word boundaries (no "…").
+4. **Session memory** (`knowledge/common.py`): every opened record and visible table row is remembered per learn
+   session; `prior.same_supplier|same_amount|same_supplier_amount|same_supplier_amount_in_month|count` are derived
+   from var-name roles (party/amount/date) and never match the record itself (shared ids). The builder/debrief accept
+   them in predicates; fuzzy checks get the earlier records + prior.* as context. `*_month` vars read off a date label
+   now yield the month.
+
+Tests: +7 (`test_knowledge.py`: language + original quote, wrong-rule case, dedupe/escalation, prior vars incl. list
+rows, fuzzy context, month var; `test_brain.py`: OPF/truncation). `make test` 210 passed; `pnpm build` green.
+
+Still open: the positive double-billing case is covered by unit tests only (C/RU never open a matching duplicate);
+no save event was perceived on the 7,200 form in C/RU, so live escalation is untested; quote translations made at
+build time translate account names ("Машины и оборудование") while tutor i18n keeps on-screen names.

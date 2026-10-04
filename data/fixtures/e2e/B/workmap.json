@@ -1,34 +1,34 @@
 {
-  "id": "wm_092397ee8f",
+  "id": "wm_8775bca496",
   "workflow_id": "wf_book_purchase_invoices_with_capex_double_96bf8e",
-  "version": 36,
-  "name": "Purchase invoice review and booking",
+  "version": 46,
+  "name": "Booking purchase invoices: capex classification, duplicate holds, UK approvals",
   "apps": [
     "ERPNext"
   ],
   "onet": {
-    "occupation_code": "13-2011.00",
-    "occupation_title": "Accountants and Auditors",
-    "task_id": "21533",
-    "task": "Process invoices for payment.",
+    "occupation_code": "43-3061.00",
+    "occupation_title": "Procurement Clerks",
+    "task_id": "2542",
+    "task": "Compare suppliers' bills with bids and purchase orders to verify accuracy.",
     "dwas": [
-      "Pay charges, fees, or taxes."
+      "Verify accuracy of financial or transactional data."
     ],
     "technologies": [
-      "Document management software",
-      "Business intelligence and data analysis software",
-      "Medical software",
-      "Word processing software",
-      "Spreadsheet software",
-      "Analytical or scientific software",
       "Accounting software",
-      "Adobe Acrobat",
-      "Alteryx software",
-      "Epic Systems",
-      "Google Docs",
-      "Google Sheets"
+      "Data base user interface and query software",
+      "Spreadsheet software",
+      "Office suite software",
+      "Electronic mail software",
+      "Presentation software",
+      "Document management software",
+      "Intuit QuickBooks",
+      "Microsoft Access",
+      "Microsoft Excel",
+      "Microsoft Office software",
+      "Microsoft Outlook"
     ],
-    "score": 0.1471
+    "score": 0.1426
   },
   "experts": [
     {
@@ -42,10 +42,10 @@
   ],
   "steps": [
     {
-      "id": "s1",
+      "id": "step_1",
       "order": 1,
       "after": [],
-      "title": "Open the supplier purchase invoice and check the pre-filled expense account",
+      "title": "Open a supplier invoice and review its line classification",
       "state_signature": {
         "app": "ERPNext",
         "view": "Purchase Invoice form",
@@ -56,7 +56,7 @@
         "keyframe_ids": [
           "s_f69df28f34d4_1"
         ],
-        "t": 1791077656.0,
+        "t": 1791077656400.0,
         "utterance_ids": [
           "u_7716be37"
         ]
@@ -72,12 +72,12 @@
       "approved": true
     },
     {
-      "id": "s2",
+      "id": "step_2",
       "order": 2,
       "after": [
-        "s1"
+        "step_1"
       ],
-      "title": "Reclassify equipment purchases from small tools to capital equipment accounts",
+      "title": "Reclassify capital-equipment lines from small tools to Plants and Machineries with the Production cost center",
       "state_signature": {
         "app": "ERPNext",
         "view": "Purchase Invoice form",
@@ -86,11 +86,9 @@
       "moment": {
         "session_id": "s_f69df28f34d4",
         "keyframe_ids": [
-          "s_f69df28f34d4_2",
-          "s_f69df28f34d4_3",
-          "s_f69df28f34d4_4"
+          "s_f69df28f34d4_2"
         ],
-        "t": 1791077669.0,
+        "t": 1791077669800.0,
         "utterance_ids": [
           "u_01ebf117",
           "u_8aa4cced"
@@ -98,17 +96,17 @@
       },
       "decision": {
         "kind": "judgment",
-        "description": "Equipment costing over {threshold} is capex: move {line.expense_account} from small tools to Plants and Machineries and the cost center to Production, instead of leaving the default small-tools booking.",
-        "from_value": "small tools account with default cost center",
+        "description": "Choose the expense head based on the item's capital nature rather than the pre-filled default",
+        "from_value": "small tools account with Administration cost center",
         "to_value": "Plants and Machineries account with Production cost center",
         "reason_quote_ids": [
-          "q_u_8aa4cced",
-          "q_u_01ebf117"
+          "q_u_01ebf117",
+          "q_u_8aa4cced"
         ],
-        "counterfactual": "If the item cost were below 5,000, it would stay in small tools with the default cost center."
+        "counterfactual": "If the item were ordinary small tooling or a repair consumable, the default small-tools account would remain"
       },
       "guardrail_ids": [
-        "g_capex_5000"
+        "g_capex"
       ],
       "context_note_ids": [],
       "experts": [
@@ -119,10 +117,10 @@
       "approved": true
     },
     {
-      "id": "s3",
+      "id": "step_3",
       "order": 3,
       "after": [
-        "s2"
+        "step_2"
       ],
       "title": "Save the corrected invoice",
       "state_signature": {
@@ -135,9 +133,9 @@
         "keyframe_ids": [
           "s_f69df28f34d4_4"
         ],
-        "t": 1791077680.0,
+        "t": 1791077680300.0,
         "utterance_ids": [
-          "u_01ebf117"
+          "u_8aa4cced"
         ]
       },
       "decision": null,
@@ -151,12 +149,12 @@
       "approved": true
     },
     {
-      "id": "s4",
+      "id": "step_4",
       "order": 4,
       "after": [
-        "s3"
+        "step_3"
       ],
-      "title": "Screen the invoice list for the next supplier and recognize a repeat amount",
+      "title": "Screen the invoice queue for repeat billing from known suppliers",
       "state_signature": {
         "app": "ERPNext",
         "view": "Purchase Invoice list",
@@ -167,88 +165,9 @@
         "keyframe_ids": [
           "s_f69df28f34d4_6"
         ],
-        "t": 1791077692.0,
+        "t": 1791077692300.0,
         "utterance_ids": [
           "u_cd5aca21"
-        ]
-      },
-      "decision": {
-        "kind": "judgment",
-        "description": "The supplier's amount matches an already-paid December invoice, so treat it as a suspected duplicate rather than a normal booking.",
-        "from_value": null,
-        "to_value": null,
-        "reason_quote_ids": [
-          "q_u_508ef250",
-          "q_u_cd5aca21"
-        ],
-        "counterfactual": "If the amount had not matched a paid invoice, the invoice would have been reviewed and booked normally."
-      },
-      "guardrail_ids": [
-        "g_double_bill_december"
-      ],
-      "context_note_ids": [],
-      "experts": [
-        "expert@ostwind.example"
-      ],
-      "variants": [],
-      "conflict": null,
-      "approved": true
-    },
-    {
-      "id": "s5",
-      "order": 5,
-      "after": [
-        "s4"
-      ],
-      "title": "Hold the suspected duplicate invoice until supplier confirmation",
-      "state_signature": {
-        "app": "ERPNext",
-        "view": "Purchase Invoice form",
-        "entity_type": "Purchase Invoice"
-      },
-      "moment": {
-        "session_id": "s_f69df28f34d4",
-        "keyframe_ids": [
-          "s_f69df28f34d4_8",
-          "s_f69df28f34d4_9"
-        ],
-        "t": 1791077708.0,
-        "utterance_ids": [
-          "u_ad410982"
-        ]
-      },
-      "decision": null,
-      "guardrail_ids": [
-        "g_double_bill_december"
-      ],
-      "context_note_ids": [],
-      "experts": [
-        "expert@ostwind.example"
-      ],
-      "variants": [],
-      "conflict": null,
-      "approved": true
-    },
-    {
-      "id": "s6",
-      "order": 6,
-      "after": [
-        "s5"
-      ],
-      "title": "Save the held invoice",
-      "state_signature": {
-        "app": "ERPNext",
-        "view": "Purchase Invoice form",
-        "entity_type": "Purchase Invoice"
-      },
-      "moment": {
-        "session_id": "s_f69df28f34d4",
-        "keyframe_ids": [
-          "s_f69df28f34d4_11"
-        ],
-        "t": 1791077717.0,
-        "utterance_ids": [
-          "u_ad410982"
         ]
       },
       "decision": null,
@@ -262,12 +181,12 @@
       "approved": true
     },
     {
-      "id": "s7",
-      "order": 7,
+      "id": "step_5",
+      "order": 5,
       "after": [
-        "s6"
+        "step_4"
       ],
-      "title": "Open the next invoice and identify that it belongs to the UK subsidiary",
+      "title": "Open the suspect invoice and compare it against previously paid invoices from the same supplier",
       "state_signature": {
         "app": "ERPNext",
         "view": "Purchase Invoice form",
@@ -276,16 +195,26 @@
       "moment": {
         "session_id": "s_f69df28f34d4",
         "keyframe_ids": [
-          "s_f69df28f34d4_14"
+          "s_f69df28f34d4_7"
         ],
-        "t": 1791077740.0,
+        "t": 1791077699900.0,
         "utterance_ids": [
-          "u_366ca8fa"
+          "u_508ef250"
         ]
       },
-      "decision": null,
+      "decision": {
+        "kind": "judgment",
+        "description": "Treat a same-amount invoice from a known repeat-biller as a suspected duplicate rather than a normal bill",
+        "from_value": null,
+        "to_value": null,
+        "reason_quote_ids": [
+          "q_u_508ef250",
+          "q_u_ad410982"
+        ],
+        "counterfactual": "If the supplier had no repeat-billing history or the amount differed from an already-paid invoice, it would be booked normally"
+      },
       "guardrail_ids": [
-        "g_uk_second_approval"
+        "g_duplicate"
       ],
       "context_note_ids": [],
       "experts": [
@@ -296,12 +225,81 @@
       "approved": true
     },
     {
-      "id": "s8",
+      "id": "step_6",
+      "order": 6,
+      "after": [
+        "step_5"
+      ],
+      "title": "Place the suspected duplicate on hold and save",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "s_f69df28f34d4",
+        "keyframe_ids": [
+          "s_f69df28f34d4_8",
+          "s_f69df28f34d4_12"
+        ],
+        "t": 1791077708400.0,
+        "utterance_ids": [
+          "u_ad410982"
+        ]
+      },
+      "decision": null,
+      "guardrail_ids": [
+        "g_duplicate"
+      ],
+      "context_note_ids": [],
+      "experts": [
+        "expert@ostwind.example"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "step_7",
+      "order": 7,
+      "after": [
+        "step_6"
+      ],
+      "title": "Identify invoices from the UK subsidiary that require controller sign-off",
+      "state_signature": {
+        "app": "ERPNext",
+        "view": "Purchase Invoice form",
+        "entity_type": "Purchase Invoice"
+      },
+      "moment": {
+        "session_id": "s_f69df28f34d4",
+        "keyframe_ids": [
+          "s_f69df28f34d4_14"
+        ],
+        "t": 1791077740800.0,
+        "utterance_ids": [
+          "u_366ca8fa"
+        ]
+      },
+      "decision": null,
+      "guardrail_ids": [
+        "g_uk_approval"
+      ],
+      "context_note_ids": [],
+      "experts": [
+        "expert@ostwind.example"
+      ],
+      "variants": [],
+      "conflict": null,
+      "approved": true
+    },
+    {
+      "id": "step_8",
       "order": 8,
       "after": [
-        "s7"
+        "step_7"
       ],
-      "title": "Escalate UK-subsidiary invoices for second approval before booking",
+      "title": "Escalate the UK invoice to Pending Second Approval instead of booking it",
       "state_signature": {
         "app": "ERPNext",
         "view": "Purchase Invoice form",
@@ -312,14 +310,14 @@
         "keyframe_ids": [
           "s_f69df28f34d4_15"
         ],
-        "t": 1791077748.0,
+        "t": 1791077774890.0,
         "utterance_ids": [
           "u_e235ee37"
         ]
       },
       "decision": null,
       "guardrail_ids": [
-        "g_uk_second_approval"
+        "g_uk_approval"
       ],
       "context_note_ids": [],
       "experts": [
@@ -332,21 +330,20 @@
   ],
   "guardrails": [
     {
-      "id": "g_capex_5000",
-      "text": "Any purchase invoice line over 5,000 booked to small tools is a capex mistake: it must go to Plants and Machineries with the Production cost center.",
+      "id": "g_capex",
+      "text": "Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools",
       "quote_ids": [
         "q_u_8aa4cced",
-        "q_u_01ebf117",
-        "q_s_f69df28f34d4_2"
+        "q_s_f69df28f34d4_1"
       ],
       "predicate": {
         "and": [
           {
             ">": [
               {
-                "var": "line.amount"
+                "var": "invoice.amount"
               },
-              "5000"
+              5000
             ]
           },
           {
@@ -366,12 +363,10 @@
         {
           "session_id": "s_f69df28f34d4",
           "keyframe_ids": [
-            "s_f69df28f34d4_1",
             "s_f69df28f34d4_2"
           ],
-          "t": 1791077669.0,
+          "t": 1791077682900.0,
           "utterance_ids": [
-            "u_01ebf117",
             "u_8aa4cced"
           ]
         }
@@ -382,26 +377,38 @@
       "approved": true
     },
     {
-      "id": "g_double_bill_december",
-      "text": "When this supplier sends a December invoice with the same amount as one already paid (old invoice number plus a suffix), put it On Hold until the supplier confirms — do not book it.",
+      "id": "g_duplicate",
+      "text": "If a supplier known to double-bill submits an invoice with the same amount as one already paid (same month, suffixed invoice number), place it on hold until the supplier confirms",
       "quote_ids": [
         "q_u_ad410982",
-        "q_u_508ef250",
-        "q_u_cd5aca21",
-        "q_s_f69df28f34d4_1",
+        "q_s_f69df28f34d4_2",
         "q_s_f69df28f34d4_3"
       ],
-      "predicate": null,
-      "fuzzy": true,
+      "predicate": {
+        "and": [
+          {
+            "var": "prior.same_supplier_amount"
+          },
+          {
+            "==": [
+              {
+                "var": "invoice.posting_month"
+              },
+              12
+            ]
+          }
+        ]
+      },
+      "fuzzy": false,
       "action": "hold",
-      "owner": "Accounts Payable lead — confirm duplicate with the supplier",
+      "owner": "supplier (confirmation) / accounts payable lead",
       "evidence": [
         {
           "session_id": "s_f69df28f34d4",
           "keyframe_ids": [
             "s_f69df28f34d4_8"
           ],
-          "t": 1791077708.0,
+          "t": 1791077728500.0,
           "utterance_ids": [
             "u_ad410982"
           ]
@@ -413,8 +420,8 @@
       "approved": true
     },
     {
-      "id": "g_uk_second_approval",
-      "text": "Anything from the UK subsidiary needs a second approval from the controller before it is booked.",
+      "id": "g_uk_approval",
+      "text": "Any invoice from the UK subsidiary requires a second approval from the controller before it is booked",
       "quote_ids": [
         "q_u_e235ee37"
       ],
@@ -428,15 +435,14 @@
       },
       "fuzzy": false,
       "action": "stop_and_ask",
-      "owner": "Controller",
+      "owner": "controller",
       "evidence": [
         {
           "session_id": "s_f69df28f34d4",
           "keyframe_ids": [
-            "s_f69df28f34d4_14",
             "s_f69df28f34d4_15"
           ],
-          "t": 1791077748.0,
+          "t": 1791077777410.0,
           "utterance_ids": [
             "u_e235ee37"
           ]
@@ -450,35 +456,35 @@
   ],
   "quotes": [
     {
-      "id": "q_u_8aa4cced",
-      "speaker": "Erika Expert",
-      "speaker_id": "expert@ostwind.example",
-      "lang": "en",
-      "text": "Equipment over 5,000 is always capex here, so it goes to Plants and Machineries and the Production cost center, never to small tools.",
-      "translations": {
-        "de": "Anlagen über 5.000 sind hier immer capex, sie gehen also auf Anlagen und Maschinen und die Kostenstelle Produktion, niemals auf Kleinwerkzeuge.",
-        "fr": "Les équipements de plus de 5 000 sont toujours de l'immobilisation ici, donc ils vont aux Installations et Machines et au centre de coûts Production, jamais aux petits outillages.",
-        "es": "Los equipos de más de 5.000 son siempre capex aquí, así que van a Plantas y Maquinaria y al centro de costes de Producción, nunca a herramientas pequeñas.",
-        "ru": "Оборудование дороже 5 000 у нас всегда относится к капвложениям, значит оно идёт на «Здания и оборудование» и в центр затрат «Производство», но никак не в мелкий инструмент."
-      },
-      "t": 1791077682917.0088,
-      "session_id": "s_f69df28f34d4",
-      "source": "live",
-      "audio_clip": null
-    },
-    {
       "id": "q_u_01ebf117",
       "speaker": "Erika Expert",
       "speaker_id": "expert@ostwind.example",
       "lang": "en",
       "text": "Booked to small tools, that's wrong for a compressor.",
       "translations": {
-        "de": "Auf Kleinwerkzeuge gebucht, das ist falsch für einen Kompressor.",
-        "fr": "Comptabilisé en petit outillage, c'est faux pour un compresseur.",
-        "es": "Contabilizado en herramientas pequeñas, eso está mal para un compresor.",
-        "ru": "Проведено по мелкому инструменту, для компрессора это неверно."
+        "de": "Auf Kleinwerkzeuge gebucht, das ist für einen Kompressor falsch.",
+        "fr": "Comptabilisé dans les petits outillages, c'est faux pour un compresseur.",
+        "es": "Contabilizado en herramientas menores, eso es incorrecto para un compresor.",
+        "ru": "Списано на мелкий инструмент — для компрессора это неверно."
       },
       "t": 1791077671797.313,
+      "session_id": "s_f69df28f34d4",
+      "source": "live",
+      "audio_clip": null
+    },
+    {
+      "id": "q_u_8aa4cced",
+      "speaker": "Erika Expert",
+      "speaker_id": "expert@ostwind.example",
+      "lang": "en",
+      "text": "Equipment over 5,000 is always capex here, so it goes to Plants and Machineries and the Production cost center, never to small tools.",
+      "translations": {
+        "de": "Anlagen über 5.000 sind hier immer Investitionen (Capex), also gehen sie auf Anlagen und Maschinen und die Kostenstelle Produktion, niemals auf Kleinwerkzeuge.",
+        "fr": "Les équipements de plus de 5 000 sont toujours en immobilisations (capex) ici, donc ils vont en Installations et Machines et au centre de coûts Production, jamais dans les petits outillages.",
+        "es": "Los equipos de más de 5.000 son siempre capex aquí, así que van a Maquinaria y Utillaje y al centro de coste de Producción, nunca a herramientas menores.",
+        "ru": "Оборудование дороже 5 000 здесь всегда относится к капитальным вложениям (capex), поэтому оно идёт в «Машины и оборудование» и на центр затрат Производства, но никак не на мелкий инструмент."
+      },
+      "t": 1791077682917.0088,
       "session_id": "s_f69df28f34d4",
       "source": "live",
       "audio_clip": null
@@ -493,26 +499,9 @@
         "de": "Gleicher Betrag wie die Dezemberrechnung, die wir bereits bezahlt haben.",
         "fr": "Même montant que la facture de décembre que nous avons déjà payée.",
         "es": "El mismo importe que la factura de diciembre que ya pagamos.",
-        "ru": "Та же сумма, что и у декабрьского счёта, который мы уже оплатили."
+        "ru": "Та же сумма, что и по декабрьскому счёту, который мы уже оплатили."
       },
       "t": 1791077701865.549,
-      "session_id": "s_f69df28f34d4",
-      "source": "live",
-      "audio_clip": null
-    },
-    {
-      "id": "q_u_cd5aca21",
-      "speaker": "Erika Expert",
-      "speaker_id": "expert@ostwind.example",
-      "lang": "en",
-      "text": "Velt again. Two eight fifty, that number looks familiar from December.",
-      "translations": {
-        "de": "Velt wieder. 2.850, diese Zahl kommt mir aus dem Dezember bekannt vor.",
-        "fr": "Encore Velt. Deux mille huit cent cinquante, ce chiffre me rappelle décembre.",
-        "es": "Velt otra vez. Dos mil ochocientos cincuenta, ese número me suena de diciembre.",
-        "ru": "Опять Velt. Две тысячи восемьсот пятьдесят, эта сумма кажется знакомой с декабря."
-      },
-      "t": 1791077694277.498,
       "session_id": "s_f69df28f34d4",
       "source": "live",
       "audio_clip": null
@@ -524,10 +513,10 @@
       "lang": "en",
       "text": "This supplier double-bills every December; hold it until they confirm. Same amount, just a suffix on the old invoice number.",
       "translations": {
-        "de": "Dieser Lieferant stellt jeden Dezember doppelt in Rechnung; zurückhalten, bis sie bestätigen. Gleicher Betrag, nur ein Suffix an der alten Rechnungsnummer.",
-        "fr": "Ce fournisseur facture en double chaque décembre ; bloquez-la jusqu'à leur confirmation. Même montant, juste un suffixe sur l'ancien numéro de facture.",
-        "es": "Este proveedor factura por duplicado cada diciembre; reténgalo hasta que lo confirmen. Mismo importe, solo un sufijo en el número de factura antiguo.",
-        "ru": "Этот поставщик каждый декабрь выставляет счёт дважды; придержите его, пока не подтвердят. Та же сумма, просто суффикс к старому номеру счёта."
+        "de": "Dieser Lieferant stellt jeden Dezember doppelt in Rechnung; zurückhalten, bis er es bestätigt. Gleicher Betrag, nur ein Suffix an der alten Rechnungsnummer.",
+        "fr": "Ce fournisseur facture en double chaque décembre ; bloquez-la jusqu'à confirmation. Même montant, juste un suffixe sur l'ancien numéro de facture.",
+        "es": "Este proveedor factura en doble cada diciembre; reténgala hasta que lo confirme. Mismo importe, solo un sufijo en el antiguo número de factura.",
+        "ru": "Этот поставщик каждый декабрь выставляет счёт дважды; удержите его, пока они не подтвердят. Та же сумма, только суффикс к старому номеру счёта."
       },
       "t": 1791077728480.713,
       "session_id": "s_f69df28f34d4",
@@ -541,10 +530,10 @@
       "lang": "en",
       "text": "Anything from the UK subsidiary needs a second approval from the controller before it is booked.",
       "translations": {
-        "de": "Alles von der britischen Tochtergesellschaft benötigt eine zweite Freigabe durch den Controller, bevor es gebucht wird.",
-        "fr": "Tout ce qui vient de la filiale britannique nécessite une seconde approbation du contrôleur avant d'être comptabilisé.",
-        "es": "Todo lo de la filial británica necesita una segunda aprobación del controller antes de contabilizarse.",
-        "ru": "Всё от британской дочерней компании требует повторного согласования финансовым контролёром до проведения в учёте."
+        "de": "Alles von der UK-Tochtergesellschaft benötigt vor der Buchung eine zweite Freigabe durch den Controller.",
+        "fr": "Toute opération de la filiale britannique nécessite une seconde validation du contrôleur avant d'être comptabilisée.",
+        "es": "Todo lo de la filial del Reino Unido necesita una segunda aprobación del controller antes de contabilizarse.",
+        "ru": "Для любых операций британского дочернего общества требуется второе согласование контролёра до их учёта."
       },
       "t": 1791077774059.4658,
       "session_id": "s_f69df28f34d4",
@@ -558,7 +547,7 @@
       "lang": "en",
       "text": "Okay, let's do it.",
       "translations": {},
-      "t": 1791077817471.477,
+      "t": 1791078974185.293,
       "session_id": "s_f69df28f34d4",
       "source": "debrief",
       "audio_clip": null
@@ -568,9 +557,9 @@
       "speaker": "Erika Expert",
       "speaker_id": "expert@ostwind.example",
       "lang": "en",
-      "text": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.",
+      "text": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
       "translations": {},
-      "t": 1791077819625.99,
+      "t": 1791078976941.207,
       "session_id": "s_f69df28f34d4",
       "source": "debrief",
       "audio_clip": null
@@ -582,7 +571,7 @@
       "lang": "en",
       "text": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
       "translations": {},
-      "t": 1791077822231.1309,
+      "t": 1791078979606.2278,
       "session_id": "s_f69df28f34d4",
       "source": "debrief",
       "audio_clip": null
@@ -594,113 +583,121 @@
       "Supplier *",
       "Supplier Name"
     ],
-    "invoice.company": [
-      "Company"
-    ],
     "invoice.amount": [
       "Amount (EUR)",
       "Amount (GBP)"
     ],
-    "invoice.expense_account": [
-      "Expense Head"
-    ],
-    "invoice.cost_center": [
-      "Cost Center"
-    ],
-    "invoice.supplier_invoice_no": [
-      "Supplier Invoice No"
-    ],
-    "invoice.supplier_invoice_date": [
-      "Supplier Invoice Date"
-    ],
-    "invoice.posting_date": [
-      "Posting Date *",
-      "Posting Date"
-    ],
-    "invoice.due_date": [
-      "Due Date"
-    ],
-    "invoice.status": [
-      "Status",
-      "ID=Status"
-    ],
-    "line.amount": [
-      "Amount (EUR)",
-      "Amount (GBP)"
+    "invoice.posting_month": [
+      "Posting Date *"
     ],
     "line.expense_account": [
       "Expense Head"
+    ],
+    "line.cost_center": [
+      "Cost Center"
+    ],
+    "invoice.company": [
+      "Company"
+    ],
+    "invoice.currency": [
+      "Amount (EUR)",
+      "Amount (GBP)"
+    ],
+    "invoice.supplier_invoice_no": [
+      "Supplier Invoice No",
+      "Supplier Invoice No="
+    ],
+    "invoice.status": [
+      "Status"
     ]
   },
   "open_unknowns": [
     {
-      "id": "u1",
+      "id": "unk_1",
       "type": "why",
-      "scope": "company",
+      "scope": "personal_judgment",
       "about_event_ids": [],
       "entity": null,
-      "hypothesis": "The 5,000 capex threshold may be tied to a depreciation or tax policy rather than pure internal convention.",
-      "hypothesis_confidence": 0.0,
-      "spoken_question": "Is the 5,000 capex cutoff from tax rules or internal policy?",
-      "priority": 2.0,
+      "hypothesis": "Threshold applies per equipment item line",
+      "hypothesis_confidence": 0.6,
+      "spoken_question": "Is the capex rule amount-based per item or per invoice total?",
+      "priority": 0.0,
       "status": "answered",
-      "created_t": 1791077682.0,
+      "created_t": 0.0,
       "expires_t": null,
-      "moment": null,
-      "answer_utterance_ids": [
-        "q_s_f69df28f34d4_2"
-      ],
-      "resolution": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.",
-      "resolution_source": "expert",
-      "extracted_rule": {
-        "condition": "The 5,000 capex cutoff is an internal accounting policy (not a statutory tax rule): equipment purchases with a net value over 5,000, booked to the Plants and Machineries account in the Production cost center, must be capitalized as fixed assets rather than expensed.",
-        "threshold": "5000",
-        "action": "Capitalize as capex (record as fixed asset in Plants and Machineries) instead of expensing",
-        "escalate_to": null
+      "moment": {
+        "session_id": "s_f69df28f34d4",
+        "keyframe_ids": [
+          "s_f69df28f34d4_4"
+        ],
+        "t": 1791077682900.0,
+        "utterance_ids": [
+          "u_8aa4cced"
+        ]
       },
-      "mandatory": false,
-      "meta": {}
-    },
-    {
-      "id": "u2",
-      "type": "why",
-      "scope": "company",
-      "about_event_ids": [],
-      "entity": null,
-      "hypothesis": "The expert spotted the duplicate because of the supplier's known December pattern plus a suffix on the paid invoice number.",
-      "hypothesis_confidence": 0.0,
-      "spoken_question": "Does the December duplicate check apply to all suppliers or just this one?",
-      "priority": 2.0,
-      "status": "answered",
-      "created_t": 1791077723.0,
-      "expires_t": null,
-      "moment": null,
       "answer_utterance_ids": [
         "q_s_f69df28f34d4_3"
       ],
       "resolution": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
       "resolution_source": "expert",
       "extracted_rule": {
-        "condition": "an invoice amount matches an invoice that has already been paid",
-        "threshold": "exact amount match to an already-paid invoice",
-        "action": "place the invoice on hold and ask the supplier",
+        "condition": "invoice.amount matches an invoice we already paid",
+        "threshold": null,
+        "action": "put invoice on hold and ask the supplier",
         "escalate_to": "supplier"
       },
       "mandatory": false,
       "meta": {}
     },
     {
-      "id": "u3",
+      "id": "unk_2",
+      "type": "stop_and_ask",
+      "scope": "personal_judgment",
+      "about_event_ids": [],
+      "entity": null,
+      "hypothesis": null,
+      "hypothesis_confidence": 0.0,
+      "spoken_question": "Who confirms with the supplier before a held duplicate is released?",
+      "priority": 0.0,
+      "status": "answered",
+      "created_t": 0.0,
+      "expires_t": null,
+      "moment": {
+        "session_id": "s_f69df28f34d4",
+        "keyframe_ids": [
+          "s_f69df28f34d4_8"
+        ],
+        "t": 1791077728500.0,
+        "utterance_ids": [
+          "u_ad410982"
+        ]
+      },
+      "answer_utterance_ids": [
+        "q_s_f69df28f34d4_2"
+      ],
+      "resolution": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "resolution_source": "expert",
+      "extracted_rule": {
+        "condition": "Invoice amount matches an already paid invoice (potential duplicate)",
+        "threshold": null,
+        "action": "Put the invoice on hold and confirm with the supplier before releasing/payment",
+        "escalate_to": "supplier"
+      },
+      "mandatory": false,
+      "meta": {}
+    },
+    {
+      "id": "u_9c63e628b1",
       "type": "limit",
       "scope": "company",
       "about_event_ids": [],
-      "entity": null,
-      "hypothesis": "Duplicate detection relied on recognizing the amount from memory; no systematic duplicate search was shown.",
+      "entity": "g_capex",
+      "hypothesis": "Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools",
       "hypothesis_confidence": 0.0,
-      "spoken_question": "How do you find duplicates if you don't remember the amount?",
-      "priority": 3.0,
+      "spoken_question": "What if it were 4,999? Would “Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools” still apply?",
+      "priority": 0.2,
       "status": "answered",
-      "created_t": 1791077723.0,
+      "created_t": 1791078971986.604,
       "expires_t": null,
       "moment": null,
       "answer_utterance_ids": [
@@ -709,10 +706,10 @@
       "resolution": "Okay, let's do it.",
       "resolution_source": "expert",
       "extracted_rule": {
-        "condition": "supplier and supplier_invoice_no match an already-posted invoice (used when amount is not remembered)",
-        "threshold": null,
-        "action": "flag as potential duplicate and hold for review",
-        "escalate_to": "accounts payable supervisor"
+        "condition": "invoice involves equipment purchase and amount exceeds capitalization threshold",
+        "threshold": "capitalization threshold (exclusive boundary; 4,999 is below/at threshold — rule would not trigger at this amount if threshold is 5,000)",
+        "action": "Post to Plants and Machineries expense account with Production cost center; never post to small tools",
+        "escalate_to": null
       },
       "mandatory": false,
       "meta": {}
@@ -720,7 +717,35 @@
   ],
   "exam": [
     {
-      "variant": "Expense Head = Tools and Small Equipment account",
+      "variant": "Compressor line pre-booked to small tools",
+      "predicted": "Reclassify to Plants and Machineries with Production cost center before saving",
+      "confidence": 0.9,
+      "expert_verdict": null,
+      "correction": null
+    },
+    {
+      "variant": "December invoice from repeat-billing supplier, same amount as one already paid",
+      "predicted": "Place on hold until supplier confirms",
+      "confidence": 0.85,
+      "expert_verdict": null,
+      "correction": null
+    },
+    {
+      "variant": "Invoice from the UK subsidiary",
+      "predicted": "Escalate to Pending Second Approval with the controller",
+      "confidence": 0.9,
+      "expert_verdict": null,
+      "correction": null
+    },
+    {
+      "variant": "Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account",
+      "predicted": "block and explain — Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools",
+      "confidence": 0.85,
+      "expert_verdict": "correct",
+      "correction": null
+    },
+    {
+      "variant": "Posting Date * = 12",
       "predicted": "proceed normally, no guardrail applies",
       "confidence": 0.7,
       "expert_verdict": "correct",
@@ -728,15 +753,8 @@
     },
     {
       "variant": "Company = Ltd account",
-      "predicted": "stop and ask — Anything from the UK subsidiary needs a second approval from the controller before it is booked.",
+      "predicted": "stop and ask — Any invoice from the UK subsidiary requires a second approval from the controller before it is booked",
       "confidence": 0.85,
-      "expert_verdict": "correct",
-      "correction": null
-    },
-    {
-      "variant": "Expense Head = Tools and Small Equipment account",
-      "predicted": "proceed normally, no guardrail applies",
-      "confidence": 0.7,
       "expert_verdict": "correct",
       "correction": null
     }
@@ -753,19 +771,19 @@
     "expert@ostwind.example"
   ],
   "consensus": {
-    "s1": 1.0,
-    "s2": 1.0,
-    "s3": 1.0,
-    "s4": 1.0,
-    "s5": 1.0,
-    "s6": 1.0,
-    "s7": 1.0,
-    "s8": 1.0
+    "step_1": 1.0,
+    "step_2": 1.0,
+    "step_3": 1.0,
+    "step_4": 1.0,
+    "step_5": 1.0,
+    "step_6": 1.0,
+    "step_7": 1.0,
+    "step_8": 1.0
   },
   "guardrail_specs": [
     {
-      "id": "g_capex_5000",
-      "text": "Any purchase invoice line over 5,000 booked to small tools is a capex mistake: it must go to Plants and Machineries with the Production cost center.",
+      "id": "g_capex",
+      "text": "Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools",
       "trigger": {
         "on": [
           "save",
@@ -778,16 +796,16 @@
         "also": "every screen state (soft)"
       },
       "scope": [
-        "s2"
+        "step_2"
       ],
       "condition": {
         "and": [
           {
             ">": [
               {
-                "var": "line.amount"
+                "var": "invoice.amount"
               },
-              "5000"
+              5000
             ]
           },
           {
@@ -802,18 +820,16 @@
       },
       "deterministic": true,
       "exceptions": [
-        "If the item cost were below 5,000, it would stay in small tools with the default cost center."
+        "If the item were ordinary small tooling or a repair consumable, the default small-tools account would remain"
       ],
       "evidence": [
         {
           "session_id": "s_f69df28f34d4",
           "keyframe_ids": [
-            "s_f69df28f34d4_1",
             "s_f69df28f34d4_2"
           ],
-          "t": 1791077669.0,
+          "t": 1791077682900.0,
           "utterance_ids": [
-            "u_01ebf117",
             "u_8aa4cced"
           ]
         }
@@ -826,8 +842,8 @@
       ]
     },
     {
-      "id": "g_double_bill_december",
-      "text": "When this supplier sends a December invoice with the same amount as one already paid (old invoice number plus a suffix), put it On Hold until the supplier confirms — do not book it.",
+      "id": "g_duplicate",
+      "text": "If a supplier known to double-bill submits an invoice with the same amount as one already paid (same month, suffixed invoice number), place it on hold until the supplier confirms",
       "trigger": {
         "on": [
           "save",
@@ -840,15 +856,27 @@
         "also": "every screen state (soft)"
       },
       "scope": [
-        "s4",
-        "s5"
+        "step_5",
+        "step_6"
       ],
       "condition": {
-        "fuzzy": "When this supplier sends a December invoice with the same amount as one already paid (old invoice number plus a suffix), put it On Hold until the supplier confirms — do not book it."
+        "and": [
+          {
+            "var": "prior.same_supplier_amount"
+          },
+          {
+            "==": [
+              {
+                "var": "invoice.posting_month"
+              },
+              12
+            ]
+          }
+        ]
       },
-      "deterministic": false,
+      "deterministic": true,
       "exceptions": [
-        "If the amount had not matched a paid invoice, the invoice would have been reviewed and booked normally."
+        "If the supplier had no repeat-billing history or the amount differed from an already-paid invoice, it would be booked normally"
       ],
       "evidence": [
         {
@@ -856,22 +884,22 @@
           "keyframe_ids": [
             "s_f69df28f34d4_8"
           ],
-          "t": 1791077708.0,
+          "t": 1791077728500.0,
           "utterance_ids": [
             "u_ad410982"
           ]
         }
       ],
       "enforce": "hold",
-      "owner": "Accounts Payable lead — confirm duplicate with the supplier",
+      "owner": "supplier (confirmation) / accounts payable lead",
       "quote_id": "q_u_ad410982",
       "experts": [
         "expert@ostwind.example"
       ]
     },
     {
-      "id": "g_uk_second_approval",
-      "text": "Anything from the UK subsidiary needs a second approval from the controller before it is booked.",
+      "id": "g_uk_approval",
+      "text": "Any invoice from the UK subsidiary requires a second approval from the controller before it is booked",
       "trigger": {
         "on": [
           "save",
@@ -884,8 +912,8 @@
         "also": "every screen state (soft)"
       },
       "scope": [
-        "s7",
-        "s8"
+        "step_7",
+        "step_8"
       ],
       "condition": {
         "in": [
@@ -901,17 +929,16 @@
         {
           "session_id": "s_f69df28f34d4",
           "keyframe_ids": [
-            "s_f69df28f34d4_14",
             "s_f69df28f34d4_15"
           ],
-          "t": 1791077748.0,
+          "t": 1791077777410.0,
           "utterance_ids": [
             "u_e235ee37"
           ]
         }
       ],
       "enforce": "ask",
-      "owner": "Controller",
+      "owner": "controller",
       "quote_id": "q_u_e235ee37",
       "experts": [
         "expert@ostwind.example"

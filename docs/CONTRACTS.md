@@ -62,7 +62,11 @@ Server → client:
   the agent speaks `text` verbatim. A segment with `step_id` highlights that step when sent (client dedupes the agent's
   own `highlight_step` for the same step within 8 s). Teach-back = one `say` per segment, sent in order.
 - `ask {unknown_id, text}` (legacy, still emitted by gate/tutor) → client maps to `say {id: unknown_id, kind: ask|tutor}`
-- `intervene {guardrail_id, text, moment: Moment}` (legacy) → client maps to `say {id: guardrail_id, kind: intervene}` and shows moment
+- `intervene {guardrail_id, text, moment: Moment, rule?, quote?, quote_original?: {id, speaker, lang, text}, lang?, trigger?,
+  escalated?}` (legacy) → client maps to `say {id: guardrail_id, kind: intervene}` and shows moment. All spoken text
+  (`text`, `rule`, `quote`) is in the learner's lang (map text GLM-translated, cached per (map version, lang));
+  `quote_original` keeps the expert's words. Deduped per (session, guardrail, entity) until the violating values
+  change; a save/submit of the same violating state sends at most one `escalated: true` reminder.
 - `context_update {text}` → client calls `sendContextualUpdate(text)`
 - `show_moment {moment: Moment}` / `highlight_step {step_id}`
 - `map_updated {workflow_id, version}`

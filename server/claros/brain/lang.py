@@ -98,6 +98,11 @@ Q_TEMPLATES: dict[str, dict[str, str]] = {
             "fr": "Pourquoi {v} pour {f} ici ?",
             "es": "¿Por qué {v} en {f} aquí?",
             "ru": "Почему {v} в поле {f}?"},
+    "why_field": {"en": "Why this {f} here?",
+                  "de": "Warum dieser Wert bei {f} hier?",
+                  "fr": "Pourquoi cette valeur pour {f} ici ?",
+                  "es": "¿Por qué ese valor en {f} aquí?",
+                  "ru": "Почему здесь такое значение в поле {f}?"},
     "limit": {"en": "At {v}, where's the limit for {f}?",
               "de": "Bei {v}: Wo liegt die Grenze für {f}?",
               "fr": "À {v}, quelle est la limite pour {f} ?",
@@ -154,8 +159,12 @@ def fmt_num(x: float, lang: str = "en") -> str:
 
 
 def _short(v: object, n: int = 28) -> str:
+    """Spoken text: cut long values at a word boundary (never a mid-word cut or an ellipsis glyph)."""
     s = str(v if v is not None else "").strip() or "this"
-    return s if len(s) <= n else s[: n - 1] + "…"
+    if len(s) <= n:
+        return s
+    cut = s[:n].rsplit(" ", 1)[0].rstrip(" ,;:-–—")
+    return cut if len(cut) >= 4 else s[:n]
 
 
 def clamp_words(s: str, n: int = 15) -> str:

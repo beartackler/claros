@@ -19,7 +19,7 @@ from claros.models import (
 
 from . import _deps as d
 from .common import (
-    OPEN_STATUSES, compute_coverage, eval_predicate, load_map, moment_ok, new_unknown, predicate_vars,
+    OPEN_STATUSES, PRIOR_VARS, compute_coverage, eval_predicate, load_map, moment_ok, new_unknown, predicate_vars,
     save_map, validate_evidence,
 )
 
@@ -172,7 +172,12 @@ Rules:
   value the expert corrected AWAY from (the mistake, never the corrected value): {"and":[{">":[{"var":"line.amount"},5000]},{"in":["Tools and Small Equipment",
   {"var":"line.expense_account"}]}]} ("in" with a string = substring match), or {"in":["Ltd",{"var":"invoice.company"}]}.
   Ops: and, or, !, ==, !=, >, >=, <, <=, in, var. For dates use "<x>_month" / "<x>_year" derived vars of a *_date var.
-  If the rule cannot be decided from visible fields: predicate null, fuzzy true.
+  Session memory vars (booleans the runtime computes from OTHER records seen earlier in the same session — list
+  rows or previously opened records — usable when the map has supplier/party and amount vars):
+  prior.same_supplier, prior.same_amount, prior.same_supplier_amount, prior.same_supplier_amount_in_month (same
+  supplier + same amount + date in the same calendar month), prior.count. Use them for repeat / duplicate / "same as
+  one already paid" rules, e.g. {"and":[{"var":"prior.same_supplier_amount"},{"==":[{"var":"invoice.posting_month"},12]}]}.
+  If the rule cannot be decided from visible fields (or these memory vars): predicate null, fuzzy true.
   action in block_and_explain|warn|stop_and_ask|hold; owner = who to ask.
 - canonical_vars: {"entity.field": [every on-screen label alias seen, in any language]} — grid columns too
   (e.g. "line.amount": ["Amount (EUR)", "Amount (GBP)"], "line.expense_account": ["Expense Head"]).
@@ -425,6 +430,8 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     # (a predicate over "item.is_equipment" can never be evaluated on a learner's screen and would never fire)
     observable = observable_vars(wm, r)
     derived = {k[:-5] + suf for k in observable if k.endswith("_date") for suf in ("_month", "_year")}
+    if _has_roles(observable):
+        derived |= set(PRIOR_VARS)  # session memory (records seen earlier) is evaluable at runtime
     for g in wm.guardrails:
         if g.predicate:
             g.predicate = _numeric_literals(g.predicate)
@@ -584,6 +591,12 @@ def tautological(pred: Any, wm: WorkMap) -> bool:
         if names[0] == names[1] or (al[0] & al[1]):
             return True
     return tautological(args, wm) if isinstance(args, (list, dict)) else False
+
+
+def _has_roles(observable: set[str]) -> bool:
+    """prior.* needs a party var and an amount var to compare records (see common.prior_vars)."""
+    from .common import _amount_values, _party_values
+    return bool(_party_values({k: "x" for k in observable})) and bool(_amount_values({k: 1.0 for k in observable}))
 
 
 def observable_vars(wm: WorkMap, r: Replay) -> set[str]:

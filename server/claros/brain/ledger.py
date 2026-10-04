@@ -325,15 +325,48 @@ class Ledger:
         same = sum(1 for x in self.events[:-1] if (x.canonical or x.field) == (e.canonical or e.field)
                    and x.new == e.new and x.new)
         if same >= 1 and val:
-            return "why", L.fill("override", lang, L.HYP_TEMPLATES, f=f, v=val), min(0.9, 0.55 + 0.15 * same), None
+            sv = speakable_value(val, self.field_history.get(e.canonical or e.field, []))
+            if sv:
+                return "why", L.fill("override", lang, L.HYP_TEMPLATES, f=f, v=sv), min(0.9, 0.55 + 0.15 * same), None
         return "why", None, 0.0, None
+
+    def full_values(self, e: Optional[ScreenEvent]) -> list[str]:
+        """Accumulated entity model for the event's field: every value seen for it (events + current screen fields
+        and grid cells), so a truncated/OCR-fragment value can be replaced by its full form."""
+        if e is None or not e.field:
+            return []
+        out = [v for v in self.field_history.get(e.canonical or e.field, []) if v]
+        for x in self.events:
+            if x.field == e.field and x.entity_id == e.entity_id:
+                out += [v for v in (x.new, x.old) if v]
+        try:
+            from claros.perception import current_state
+            st = current_state(self.session_id)
+        except Exception:  # noqa: BLE001
+            st = None
+        if st is not None and (not e.entity_id or st.entity_id in (None, e.entity_id)):
+            base = re.sub(r"\s*\*$", "", e.field).strip().lower()
+            out += [f.value for f in st.fields if f.value and re.sub(r"\s*\*$", "", f.label or "").strip().lower() == base]
+            for tb in st.tables or []:
+                cols = [re.sub(r"\s*\*$", "", str(c)).strip().lower() for c in tb.get("columns") or []]
+                if base in cols:
+                    i = cols.index(base)
+                    out += [str(r[i]) for r in tb.get("rows") or [] if isinstance(r, list) and len(r) > i and r[i]]
+        return list(dict.fromkeys(out))
 
     def make_question(self, u: Unknown, e: Optional[ScreenEvent]) -> str:
         lang = self.lang()
         f = _ui_text((e.field or e.canonical) if e else None)
-        v = _ui_text((e.new if e and e.new not in (None, "") else (e.old if e else None)) or (e.summary if e else ""))
+        raw = (e.new if e and e.new not in (None, "") else (e.old if e else None)) if e else None
+        full = self.full_values(e)
+        v = speakable_value(raw, full) if raw else None
+        if v is None and e is not None and not e.field:
+            v = speakable_value(e.summary)  # status/tag events: the summary is the value
         if u.hypothesis and u.hypothesis_confidence >= 0.7:
             q = L.fill("confirm", lang, h=u.hypothesis)
+        elif v is None and f:
+            # never speak a truncated / OCR-fragment value: fall back to the field label
+            q = L.fill("why_field", lang, f=f)
         else:
             key = u.type if u.type in L.Q_TEMPLATES else "why"
             q = L.fill(key, lang, f=f or "this", v=v or "this", e=u.entity or "this")
@@ -555,6 +588,53 @@ class Ledger:
         for u in self.unknowns.values():
             if u.status in ("open", "asked"):
                 u.status = "deferred"
+
+
+_TRUNC = re.compile(r"\s*(\.\.\.|…)\s*$")
+_FRAG_SUFFIX = re.compile(r"\s+[-–—|/:]\s*[^\s\d]{0,3}$")  # ' - OPF', ' - O', ' -' (ERP company suffixes, cut cells)
+
+
+def _is_numberish(t: str) -> bool:
+    return bool(re.fullmatch(r"[\d\s.,'%€$£₽+-]+", t)) and bool(re.search(r"\d", t))
+
+
+def speakable_value(v: Optional[str], full: Any = ()) -> Optional[str]:
+    """A screen value fit to SPEAK in a question, or None (→ use the field label instead).
+    Never a truncated/ellipsized cell ('Tools and Small Equipment - O...'), a trailing short fragment
+    ('Plants and Machineries - OPF' → 'Plants and Machineries') or a non-numeric fragment under 4 chars ('Ol').
+    `full` = other values seen for the same field (entity model): a complete value that the truncated one is a
+    prefix of wins."""
+    if v is None:
+        return None
+    t = str(v).strip()
+    if not t:
+        return None
+    truncated = bool(_TRUNC.search(t))
+    base = _TRUNC.sub("", t).strip()
+    nb = re.sub(r"\W+", " ", base.lower()).strip()
+    best = None
+    for c in full or ():
+        c = str(c).strip()
+        if not c or _TRUNC.search(c) or c == t:
+            continue
+        nc = re.sub(r"\W+", " ", c.lower()).strip()
+        if len(nb) >= 4 and nc.startswith(nb) and len(nc) > len(nb) and (best is None or len(c) > len(best)):
+            best = c
+    if best is not None:
+        t, truncated = best, False
+    t = _ui_text(t) or ""
+    if truncated:
+        t = _TRUNC.sub("", t).strip()
+        t = t.rsplit(" ", 1)[0] if " " in t else ""  # the last word was cut mid-way
+    if _is_numberish(t):
+        return t
+    prev = None
+    while prev != t:
+        prev = t
+        t = _FRAG_SUFFIX.sub("", t).strip().rstrip("-–—|/:,;").strip()
+    if len(t) < 4 and not _is_numberish(t):
+        return None
+    return t
 
 
 def _ui_text(v: Optional[str]) -> Optional[str]:

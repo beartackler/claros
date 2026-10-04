@@ -3,125 +3,125 @@
   "frames": [],
   "turns": [
     {
-      "t": 1791077816580.555,
+      "t": 1791078972986.672,
       "sent": "Okay, let's do it.",
-      "text": "Got it. Is the 5,000 capex cutoff from tax rules or internal policy?",
+      "text": "Got it. Who confirms with the supplier before a held duplicate is released?",
       "tool": null,
-      "ttft_ms": 2062,
-      "total_ms": 2062,
+      "ttft_ms": 2445,
+      "total_ms": 2445,
       "kind": "user"
     },
     {
-      "t": 1791077818944.9128,
-      "sent": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.",
-      "text": "Got it. Does the December duplicate check apply to all suppliers or just this one?",
-      "tool": null,
-      "ttft_ms": 2296,
-      "total_ms": 2296,
-      "kind": "user"
-    },
-    {
-      "t": 1791077821542.5642,
+      "t": 1791078975733.1729,
       "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "text": "Got it. Teach-back: I'm walking through your AP workflow — please confirm I've got it right. I open the supplier purchase invoice and check the pre-filled expense account. If equipment costs over the threshold, I treat it as capex: instead of the default small-tools booking, I move the expense account to Plants and Machineries and set the cost center to Production. I save the corrected invoice. On the invoice list for the next supplier, if the amount matches an already-paid December invoice, I recognize it as a suspected duplicate, not a normal booking. I hold that suspected duplicate until the supplier confirms — I don't book it, even with the old invoice number plus a suffix. I save the held invoice. For the next invoice, I identify it as belonging to the UK subsidiary. Did I get that right?",
+      "text": "Got it. Looks like: Threshold applies per equipment item line — is that your rule?",
       "tool": null,
-      "ttft_ms": 2664,
-      "total_ms": 32839,
+      "ttft_ms": 1917,
+      "total_ms": 1917,
       "kind": "user"
     },
     {
-      "t": 1791077854684.149,
+      "t": 1791078977951.5322,
+      "sent": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "text": "Got it. Here's my teach-back:  I open a supplier invoice and review its line classification.  For capital-equipment lines, I choose the expense head based on the item's capital nature, not the pre-filled default — reclassifying to Plants and Machineries with the Production cost center, never small tools, per the capitalization threshold.  Then I save the corrected invoice.  Next I screen the queue for repeat billing from known suppliers.  On suspect invoices, I treat a same-amount invoice from a known repeat-biller as a suspected duplicate, not a normal bill.  I place it on hold and save, waiting for supplier confirmation before proceeding.  I also identify invoices from the UK subsidiary needing controller sign-off.  These get escalated to Pending Second Approval rather than being booked. Is that right?",
+      "tool": null,
+      "ttft_ms": 3594,
+      "total_ms": 3595,
+      "kind": "user"
+    },
+    {
+      "t": 1791078981847.1072,
       "sent": "Yes, that's right.",
-      "text": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
+      "text": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account. I would: block and explain — Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools (85% sure). Right?",
       "tool": null,
-      "ttft_ms": 211,
-      "total_ms": 211,
+      "ttft_ms": 120,
+      "total_ms": 121,
       "kind": "user"
     },
     {
-      "t": 1791077855197.9329,
+      "t": 1791078982269.486,
       "sent": "Yes, correct.",
-      "text": "Got it. Case 2: Company = Ltd account. I would: stop and ask — Anything from the UK subsidiary needs a second approval from the controller before it is booked. (85% sure). Right?",
+      "text": "Got it. Case 2: Posting Date * = 12. I would: proceed normally, no guardrail applies (70% sure). Right?",
       "tool": null,
-      "ttft_ms": 232,
-      "total_ms": 233,
+      "ttft_ms": 114,
+      "total_ms": 114,
       "kind": "user"
     },
     {
-      "t": 1791077855732.8708,
+      "t": 1791078982684.7832,
       "sent": "Yes, correct.",
-      "text": "Got it. Case 3: Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
+      "text": "Got it. Case 3: Company = Ltd account. I would: stop and ask — Any invoice from the UK subsidiary requires a second approval from the controller before it is booked (85% sure). Right?",
       "tool": null,
-      "ttft_ms": 127,
-      "total_ms": 127,
+      "ttft_ms": 212,
+      "total_ms": 212,
       "kind": "user"
     },
     {
-      "t": 1791077856162.522,
+      "t": 1791078983198.2131,
       "sent": "Yes, correct.",
       "text": "Got it. That's everything. The map is published for learners.",
       "tool": null,
-      "ttft_ms": 128,
-      "total_ms": 128,
+      "ttft_ms": 115,
+      "total_ms": 116,
       "kind": "user"
     }
   ],
-  "map_build_s": 31.2,
+  "map_build_s": 19.6,
   "built": {
     "type": "status",
     "level": "info",
-    "text": "Work map built: 8 steps, 3 guardrails, 3 open questions.",
-    "_at": 1791077815055.4
+    "text": "Work map built: 8 steps, 3 guardrails, 2 open questions.",
+    "_at": 1791078971669.926
   },
   "debrief": [
     {
       "say": "Okay, let's do it.",
-      "reply": "Got it. Is the 5,000 capex cutoff from tax rules or internal policy?",
+      "reply": "Got it. Who confirms with the supplier before a held duplicate is released?",
       "tool": null,
-      "ttft_ms": 2062,
-      "total_ms": 2062
-    },
-    {
-      "say": "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center.",
-      "reply": "Got it. Does the December duplicate check apply to all suppliers or just this one?",
-      "tool": null,
-      "ttft_ms": 2296,
-      "total_ms": 2296
+      "ttft_ms": 2445,
+      "total_ms": 2445
     },
     {
       "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
-      "reply": "Got it. Teach-back: I'm walking through your AP workflow — please confirm I've got it right. I open the supplier purchase invoice and check the pre-filled expense account. If equipment costs over the threshold, I treat it as capex: instead of the default small-tools booking, I move the expense account to Plants and Machineries and set the cost center to Production. I save the corrected invoice. On the invoice list for the next supplier, if the amount matches an already-paid December invoice, I recognize it as a suspected duplicate, not a normal booking. I hold that suspected duplicate until the supplier confirms — I don't book it, even with the old invoice number plus a suffix. I save the held invoice. For the next invoice, I identify it as belonging to the UK subsidiary. Did I get that right?",
+      "reply": "Got it. Looks like: Threshold applies per equipment item line — is that your rule?",
       "tool": null,
-      "ttft_ms": 2664,
-      "total_ms": 32839
+      "ttft_ms": 1917,
+      "total_ms": 1917
+    },
+    {
+      "say": "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else.",
+      "reply": "Got it. Here's my teach-back:  I open a supplier invoice and review its line classification.  For capital-equipment lines, I choose the expense head based on the item's capital nature, not the pre-filled default — reclassifying to Plants and Machineries with the Production cost center, never small tools, per the capitalization threshold.  Then I save the corrected invoice.  Next I screen the queue for repeat billing from known suppliers.  On suspect invoices, I treat a same-amount invoice from a known repeat-biller as a suspected duplicate, not a normal bill.  I place it on hold and save, waiting for supplier confirmation before proceeding.  I also identify invoices from the UK subsidiary needing controller sign-off.  These get escalated to Pending Second Approval rather than being booked. Is that right?",
+      "tool": null,
+      "ttft_ms": 3594,
+      "total_ms": 3595
     },
     {
       "say": "Yes, that's right.",
-      "reply": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
+      "reply": "Thanks. Three quick test cases, tell me if I'd get them right. Case 1: Amount (EUR) = 5,200, Expense Head = Tools and Small Equipment account. I would: block and explain — Equipment purchases above the capitalization threshold must go to the Plants and Machineries account with the Production cost center, never to small tools (85% sure). Right?",
       "tool": null,
-      "ttft_ms": 211,
-      "total_ms": 211
+      "ttft_ms": 120,
+      "total_ms": 121
     },
     {
       "say": "Yes, correct.",
-      "reply": "Got it. Case 2: Company = Ltd account. I would: stop and ask — Anything from the UK subsidiary needs a second approval from the controller before it is booked. (85% sure). Right?",
+      "reply": "Got it. Case 2: Posting Date * = 12. I would: proceed normally, no guardrail applies (70% sure). Right?",
       "tool": null,
-      "ttft_ms": 232,
-      "total_ms": 233
+      "ttft_ms": 114,
+      "total_ms": 114
     },
     {
       "say": "Yes, correct.",
-      "reply": "Got it. Case 3: Expense Head = Tools and Small Equipment account. I would: proceed normally, no guardrail applies (70% sure). Right?",
+      "reply": "Got it. Case 3: Company = Ltd account. I would: stop and ask — Any invoice from the UK subsidiary requires a second approval from the controller before it is booked (85% sure). Right?",
       "tool": null,
-      "ttft_ms": 127,
-      "total_ms": 127
+      "ttft_ms": 212,
+      "total_ms": 212
     },
     {
       "say": "Yes, correct.",
       "reply": "Got it. That's everything. The map is published for learners.",
       "tool": null,
-      "ttft_ms": 128,
-      "total_ms": 128
+      "ttft_ms": 115,
+      "total_ms": 116
     }
   ],
   "coverage": {
