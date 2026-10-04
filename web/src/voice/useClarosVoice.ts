@@ -90,6 +90,23 @@ if (typeof window !== "undefined" && !(window as unknown as { __clarosConsole?: 
   };
 }
 
+// Every microphone request is timed in the console ("[claros voice] mic … ms"): on macOS a second app recording the
+// mic (a screen recorder) can make one request take tens of seconds, and this shows which one.
+if (typeof window !== "undefined" && navigator.mediaDevices && !(window as unknown as { __clarosMic?: boolean }).__clarosMic) {
+  (window as unknown as { __clarosMic?: boolean }).__clarosMic = true;
+  const md = navigator.mediaDevices;
+  const orig = md.getUserMedia.bind(md);
+  md.getUserMedia = async (c?: MediaStreamConstraints) => {
+    const t = performance.now();
+    try {
+      return await orig(c);
+    } finally {
+      const ms = Math.round(performance.now() - t);
+      if (c?.audio) console.info(`[claros voice] mic ${JSON.stringify(c.audio)} took ${ms}ms`);
+    }
+  };
+}
+
 // A conversation token fetched while the window picker is open, so pressing Start doesn't wait on it.
 // Tokens are short-lived, so a prefetched one is used only within 60 s.
 let prefetched: { agent: string; at: number; p: Promise<TokenResp> } | null = null;

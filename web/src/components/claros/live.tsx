@@ -166,19 +166,28 @@ function ReconnectLabel() {
 }
 
 /** Resolve when the voice agent is connected (true) or failed / timed out (false). */
-export function waitVoice(timeoutMs = 45_000): Promise<boolean> {
+export function waitVoice(timeoutMs = 120_000): Promise<boolean> {
+  // A slow connection is not a failed one: keep waiting while the SDK is still connecting (the start screen says
+  // "still connecting"). Fail only when it gives up (disconnected, or an error that doesn't recover in 3 s).
   return new Promise((resolve) => {
     let done = false;
+    let grace: ReturnType<typeof setTimeout> | null = null;
+    let seenConnecting = false;
+    const t0 = Date.now(); // a stale "disconnected" from a previous call can land right after Start
     const finish = (v: boolean) => {
       if (done) return;
       done = true;
       unsub();
       clearTimeout(timer);
+      if (grace) clearTimeout(grace);
       resolve(v);
     };
     const check = () => {
       const v = useClaros.getState().voiceStatus;
-      if (v === "connected") finish(true);
+      if (v === "connected") return finish(true);
+      if (v === "connecting") seenConnecting = true;
+      else if (v === "disconnected" && seenConnecting && Date.now() - t0 > 2000) finish(false);
+      else if (v === "error" && !grace) grace = setTimeout(() => finish(useClaros.getState().voiceStatus === "connected"), 3000);
     };
     const unsub = useClaros.subscribe(check);
     const timer = setTimeout(() => finish(useClaros.getState().voiceStatus === "connected"), timeoutMs);
