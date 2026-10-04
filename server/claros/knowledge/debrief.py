@@ -314,6 +314,19 @@ def _step_of(wm: WorkMap, g: Guardrail) -> Optional[Step]:
     return next((s for s in ordered_steps(wm) if g.id in s.guardrail_ids), None)
 
 
+def _changed_part(old: Any, new: str, n: int = 220) -> str:
+    """Only the sentences that are new in a rule's text (diff, not the whole rule), whole sentences only."""
+    sents = [x.strip() for x in re.split(r"(?<=[.!?;])\s+", new) if x.strip()]
+    olds = {re.sub(r"\W+", " ", x).strip().lower() for x in re.split(r"(?<=[.!?;])\s+", str(old or ""))}
+    fresh = [x for x in sents if re.sub(r"\W+", " ", x).strip().lower() not in olds] or sents
+    out = ""
+    for x in fresh:
+        if out and len(out) + len(x) + 1 > n:
+            break
+        out = f"{out} {x}".strip()
+    return out if len(out) <= n else _short(out, n)
+
+
 def _short(v: Any, n: int = 40) -> str:
     s = re.sub(r"\s*(\.\.\.|…)$", "", str(v or "")).strip()
     if " - " in s:  # ERP-style "Account - COMPANY" suffix
@@ -578,11 +591,13 @@ def topic_of(wm: WorkMap, u: Unknown) -> str:
     """The rule (guardrail id) or step a question is about; ledger leftovers are matched to a rule by wording."""
     if u.entity and (guardrail_by_id(wm, u.entity) or step_by_id(wm, u.entity)):
         return u.entity
-    words = _toks(" ".join(x for x in (u.spoken_question, u.hypothesis, u.resolution) if x))
+    def stems(txt: str) -> set[str]:  # "held"/"hold", "confirm"/"confirmation"
+        return {w[:4] for w in _toks(txt)}
+    words = stems(" ".join(x for x in (u.spoken_question, u.hypothesis, u.resolution) if x))
     qtext = {q.id: q.text for q in wm.quotes}
     best, sc = None, 0.0
     for g in wm.guardrails:
-        gw = _toks(g.text) | {w for qid in g.quote_ids for w in _toks(qtext.get(qid, ""))}
+        gw = stems(g.text) | {w for qid in g.quote_ids for w in stems(qtext.get(qid, ""))}
         j = len(words & gw) / max(1, min(len(words), len(gw)))
         if j > sc:
             best, sc = g.id, j
@@ -820,8 +835,9 @@ async def apply_correction(wm: WorkMap, text: str, lang: str, quote_id: Optional
         new = p.get("new")
         if f == "predicate" and isinstance(new, str):
             new = d.parse_json(new)
-        if f == "predicate" and new is not None and not valid_patch_predicate(wm, old, new, text):
-            continue  # malformed / unobservable vars / literals the expert never said
+        if f == "predicate" and (new is None or not valid_patch_predicate(wm, old, new, text)):
+            continue  # malformed / unobservable vars / unsaid literals; a correction never disables a check (e2e:
+            # "maintenance stays an expense" nulled the capex predicate) — the refinement lives in the rule text
         if old == new:
             continue
         try:
@@ -869,7 +885,7 @@ def diff_readback(wm: WorkMap, diffs: list[dict], lang: str) -> str:
             elif f == "action" and new:
                 bits.append(t("rule_now", lang, v=_ACTION_WORDS.get(str(new), str(new).replace("_", " "))))
             elif new:
-                bits.append(t("rule_now", lang, v=_short(new, 120).rstrip(".")))
+                bits.append(t("rule_now", lang, v=_changed_part(df.get("old"), str(new)).rstrip(".")))
     if not bits:
         return t("nochange", lang)
     return f"{t('got_it', lang)} " + " ".join(bits) + " " + t("anything_else", lang)
@@ -1004,6 +1020,7 @@ async def next_debrief_utterance(session: Any) -> str:
     eid, ename = _expert(session)
     if st.phase == "questions":
         if not st.prepared:
+            st.started_ms = d.now_ms()  # the state may exist since capture; the 5-min budget starts with the debrief
             await prepare(wm, st, lang)
         u = pick_next(wm, st, eid, ename)
         if u is not None:
@@ -1242,9 +1259,14 @@ async def publish_confirmed(wm: WorkMap, sid: str, eid: str) -> bool:
         g.approved = True
     wm.approved_by = list(dict.fromkeys(wm.approved_by + [eid]))
     second = False
+    st = _states.get(sid)
+    asked_topics = set(st.topics) if st else set()
     for u in wm.open_unknowns:
         if (u.meta or {}).get("origin") == "debrief" and (u.meta or {}).get("secondary") and u.status == "open":
             u.status = "dropped"  # optional extra probe, never needed
+            continue
+        if u.status in ("open", "deferred") and (u.meta or {}).get("probe") and topic_of(wm, u) in asked_topics:
+            u.status = "dropped"  # another probe on a rule the expert already clarified in this debrief
             continue
         if u.status in ("open", "asked") and u.scope in EXPERT_SCOPES and not is_learner_item(u):
             u.status = "deferred"
