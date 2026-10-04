@@ -23,6 +23,9 @@ from PIL import Image, ImageChops, ImageStat
 
 import os
 API = os.getenv("CLAROS_E2E_API", "http://localhost:8787")
+# hosted dialog (production default, CLAROS_DIALOG_MODE=hosted): the server pushes `say` (and legacy `ask`/`intervene`)
+# and the ElevenLabs agent speaks the text verbatim; user turns are final transcripts over the WS only (no custom LLM).
+HOSTED = os.getenv("CLAROS_E2E_HOSTED", "1") == "1"
 WS = API.replace("http", "ws", 1)
 KF_LONG_EDGE = 1600
 JPEG_Q = 75
@@ -69,7 +72,9 @@ class ClarosClient:
     seq: int = 0
     on_ask: Optional[Callable[[dict], Awaitable[None]]] = None
     on_intervene: Optional[Callable[[dict], Awaitable[None]]] = None
+    on_say: Optional[Callable[[dict], Awaitable[None]]] = None
     auto_voice: bool = True
+    hosted: bool = HOSTED
 
     def __post_init__(self) -> None:
         self.ws = None
@@ -80,6 +85,7 @@ class ClarosClient:
         self._voice_lock = asyncio.Lock()
         self.agent_speaking = False
         self.tasks: list[asyncio.Task] = []
+        self.spoken: list[dict] = []  # hosted: what the agent actually said, in order
 
     # ---------- lifecycle ----------
     @classmethod
@@ -128,6 +134,10 @@ class ClarosClient:
                 m["_at"] = now_ms()
                 self.received.append(m)
                 typ = m.get("type")
+                if self.hosted:
+                    if typ in ("say", "ask", "intervene") and (self.auto_voice or typ == "say"):
+                        self.tasks.append(asyncio.create_task(self._speak_hosted(m)))
+                    continue
                 if typ == "ask" and self.auto_voice:
                     self.tasks.append(asyncio.create_task(self._voice("ask", m["unknown_id"], m.get("text") or "", m)))
                 elif typ == "intervene" and self.auto_voice:
@@ -243,6 +253,29 @@ class ClarosClient:
             if cb:
                 await cb({**msg, "_spoken": turn.text})
 
+    async def _speak_hosted(self, m: dict) -> None:
+        """Web client behaviour: ask/intervene → say; the hosted agent speaks the text verbatim when it has the floor."""
+        typ = m.get("type")
+        key = m.get("id") or m.get("unknown_id") or m.get("guardrail_id") or ""
+        text = (m.get("text") or "").strip()
+        if not text:
+            return
+        async with self._voice_lock:
+            t0 = time.perf_counter()
+            turn = Turn(t=now_ms(), sent=f"⟦say:{key}|{text}⟧", text=text, kind=m.get("kind") or typ, ttft_ms=0.0)
+            await self.speak_agent(text)
+            turn.total_ms = round((time.perf_counter() - t0) * 1000)
+            self.turns.append(turn)
+            self.spoken.append({"at": now_ms(), "type": typ, "kind": m.get("kind") or typ, "id": key, "text": text,
+                                "step_id": m.get("step_id"), "why": m.get("why")})
+        msg = {**m, "_spoken": text}
+        if typ == "ask" and self.on_ask:
+            await self.on_ask({**msg, "unknown_id": m.get("unknown_id") or key})
+        elif typ == "intervene" and self.on_intervene:
+            await self.on_intervene(msg)
+        elif typ == "say" and self.on_say:
+            await self.on_say(msg)
+
     async def say(self, text: str, lang: Optional[str] = None, llm: bool = True) -> Optional[Turn]:
         """The user speaks: vad on/off, final transcript over WS, then the ElevenLabs LLM turn."""
         async with self._voice_lock:
@@ -258,6 +291,10 @@ class ClarosClient:
                          "lang": lang or self.lang, "event_id": f"u_{uuid.uuid4().hex[:8]}"})
         if not llm:
             return None
+        if self.hosted:  # hosted agent: the server reacts by pushing `say` (spoken by _speak_hosted)
+            turn = Turn(t=now_ms(), sent=text, kind="user")
+            self.turns.append(turn)
+            return turn
         turn = await self.llm_turn(text)
         await self.speak_agent(turn.text)
         return turn

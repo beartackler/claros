@@ -173,3 +173,14 @@ async def test_correction_readback_has_no_json(monkeypatch):
     r = await debrief.handle_debrief_answer(s, "yes, that's how it works")
     assert st.phase == "done" and "published" in r
     assert common.load_map("wf_ap_invoice").approved_by == ["u_anna"]
+
+
+def test_topic_of_matches_leftover_to_rule_by_wording():
+    from claros.knowledge import debrief
+    from claros.models import Guardrail, Unknown, WorkMap
+    wm = WorkMap(id="w", workflow_id="wf", name="x", guardrails=[
+        Guardrail(id="gd", text="Hold invoices whose amount matches one already paid; ask the supplier"),
+        Guardrail(id="gu", text="UK subsidiary invoices need a second approval")])
+    a = Unknown(id="a", type="deliberate", spoken_question="Do you hold same-amount repeats from that supplier too?")
+    b = Unknown(id="b", type="why", entity="gd", spoken_question="What tells you it's a double bill?")
+    assert debrief.topic_of(wm, a) == debrief.topic_of(wm, b) == "gd"

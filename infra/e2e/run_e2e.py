@@ -24,13 +24,16 @@ from playwright.async_api import async_playwright
 
 sys.path.insert(0, str(Path(__file__).parent))
 import erp  # noqa: E402
-from claros_client import API, ClarosClient, now_ms  # noqa: E402
+from claros_client import API, HOSTED, ClarosClient, now_ms  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "fixtures" / "e2e"
 STATE = OUT / "state.json"
 EXPERT = {"id": "expert@ostwind.example", "name": "Erika Expert", "role": "expert"}
 LEARNER = {"id": "learner@ostwind.example", "name": "Lea Learner", "role": "learner"}
+# second expert (stretch: "two experts, one task") — same task, one different judgment call (cost center)
+EXPERT2 = {"id": "expert2@ostwind.example", "name": "Max Mertens", "role": "expert"}
+X = {"expert": EXPERT, "cost_center": ("Production", "Production - OPP"), "tag": "", "answers": {}}
 
 
 def load_state() -> dict:
@@ -72,26 +75,40 @@ KEYS = {
 }
 
 
+ANSWERS2 = {
+    "capex": "Equipment over 5,000 is capex, so Plants and Machineries. I book it to Administration, not "
+             "Production, because the fixed-asset register is kept there.",
+}
+
+
 def pick_answer(text: str, phase: str) -> str:
     low = text.lower()
     scores = {k: len(re.findall(p, low)) for k, p in KEYS.items()}
     best = max(scores, key=lambda k: (scores[k], k == phase))
     if scores[best] == 0:
         best = phase
-    return ANSWERS[best]
+    return X["answers"].get(best) or ANSWERS[best]
 
 
 DEBRIEF_KB = [
     (r"4[,.]?999|below|under 5|less than 5", "No — below 5,000 it stays an expense, small tools is fine then."),
     (r"maint|repair|overhaul|service", "Maintenance or repairs stay an expense even above 5,000; only new equipment "
                                        "is capitalised."),
-    (r"duplicate|december|velt|double|hold|same amount|re-?bill",
-     "If the amount matches an invoice we already paid, put it on hold and ask the supplier before anything else."),
+    (r"new supplier|unknown supplier|never seen|don't know the supplier|first time",
+     "If I don't know the supplier, I stop and ask the controller before booking anything."),
+    (r"duplicate|december|velt|double|hold|same amount|re-?bill|release",
+     "Any supplier: if the amount matches an invoice we already paid, put it on hold and ask the supplier. I release "
+     "it myself once they confirm it's not a duplicate."),
     (r"uk|subsidiar|ltd|gbp|pound|second approval|controller|pennick",
      "Every invoice of the UK company goes to Frank, the controller, for second approval."),
     (r"capex|capital|asset|plant|machin|equipment|5[,.]?000|cost cent|production|expense head|tools",
      "Equipment over 5,000 net is capex: Plants and Machineries and the Production cost center."),
 ]
+
+
+TEACHBACK_CORRECTION = ("One detail: maintenance and repairs stay an expense even above 5,000 — only new equipment "
+                        "is capex.")
+_corrected: dict = {}
 
 
 def truth(variant: str) -> Optional[bool]:
@@ -110,8 +127,15 @@ def truth(variant: str) -> Optional[bool]:
     return None
 
 
+CONFLICT2 = ("New machines that go into the fixed-asset register I book to Administration, because the register is "
+             "kept there; spare parts and running costs go to Production like Erika does.")
+
+
 def debrief_reply(text: str) -> str:
     low = text.lower()
+    if X["tag"] and re.search(r"erika|another expert|other expert|; you |you (booked|book|used|chose|put)", low) \
+            and not re.search(r"did i get|how it works\??\s*$", low):
+        return CONFLICT2
     m = re.search(r"case \d+:(.*?)i would:(.*?)(\(\d+% sure\))", low, re.S)
     if m:
         want = truth(m.group(1))
@@ -120,8 +144,12 @@ def debrief_reply(text: str) -> str:
             return "Yes, correct."
         return ("No, that one must be stopped — it's a guardrail case." if want else
                 "No, that's fine to book normally, no guardrail applies there.")
-    if re.search(r"is (that|this) right\??\s*$|did i get (it|that) right|confirm", low) and len(low.split()) > 40:
-        return "Yes, that's right."
+    if re.search(r"is (that|this) right\??\s*$|did i get (it|that) right|how it works\??\s*$|confirm", low) \
+            and len(low.split()) > 40:
+        return TEACHBACK_CORRECTION if not _corrected.get("done") else "Yes, that's how it works."
+    if re.search(r"now:|now says|changed|anything else|is that how it works|is it right now", low):
+        _corrected["done"] = True
+        return "Yes, that's how it works."
     for pat, ans in DEBRIEF_KB:
         if re.search(pat, low):
             return ans
@@ -200,9 +228,9 @@ async def wait_asks(c: ClarosClient, n: int, max_s: float, answered: list) -> No
 async def phase_a() -> None:
     log("reset ERPNext")
     subprocess.run([str(ROOT / "infra/erpnext/reset.sh"), "restore"], check=True, capture_output=True)
-    c = await ClarosClient.create("capture", EXPERT, "en")
-    log("capture session", c.session_id)
-    save_state(capture_session=c.session_id)
+    c = await ClarosClient.create("capture", X["expert"], "en")
+    log("capture session", c.session_id, X["expert"]["name"])
+    save_state(**{f"capture_session{X['tag']}": c.session_id})
     phase = {"cur": "capex"}
     answered: list[dict] = []
 
@@ -245,9 +273,9 @@ async def phase_a() -> None:
                      erp.set_grid_link(page, "expense_account", "Plants and Mach",
                                        pick="Plants and Machineries - OPP", on_typing=D.typing), idle_s=2)
         await narrate("Booked to small tools, that's wrong for a compressor.")
-        await D.step("cost center → Production",
-                     erp.set_grid_link(page, "cost_center", "Production", pick="Production - OPP",
-                                       on_typing=D.typing), idle_s=1.5)
+        cc, cc_pick = X["cost_center"]
+        await D.step(f"cost center → {cc}",
+                     erp.set_grid_link(page, "cost_center", cc, pick=cc_pick, on_typing=D.typing), idle_s=1.5)
         await D.step("save", erp.save(page), "boundary", idle_s=0.3)
         await D.toast_frame("saved toast")
         await wait_asks(c, 1, 45, answered)
@@ -285,7 +313,7 @@ async def phase_a() -> None:
     ledger = await api("GET", f"/api/sessions/{c.session_id}/ledger")
     dur = round(time.monotonic() - t_start)
     await c.close()
-    summ = await dump("A", c, {"narration": narr, "answered": answered, "gate": gate, "ledger": ledger,
+    summ = await dump("A" + X["tag"], c, {"narration": narr, "answered": answered, "gate": gate, "ledger": ledger, "spoken": c.spoken,
                                "driver": D.notes, "final_doc": state, "duration_s": dur})
     asks = c.of_type("ask")
     log(f"done: {dur}s, frames={len(c.frames)}, asks={len(asks)}, answered={len(answered)}, "
@@ -299,9 +327,9 @@ async def phase_a() -> None:
 
 async def phase_b() -> None:
     st = load_state()
-    sid = st["capture_session"]
+    sid = st[f"capture_session{X['tag']}"]
     t0 = time.perf_counter()
-    c = ClarosClient(sid, "capture", EXPERT, "en")
+    c = ClarosClient(sid, "capture", X["expert"], "en")
     await c.connect()
     c.auto_voice = False
     await api("POST", f"/api/sessions/{sid}/end")
@@ -322,9 +350,71 @@ async def phase_b() -> None:
         mine = [w for w in wfs if sid in json.dumps(await api("GET", f"/api/workflows/{w['workflow_id']}"))]
         wid = mine[0]["workflow_id"] if mine else None
     log("workflow", wid)
-    save_state(workflow_id=wid, map_build_s=build_s)
+    save_state(**{f"workflow_id{X['tag']}": wid, f"map_build_s{X['tag']}": build_s})
     # debrief: same session switches to debrief mode (as the client does on `phase`)
     c.mode = "debrief"
+    if HOSTED:
+        c.auto_voice = True
+        turns = await hosted_debrief(c, sid, wid)
+    else:
+        turns = await custom_debrief(c, sid, wid)
+    await asyncio.sleep(2)
+    wm = await api("GET", f"/api/workflows/{wid}") if wid else None
+    cov = await api("GET", f"/api/workflows/{wid}/coverage") if wid else None
+    await c.close()
+    d = OUT / ("B" + X["tag"])
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "workmap.json").write_text(json.dumps(wm, indent=2, ensure_ascii=False))
+    await dump("B" + X["tag"], c, {"map_build_s": build_s, "built": built, "debrief": turns, "coverage": cov,
+                        "workflow_id": wid, "spoken": c.spoken})
+    if wm:
+        log(f"steps={len(wm.get('steps', []))} guardrails={len(wm.get('guardrails', []))} "
+            f"open={len(wm.get('open_unknowns', []))} coverage={cov}")
+        for g in wm.get("guardrails", []):
+            log("  G", g["id"], g.get("predicate"), g.get("fuzzy"), g.get("text")[:90])
+        log("  canonical_vars", wm.get("canonical_vars"))
+
+
+async def hosted_debrief(c: ClarosClient, sid: str, wid: Optional[str]) -> list[dict]:
+    """Hosted dialog: hello mode=debrief → the server pushes `say`; the expert answers with final transcripts."""
+    n0 = len(c.spoken)
+    await c.send({"type": "hello", "session_id": sid, "mode": "debrief", "user": X["expert"], "lang": "en",
+                  "workflow_id": wid})
+    turns: list[dict] = []
+    _corrected.clear()
+    for _ in range(16):
+        # wait for the server's next utterance(s) to be spoken, then ~3 s of quiet (teach-back = several segments)
+        end = time.monotonic() + 90
+        while time.monotonic() < end and len(c.spoken) == n0:
+            await asyncio.sleep(0.3)
+        last = len(c.spoken)
+        quiet_since = time.monotonic()
+        # quiet = nothing new spoken AND the agent is not mid-utterance (a teach-back is several `say` segments)
+        while time.monotonic() - quiet_since < 3.0 and time.monotonic() < end:
+            await asyncio.sleep(0.3)
+            if len(c.spoken) != last or c.agent_speaking:
+                last, quiet_since = len(c.spoken), time.monotonic()
+        batch = c.spoken[n0:]
+        n0 = len(c.spoken)
+        if not batch:
+            log("  DEBRIEF: no reply from the server")
+            break
+        text = " ".join(b["text"] for b in batch)
+        log(f"  CLAROS ({','.join(sorted({b['kind'] for b in batch}))}): {text!r}")
+        if re.search(r"published|that's everything|nothing left", text, re.I):
+            turns.append({"claros": text, "kinds": [b["kind"] for b in batch],
+                          "steps": [b.get("step_id") for b in batch if b.get("step_id")]})
+            break
+        reply = debrief_reply(text)
+        turns.append({"claros": text, "kinds": [b["kind"] for b in batch],
+                      "steps": [b.get("step_id") for b in batch if b.get("step_id")], "expert": reply})
+        log(f"  EXPERT: {reply!r}")
+        await asyncio.sleep(0.8)
+        await c.say(reply)
+    return turns
+
+
+async def custom_debrief(c: ClarosClient, sid: str, wid: Optional[str]) -> list[dict]:
     await c.send({"type": "hello", "session_id": sid, "mode": "debrief", "user": EXPERT, "lang": "en",
                    "workflow_id": wid})
     await asyncio.sleep(1)
@@ -338,21 +428,7 @@ async def phase_b() -> None:
             break
         line = debrief_reply(tr.text or "")
         await asyncio.sleep(0.3)
-    await asyncio.sleep(2)
-    wm = await api("GET", f"/api/workflows/{wid}") if wid else None
-    cov = await api("GET", f"/api/workflows/{wid}/coverage") if wid else None
-    await c.close()
-    d = OUT / "B"
-    d.mkdir(parents=True, exist_ok=True)
-    (d / "workmap.json").write_text(json.dumps(wm, indent=2, ensure_ascii=False))
-    await dump("B", c, {"map_build_s": build_s, "built": built, "debrief": turns, "coverage": cov,
-                        "workflow_id": wid})
-    if wm:
-        log(f"steps={len(wm.get('steps', []))} guardrails={len(wm.get('guardrails', []))} "
-            f"open={len(wm.get('open_unknowns', []))} coverage={cov}")
-        for g in wm.get("guardrails", []):
-            log("  G", g["id"], g.get("predicate"), g.get("fuzzy"), g.get("text")[:90])
-        log("  canonical_vars", wm.get("canonical_vars"))
+    return turns
 
 
 # ---------------- Phase C: learner ----------------
@@ -440,6 +516,7 @@ async def phase_c(lang: str = "en") -> None:
         log(f"interventions on 6,100: {len(iv_6100)}", [m.get("text") for m in iv_6100])
         results["intervene_6100"] = iv_6100
         results["intents"] = intents
+        results["spoken"] = c.spoken
         await b.close()
     await c.close()
     await api("POST", f"/api/sessions/{c.session_id}/end")
@@ -448,6 +525,9 @@ async def phase_c(lang: str = "en") -> None:
 
 async def main() -> None:
     ph = (sys.argv[1] if len(sys.argv) > 1 else "A").upper()
+    if ph in ("A2", "B2"):
+        X.update(expert=EXPERT2, cost_center=("Administration", "Administration - OPP"), tag="2", answers=ANSWERS2)
+        ph = ph[0]
     if ph == "A":
         await phase_a()
     elif ph == "B":

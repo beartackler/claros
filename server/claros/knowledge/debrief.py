@@ -137,6 +137,7 @@ class DebriefState:
     exam_idx: int = 0
     seq: int = 0
     probed: bool = False
+    topics: list = field(default_factory=list)  # rule/step each asked question was about (one question per topic)
 
 
 _states: dict[str, DebriefState] = {}
@@ -573,6 +574,21 @@ def budget_spent(st: DebriefState, now: Optional[float] = None) -> bool:
     return st.asked >= CONFIG["max_questions"] or ((now or d.now_ms()) - st.started_ms) / 1000 > CONFIG["max_seconds"]
 
 
+def topic_of(wm: WorkMap, u: Unknown) -> str:
+    """The rule (guardrail id) or step a question is about; ledger leftovers are matched to a rule by wording."""
+    if u.entity and (guardrail_by_id(wm, u.entity) or step_by_id(wm, u.entity)):
+        return u.entity
+    words = _toks(" ".join(x for x in (u.spoken_question, u.hypothesis, u.resolution) if x))
+    qtext = {q.id: q.text for q in wm.quotes}
+    best, sc = None, 0.0
+    for g in wm.guardrails:
+        gw = _toks(g.text) | {w for qid in g.quote_ids for w in _toks(qtext.get(qid, ""))}
+        j = len(words & gw) / max(1, min(len(words), len(gw)))
+        if j > sc:
+            best, sc = g.id, j
+    return best if best and sc >= 0.3 else (u.entity or u.id)
+
+
 def pick_next(wm: WorkMap, st: DebriefState, expert_id: Optional[str], expert_name: Optional[str]
               ) -> Optional[Unknown]:
     """Core items first (secondary probes only while fewer than min_questions were asked); then ≤learner_cap
@@ -581,7 +597,10 @@ def pick_next(wm: WorkMap, st: DebriefState, expert_id: Optional[str], expert_na
         return None
     q = plan(wm, expert_id, expert_name, include_secondary=st.core_asked < CONFIG["min_questions"])
     core = [u for u in q if not is_learner_item(u)]
-    if core:
+    fresh = [u for u in core if topic_of(wm, u) not in st.topics]
+    if fresh:  # e2e: two questions in a row about the same double-billing rule
+        return fresh[0]
+    if core and st.core_asked < CONFIG["min_questions"]:
         return core[0]
     learner = [u for u in q if is_learner_item(u)]
     if learner and st.learner_asked < CONFIG["learner_cap"]:
@@ -991,6 +1010,7 @@ async def next_debrief_utterance(session: Any) -> str:
             u.status = "asked"
             st.current = u.id
             st.asked += 1
+            st.topics.append(topic_of(wm, u))
             if is_learner_item(u):
                 st.learner_asked += 1
             else:
