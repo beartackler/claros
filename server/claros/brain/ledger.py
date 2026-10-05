@@ -714,17 +714,29 @@ class Ledger:
         u = self.unknowns.get(uid) if uid else self.last_asked()
         if u is None:
             return None
+        if self.mark_answered(u, text, utterance_id=utterance_id, source=source):
+            await self.extract_answer(u, text, emit=emit)
+        return u
+
+    def mark_answered(self, u: Unknown, text: str, *, utterance_id: Optional[str] = None,
+                      source: str = "expert") -> bool:
+        """Synchronous half of record_answer. False when this text is already recorded (the dialog ack and the
+        ledger's own resolution both see the same utterance: live resolution was the answer twice)."""
+        if u.status == "answered" and text in (u.resolution or ""):
+            return False
         u.resolution = (u.resolution + " " + text) if (u.status == "answered" and u.resolution) else text
         u.status = "answered"
         u.resolution_source = source
         u.expires_t = None
         if utterance_id:
             u.answer_utterance_ids.append(utterance_id)
+        return True
+
+    async def extract_answer(self, u: Unknown, text: str, *, emit: bool = True) -> None:
         u.extracted_rule = await extract_rule(text, u)
         deps.store_log(self.session_id, "unknown.answered", u.model_dump(mode="json"))
         if emit:
             await self.emit()
-        return u
 
     def strike_last(self) -> Optional[Unknown]:
         ans = [u for u in self.unknowns.values() if u.status == "answered" and u.resolution_source == "expert"]

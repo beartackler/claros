@@ -209,9 +209,11 @@ async def _capture_turn(sid: str, intent: str, text: str, lang: str, pending: An
         target = pending or lg.last_asked(180_000)
         if target is None:
             return {"intent": "narration"}  # talking about the screen, not to Claros
-        await asyncio.sleep(0)  # let the ledger's own resolution run first
-        if target.status != "answered":
-            await lg.record_answer(target.id, text)
+        # rule extraction takes up to ~7 s: ack now, extract in the background (live: stopped at 115.7 s, "Got it"
+        # at 122.9 s). Marking it answered first also keeps the ledger's own resolution from recording it twice.
+        if lg.mark_answered(target, text):
+            lg.meta.setdefault(target.id, {})["extract"] = asyncio.get_running_loop().create_task(
+                lg.extract_answer(target, text))
         key = {"answer": "ack", "correction": "ack_correction", "confirm": "ack_confirm"}[intent]
         return {"intent": intent, "said": await _speak(sid, L.phrase(key, lang), "ack")}
     if intent == "not_now":

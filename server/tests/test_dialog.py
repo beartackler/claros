@@ -207,6 +207,28 @@ def test_capture_controls_and_ack(offline):
     assert says(offline.sent)[-1]["text"] == "Thanks! I'm putting your map together, then I'll ask a few questions."
 
 
+def test_ack_does_not_wait_for_rule_extraction_and_answer_recorded_once(offline, monkeypatch):
+    """Live: "Got it" came 7 s after the expert stopped (it awaited GLiNER2 + LLM), and the resolution was
+    the answer twice (dialog ack + the ledger's own resolution both recorded it)."""
+    async def slow_extract(text, u=None):
+        await asyncio.sleep(5)
+
+    monkeypatch.setattr(ledger_mod, "extract_rule", slow_extract)
+    lg = ledger_mod.get_ledger("ack1")
+    from tests.test_brain import ev
+    u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
+    lg.mark_asked(u.id)
+    p = {"role": "user", "text": "Because that department pays for it", "event_id": "a-1"}
+
+    async def both():
+        r = await asyncio.wait_for(dialog.on_utterance("ack1", p), 1.0)
+        await asyncio.wait_for(lg.on_utterance(p), 1.0)  # same text already recorded: no second copy, no wait
+        return r
+    r = run(both())
+    assert r["said"] and lg.unknowns[u.id].status == "answered"
+    assert lg.unknowns[u.id].resolution == "Because that department pays for it"
+
+
 # ---------------- context + vars + lookup ----------------
 
 def test_context_update_compact_and_throttled(offline, monkeypatch):
