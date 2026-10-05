@@ -98,6 +98,7 @@ class Ledger:
         self.context_notes: list[ContextNote] = []
         self.started_ms = deps.now_ms()
         self.asked_ids: list[str] = []
+        self.held_until = 0.0  # the gate's min gap after an ask: waiting it out isn't staleness
         self.off_record = False
         self.field_history: dict[str, list[str]] = {}
         self.seen_utterances: set[str] = set()
@@ -118,7 +119,7 @@ class Ledger:
         cls_w = CLASS_WEIGHT.get(m.get("class", ""), w)
         crit = max(w, cls_w)  # criticality: guardrail 3, decision 2, step/slip 1
         sal = m.get("salience", 0.6)
-        rec = math.exp(-max(0.0, now - u.created_t) / RECENCY_TAU_MS)
+        rec = math.exp(-max(0.0, now - max(u.created_t, self.held_until)) / RECENCY_TAU_MS)
         unc = 1.0 - (u.hypothesis_confidence if u.hypothesis else 0.0)
         voi = sal * rec * (0.6 + 0.4 * unc)  # EVPI proxy: confident hypotheses are worth less (but still confirm)
         return round(max(0.0, voi * crit - self.redundancy(u)), 4)
@@ -186,7 +187,7 @@ class Ledger:
         now = now if now is not None else deps.now_ms()
         out = []
         for u in self.unknowns.values():
-            if u.status == "open" and u.expires_t is not None and now >= u.expires_t:
+            if u.status == "open" and u.expires_t is not None and now >= max(u.expires_t, self.held_until + EXPIRE_MS):
                 u.status = "deferred"
                 out.append(u)
         return out

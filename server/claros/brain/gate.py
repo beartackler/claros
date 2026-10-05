@@ -308,6 +308,9 @@ class Gate:
                 pass
             lg.mark_asked(u.id)
             s.asks.append(now)
+            # the min gap now holds every other question back: their decay and expiry restart when it lifts, or
+            # one born alongside this ask (60 s expiry, 60 s recency τ) can never clear τ after the 45 s gap
+            lg.held_until = now + c.min_gap_ms
             why = self.why(sid, lg, u, now)
             lg.meta.setdefault(u.id, {})["why"] = why
             entry["why"] = why

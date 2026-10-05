@@ -270,6 +270,18 @@ def test_gate_budget_and_gap(offline):
     assert r["decision"] == "blocked" and any("budget" in x for x in r["reasons"])
 
 
+def test_question_born_with_an_ask_survives_the_min_gap(offline):
+    """min gap 45 s vs recency τ 60 s and 60 s expiry: a second unknown opened alongside an ask decayed and
+    expired while the gap held it back."""
+    g, lg = _gate_ready(offline)
+    assert run(g.evaluate("g1"))["decision"] == "ask_now"
+    u2 = run(lg.on_events([ev(5, "escalate", field="Approver", new="CFO", summary="Sent for approval")]))[0]
+    fresh = lg.priority(u2)
+    offline.clock.t += 61_000
+    lg.expire()
+    assert u2.status == "open" and lg.priority(u2) == pytest.approx(fresh, rel=0.3)
+
+
 def test_gate_snooze_and_reading_grace(offline):
     g, lg = _gate_ready(offline)
     g.snooze("g1")
