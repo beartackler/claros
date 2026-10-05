@@ -317,3 +317,24 @@ def test_relay_takes_newest_pending_line():
     from claros.brain.llm_endpoint import relay
     r = relay(_relay_body(("assistant", "hi"), ("user", "⟦First.⟧"), ("user", "um"), ("user", "⟦Second.⟧")))
     assert r.text == "Second."
+
+
+def test_capture_question_to_claros_gets_an_answer(offline, monkeypatch):
+    """Relay: the agent never answers on its own, so a question mid-capture must not end in silence."""
+    from claros.brain import intents
+
+    async def classify(mode, text, ctx):
+        return intents.IntentResult(intent="question_to_claros", confidence=0.9, backend="test")
+
+    replies = iter(["That's the Purchase Invoice form, still in Draft.", "UNSURE"])
+
+    async def llm(messages, **k):
+        assert "Question:" in messages[-1]["content"]
+        return next(replies)
+
+    monkeypatch.setattr(dialog, "classify_intent", classify)
+    monkeypatch.setattr(deps, "llm_chat", llm)
+    run(dialog.on_utterance("q1", {"role": "user", "event_id": "a", "text": "Claros, what screen is this?"}))
+    assert says(offline.sent)[-1]["text"] == "That's the Purchase Invoice form, still in Draft."
+    run(dialog.on_utterance("q1", {"role": "user", "event_id": "b", "text": "Claros, why do I do that?"}))
+    assert says(offline.sent)[-1]["text"].startswith("I'm not sure yet")

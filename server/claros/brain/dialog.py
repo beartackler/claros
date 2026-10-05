@@ -220,8 +220,25 @@ async def _capture_turn(sid: str, intent: str, text: str, lang: str, pending: An
             pending.status = "open"
             pending.expires_t = deps.now_ms() + 300_000 + 45_000
         return {"intent": intent, "said": await _speak(sid, L.phrase("later", lang), "ack", settle=False)}
-    # narration → silence; question_to_claros → the hosted agent answers itself (prompt rule c)
-    return {"intent": intent}
+    if intent == "question_to_claros":
+        return {"intent": intent, "said": await _speak(sid, await answer_from_screen(sid, text, lang), "ack")}
+    return {"intent": intent}  # narration → silence
+
+
+async def answer_from_screen(sid: str, question: str, lang: str) -> str:
+    """Relay has no free-talking agent: a question to Claros mid-capture gets a short answer grounded in the
+    screen and what was said so far, or an honest "not sure yet" (never a guess about the expert's own rules)."""
+    sys_ = (f"You are Claros, an apprentice watching an expert work. Answer their question in at most 25 words, in "
+            f"{L.LANG_NAMES.get(lang, 'English')}, using only the context. If the context doesn't answer it, or it "
+            f"asks about their own rules or reasons, reply exactly: UNSURE")
+    try:
+        out = await asyncio.wait_for(deps.llm_chat(
+            [{"role": "system", "content": sys_},
+             {"role": "user", "content": f"Context: {context_text(sid) or 'none'}\nQuestion: {question}"}]), 4.0)
+    except Exception:  # noqa: BLE001
+        out = None
+    out = (out or "").strip()
+    return L.phrase("not_sure", lang) if not out or "UNSURE" in out else L.clamp_words(out, 30)
 
 
 async def _debrief_turn(sid: str, sess: Any, intent: str, text: str) -> dict:
@@ -269,7 +286,7 @@ async def kick_debrief(sid: str) -> list[dict]:
 
 async def _learn_turn(sid: str, sess: Any, intent: str, text: str) -> dict:
     if intent == "off_topic" and "?" not in (text or ""):
-        return {"intent": intent}  # chatter: hosted agent skips. A real question goes to the tutor (it has the map)
+        return {"intent": intent}  # chatter: stay quiet. A real question goes to the tutor (it has the map)
     fn = deps.knowledge_attr("tutor.handle_intent")
     if not fn:
         return {"intent": intent}
