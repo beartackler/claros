@@ -1,6 +1,7 @@
 """Capture v2.2: action-phrased live questions, `why` on asks, `signals`, `looked_up` (offline, deps mocked)."""
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
@@ -177,3 +178,30 @@ def test_typing_run_on_one_field_is_one_question(offline):
     assert len(u.about_event_ids) == 4
     m = lg.meta[u.id]["event"]
     assert (m.old, m.new) == ("Tools and Small Equipment - OPP", "Plants and Machineries - OPP")
+
+
+def test_typing_run_rephrases_from_the_latest_value(offline, monkeypatch):
+    """Replay 2026-10-05: the question was worded for the half-typed "Small Equipment" and kept that wording
+    after the expert finished typing "Plants and Machineries"."""
+    async def llm(messages, **k):
+        if "ONE short spoken question" in messages[0]["content"]:
+            new = json.loads(messages[-1]["content"])["new"] or ""
+            word = "small equipment" if "Small" in new else "plant and machinery"
+            return json.dumps({"action": f"You switched it to {word}",
+                               "question": f"You switched it to {word} — why?"})
+        return None
+
+    monkeypatch.setattr(deps, "llm_chat", llm)
+    lg = ledger_mod.get_ledger("p_rephrase")
+
+    async def go():
+        u = (await lg.on_events([ev(1, "edit", field="Expense Head", old="Tools and Small Equipment - OPP",
+                                    new="Small Equipment", source="typed")]))[0]
+        assert "small equipment" in u.spoken_question
+        await lg.on_events([ev(2, "edit", field="Expense Head", old="Small Equipment",
+                               new="Plants and Machineries - OPP", source="typed")])
+        assert "llm_q" not in lg.meta[u.id]  # stale wording dropped right away (template until re-phrased)
+        await asyncio.sleep(1.0)  # the 0.6 s settle in Ledger._rethink, then the re-phrase
+        return u
+
+    assert run(go()).spoken_question == "You switched it to plant and machinery — why?"

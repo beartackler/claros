@@ -284,6 +284,9 @@ def test_vision_template_and_out_of_order():
     assert cc.value == "Production"  # newer OCR value wins over the older vision frame
     assert tr.kinds["id:ACC-PINV-0004"]["cost center"] == "select"
     assert tr.apply_vision(0, vs, lines0) is None  # stale/duplicate seq dropped
+    # an empty read (live: a mid-edit frame came back with nothing) must not wipe the screen's template
+    assert tr.apply_vision(2, VisionState(), lines0) is None
+    assert tr.templates["id:ACC-PINV-0004"].vs.fields
 
 
 # ---------------- pipeline (mocked OCR + LLM) ----------------
@@ -476,3 +479,35 @@ async def test_register_wires_bus(monkeypatch):
 def test_field_model_roundtrip():
     f = Field_(label="Kostenstelle", value="Verwaltung", bbox=[1, 2, 3, 4])
     assert ScreenState(seq=1, t=0, fields=[f]).model_dump()["fields"][0]["label"] == "Kostenstelle"
+
+
+async def test_vision_serves_newest_must_frame_first(scripted):
+    """Live: boundary frames from earlier screens queued oldest-first; the invoice waited 40 s for its template."""
+    bus = Bus()
+    seen, gate = [], asyncio.Event()
+
+    async def vision(msgs, jpeg):
+        seen.append(msgs)
+        await gate.wait()
+        return None
+
+    p = pl.SessionPipeline("s1", bus, vision=vision, persist=False)
+    scripted += [form(title_id=f"X-PINV-{1000 + i}") for i in range(4)]
+    for i in range(4):  # new record each frame → must-keep jobs
+        await p.on_keyframe({"t": i * 100, "seq": i, "reason": "boundary", "jpeg_b64": _jpeg()})
+    await asyncio.sleep(0.05)
+    assert len(seen) == 1 and [j.seq for j in p.pending] == [1, 2, 3]
+    gate.set()
+    await asyncio.sleep(0.05)
+    assert len(seen) == 2 and "X-PINV-1003" in seen[-1][-1]["content"].split("OCR lines:")[1] and not p.pending
+    p.close()
+
+
+def test_panel_over_an_amount_is_not_an_edit():
+    """Live: a floating onboarding card covered the total; OCR read "Review Accounts Settings" as its value."""
+    frames = [(0, form()), (2000, form(typed_extra="Review Accounts Settings")), (4000, form()),
+              (5000, form(typed_extra="12.400,00 € Getting Started")), (5500, form()),
+              (6000, form(typed_extra="13.000,00 €"))]
+    evs, _ = run_seq(frames, [{"t": t, "kind": "typing", "tiles_changed": 3} for t in (1500, 3500, 4800, 5400, 5900)])
+    edits = [(e.kind, e.old, e.new) for e in evs if e.field == "Grand Total"]
+    assert edits == [("edit", "12.400,00 €", "13.000,00 €")]

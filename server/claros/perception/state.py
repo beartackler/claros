@@ -573,6 +573,9 @@ class StateTracker:
         if seq <= self.last_vision_seq:
             log.info("dropping stale vision result seq=%s (applied %s)", seq, self.last_vision_seq)
             return None
+        if not (vs.fields or vs.tables or vs.view or vs.entity_type or vs.entity_id):
+            log.info("empty vision result seq=%s: keeping the current template", seq)
+            return None  # an empty read must not replace this screen's template (it would wipe every field)
         self.last_vision_seq = seq
         if vs.app and vs.app.strip() and vs.app.strip().lower() not in ("null", "none", "unknown"):
             self.app_votes[vs.app.strip()] = self.app_votes.get(vs.app.strip(), 0) + 1

@@ -104,6 +104,19 @@ def same_value(p: Any, f: Any) -> bool:
     return _same_text(p.value or "", f.value or "")
 
 
+def _covered(p: Any, f: Any) -> bool:
+    """An amount "changed" to plain words is a panel or popup drawn over the field (live: ERPNext's Getting Started
+    card read as "Total (EUR) € 8.400,00 → Review Accounts Settings"), not an edit."""
+    def words(x: Any) -> bool:
+        return _num_of(getattr(x, "normalized", None)) is None and not any(ch.isdigit() for ch in x.value or "")
+    num_p, num_f = (_num_of(getattr(x, "normalized", None)) is not None for x in (p, f))
+    if num_p != num_f and (p.value or "").strip() and (f.value or "").strip():
+        a, b = (p.value.strip(), f.value.strip()) if num_p else (f.value.strip(), p.value.strip())
+        if a in b and len(b) > len(a):  # "€ 8.400,00" ↔ "€ 8.400,00 Getting Started": same amount, panel text on it
+            return True
+    return (num_p and words(f)) or (num_f and words(p))  # covered, or uncovered again
+
+
 class Differ:
     def __init__(self, session_id: str = "") -> None:
         self.session_id = session_id
@@ -171,7 +184,7 @@ class Differ:
                 continue
             if p is None or f.bbox is None or p.bbox is None:  # newly seen / scrolled in or off: not an edit
                 continue
-            if (p.value or "") != (f.value or "") and not same_value(p, f):
+            if (p.value or "") != (f.value or "") and not same_value(p, f) and not _covered(p, f):
                 changes.append((k, p, f))
         win = self._window(cur.t)
         typing = [a for a in win if a.kind == "typing"]
