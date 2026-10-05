@@ -293,12 +293,14 @@ class Ledger:
         """A value that flipped and flipped back (a dropdown over another field, a misread) is not a decision:
         drop open, not-yet-asked questions about that field (live: "why did you set the delivery terms?")."""
         fld = e.canonical or e.field
-        if not fld:
-            return
+        if not fld or e.source == "system":
+            return  # live: an app-side 'undo' (autofill flipping a neighbour) dropped the expense-head question
         ids = {x.id for x in self.events if (x.canonical or x.field) == fld and x.kind in ("edit", "select")
                and (x.entity_id or x.entity_type) == (e.entity_id or e.entity_type)}
         for u in self.unknowns.values():
-            if u.status == "open" and u.about_event_ids and set(u.about_event_ids) <= ids:
+            first = self.meta.get(u.id, {}).get("event")
+            if u.status == "open" and u.about_event_ids and set(u.about_event_ids) <= ids \
+                    and first is not None and first.old == e.new:  # really back where it started
                 u.status = "dropped"
 
     async def _requirement_guard(self, e: ScreenEvent) -> Optional[Unknown]:

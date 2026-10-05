@@ -193,6 +193,18 @@ def test_ledger_classifies_slip_and_guardrail():
     assert lg.heuristic_class(ledger_mod._ev(ev(3, "edit", field="Qty", old="1", new="1", source="system"))) == "routine"
 
 
+def test_only_a_real_revert_drops_the_question(offline):
+    """Live: a system-sourced 'undo' on the same field dropped the expense-head question."""
+    lg = ledger_mod.get_ledger("rv1")
+    kw = dict(field="Expense Head")
+    u = run(lg.on_events([ev(1, "edit", old="Tools", new="Plants", source="typed", **kw)]))[0]
+    run(lg.on_events([ev(2, "undo", old="Plants", new="Tools", source="system", **kw)]))
+    run(lg.on_events([ev(3, "undo", old="Plants", new="Furniture", source="typed", **kw)]))
+    assert lg.unknowns[u.id].status == "open"
+    run(lg.on_events([ev(4, "undo", old="Plants", new="Tools", source="typed", **kw)]))
+    assert lg.unknowns[u.id].status == "dropped"
+
+
 def test_off_record_ignores_events(offline):
     offline.get_session("s4").off_record = True
     assert run(ledger_mod.get_ledger("s4").on_events([ev(1, "hold")])) == []
