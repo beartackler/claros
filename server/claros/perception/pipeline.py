@@ -270,8 +270,10 @@ class SessionPipeline:
             if wait > 0:
                 await asyncio.sleep(min(wait, 5.0))
                 continue
-            job = min(self.pending, key=lambda j: j.seq)
-            self.pending.remove(job)
+            # newest first: an older frame's result is stale once a newer one is applied, and serving a backlog
+            # oldest-first left a just-opened screen without a template for 40 s (live: edits read only at Save)
+            job = max(self.pending, key=lambda j: j.seq)
+            self.pending.clear()
             self.vision_calls.append(time.monotonic())
             self.in_flight += 1
             try:
@@ -279,10 +281,14 @@ class SessionPipeline:
                 vs = await self.vision(msgs, job.jpeg)
                 if vs is not None:
                     async with self.lock:
+                        had_tpl = self.tracker.current_key in self.tracker.templates
                         st = self.tracker.apply_vision(job.seq, vs, job.lines)
                         if st is not None:
                             prev = self.published
-                            if job.seq < st.seq and prev is not None and prev.entity_id == st.entity_id:
+                            # only when this screen had no template: then the cheap path couldn't see edits yet.
+                            # With one, it already reported them and re-diffing an older frame repeats each
+                            # change (a repeat reads as "set it back" and drops the real question)
+                            if not had_tpl and job.seq < st.seq and prev is not None and prev.entity_id == st.entity_id:
                                 # vision read an older frame of this screen: re-baseline the diff on that frame
                                 # so a change made during the vision latency (e.g. a tag added right after
                                 # opening) is still an edit event, not hidden behind unreliable OCR pairs

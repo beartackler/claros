@@ -472,8 +472,8 @@ class Ledger:
         if not isinstance(d, dict):
             return
         q, a = valid_phrasing(d.get("question"), d.get("action"), lang)
-        if q:
-            m = self.meta.setdefault(u.id, {})
+        m = self.meta.setdefault(u.id, {})
+        if q and m.get("event", e) is e:  # stale if more typing merged in while the model was phrasing
             m["llm_q"], m["action"] = q, a
 
     def _ctx(self, e: ScreenEvent) -> dict:
@@ -495,11 +495,42 @@ class Ledger:
             merged = e.model_copy(update={"old": (first.old if first is not None and first.old else e.old)})
             u.about_event_ids.append(e.id)
             m["event"] = merged
+            if first is not None and first.new != merged.new:
+                # wording and reason guess were written for a half-typed value ("small equipment" while the
+                # expert was still typing "Plants and Machinery"): drop them and redo them for the latest value
+                m.pop("llm_q", None)
+                m.pop("action", None)
+                u.hypothesis, u.hypothesis_confidence = None, 0.0
+                self._rethink(u)
             if merged.old != merged.new:
                 u.spoken_question = self.make_question(u, merged)
             u.created_t, u.expires_t = now, now + EXPIRE_MS
             return True
         return False
+
+    def _rethink(self, u: Unknown) -> None:
+        """Re-run hypothesis + phrasing on the field's latest merged event (latest run wins)."""
+        m = self.meta.setdefault(u.id, {})
+        old = m.get("rethink")
+        if old is not None and not old.done():
+            old.cancel()
+
+        async def run() -> None:
+            await asyncio.sleep(0.6)  # typing comes in bursts: wait for the run to settle
+            e = m.get("event")
+            if e is None or u.status != "open":
+                return
+            try:
+                await asyncio.wait_for(asyncio.gather(self._hypothesize(u, e), self._phrase(u, e)), 8.0)
+            except Exception:  # noqa: BLE001
+                deps.log.debug("rethink failed", exc_info=True)
+            if m.get("event") is e:
+                u.spoken_question = self.make_question(u, e)
+
+        try:
+            m["rethink"] = asyncio.get_running_loop().create_task(run())
+        except RuntimeError:
+            pass
 
     async def _open_for(self, e: ScreenEvent, cls: str) -> Optional[Unknown]:
         utype, hyp, hconf, th = self._shape(e, cls)
@@ -584,7 +615,8 @@ class Ledger:
                 except Exception:  # noqa: BLE001
                     deps.log.debug("question phrasing failed", exc_info=True)
             await asyncio.gather(hyp(), phrase())
-            u.spoken_question = self.make_question(u, e)
+            # a later keystroke may have merged in meanwhile: phrase the latest value, not the first one
+            u.spoken_question = self.make_question(u, self.meta.get(u.id, {}).get("event") or e)
         self.meta.setdefault(u.id, {})["tag"] = self.tag(u)
         if u.status == "open":
             now = deps.now_ms()
@@ -599,6 +631,8 @@ class Ledger:
             return
         rep, share = await cluster_top(hyps)
         m = self.meta.setdefault(u.id, {})
+        if m.get("event", e) is not e:
+            return  # guessed for a value the expert has since typed over
         m["hypotheses"] = hyps
         m["hypothesis_share"] = share
         if share >= 0.7 or share > u.hypothesis_confidence:
