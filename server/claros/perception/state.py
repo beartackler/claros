@@ -467,6 +467,9 @@ class StateTracker:
                 # grid columns: aligned cell lookup below; checkbox values aren't text; a "value" that is another
                 # field's label is a label-above-label mis-pair
                 continue
+            lb = tpl.label_boxes.get(k) if tpl else None
+            if lb is not None and abs(p.label_bbox[0] - lb[0]) > max(40, 2 * lb[3]):
+                continue  # same word outside the field's column (a nav item): see the template path below
             visible[k] = Field_(label=p.label, value=p.value, bbox=p.value_bbox,
                                 normalized=normalize(p.value, ui_lang))
         # 1b) grid cells: value under the column header (row i) on this frame
@@ -506,8 +509,12 @@ class StateTracker:
                     if tpl.seq == seq:
                         visible[k] = Field_(label=vf.label, value=vf.value, bbox=None)
                     continue
-                lab_now = _find_label(lines, vf.label)
                 lb = tpl.label_boxes.get(k)
+                lab_now = _find_label(lines, vf.label, near_x=lb[0] if lb else None)
+                if lab_now is not None and lb is not None and abs(lab_now.bbox[0] - lb[0]) > max(40, 2 * lb[3]):
+                    # scrolling moves a label up/down, never sideways: this is the same word elsewhere (live: the
+                    # form's "Supplier" scrolled off, the nav menu's "Supplier" stood in → value read from a heading)
+                    lab_now = None
                 if vf.bbox and lab_now is not None and lb is not None:
                     dx, dy = lab_now.bbox[0] - lb[0], lab_now.bbox[1] - lb[1]
                     vb = [vf.bbox[0] + dx, vf.bbox[1] + dy, vf.bbox[2], vf.bbox[3]]
@@ -675,13 +682,13 @@ def _cell_below(lines: list[OcrLine], header: str, row: int) -> Optional[OcrLine
     return rows[row] if row < len(rows) else None
 
 
-def _find_label(lines: list[OcrLine], label: str) -> Optional[OcrLine]:
+def _find_label(lines: list[OcrLine], label: str, near_x: Optional[float] = None) -> Optional[OcrLine]:
     k = label_key(label)
     if not k:
         return None
-    for ln in lines:
-        if label_key(ln.text) == k:
-            return ln
+    exact = [ln for ln in lines if label_key(ln.text) == k]
+    if exact:  # the same word can be a nav item and a field label: prefer the one in the field's column
+        return min(exact, key=lambda ln: abs(ln.bbox[0] - near_x)) if near_x is not None else exact[0]
     for ln in lines:
         lk = label_key(ln.text)
         if lk.startswith(k + ":") or lk.startswith(k + " :"):

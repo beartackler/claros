@@ -639,3 +639,19 @@ async def test_rebaseline_on_other_screen_does_not_reopen(scripted):
     await p.drain()
     assert [e.kind for batch in bus.of("screen.events") for e in batch].count("open") == 2
     p.close()
+
+
+def test_nav_item_with_a_field_labels_name_is_not_the_field():
+    """Live: the form scrolled "Supplier" off-screen; the nav menu's "Supplier" stood in and the value was read
+    from a section heading ("Supplier → Purchase Invoice Scan Barcode")."""
+    tr = StateTracker()
+    lines0 = form() + [L("Due Date", 650, 176), L("31.10.2026", 660, 208)]
+    tr.update(0, 0, lines0, DIMS)
+    vs = VisionState(view="Purchase Invoice form", entity_type="Purchase Invoice", entity_id="ACC-PINV-0004",
+                     fields=[VField(label="Supplier", value="Global Office Supply Ltd", bbox=[60, 208, 400, 236])])
+    tr.apply_vision(0, vs, lines0)
+    scrolled = [L("Purchase Invoice ACC-PINV-0004", 30, 90, w=450, h=32), L("Supplier", 400, 150),
+                L("Scan Barcode", 410, 182), L("Due Date", 650, 176), L("31.10.2026", 660, 208)]
+    st = tr.update(1, 1000, scrolled, DIMS)
+    sup = [f for f in st.fields if f.label == "Supplier"]
+    assert not sup or sup[0].bbox is None  # off-screen (remembered value only), never "Scan Barcode"
