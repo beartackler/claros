@@ -44,6 +44,7 @@ def env(monkeypatch):
     async def no_decide(q, context, options):
         return None, 0.0
     monkeypatch.setattr(d, "decide", no_decide)
+    monkeypatch.setitem(debrief.CONFIG, "continuation_ms", 0)  # tests answer instantly, never mid-pause
     d.PREWRITTEN.clear()
     tutor._states.clear()
     debrief._states.clear()
@@ -146,7 +147,8 @@ async def test_builder_validates_repairs_and_opens_gaps(monkeypatch, env):
     monkeypatch.setattr(d, "chat", fake_chat)
     wm = await builder.build_map("cap1", workflow_id="wf_test",
                                  expert=User(id="u_anna", name="Anna Keller", role="expert"))
-    assert len([c for c in calls if "failed validation" in c[-1]["content"]]) == 1  # one repair retry
+    # s3 has no moment: a coverage question below, never a ~32 s repair retry (live: a retry on almost every build)
+    assert not [c for c in calls if "failed validation" in c[-1]["content"]]
     s1, s2, s3 = sorted(wm.steps, key=lambda s: s.order)
     assert "4471" not in s1.title and "invoice" in s1.title.lower()  # generalized
     assert s2.moment.utterance_ids == ["u2"]  # nearest utterance repair
@@ -565,3 +567,70 @@ def test_month_var_aliasing_a_date_label():
     wm.canonical_vars["invoice.posting_month"] = ["Posting Date *"]
     st = ScreenState.model_validate(_state(1, fields=[("Posting Date *", "22.12.2025")]))
     assert common.canonical_vars_from_state(st, wm)["invoice.posting_month"] == 12
+
+
+async def test_tracker_stays_on_step_when_frame_has_no_view():
+    wm = fx()
+    wm.steps[0].state_signature = {"app": "ERPNext"}  # app-only step matched every view-less frame at 1.0 (live)
+    st = ScreenState.model_validate({**_state(1, view=None), "entity_type": None})
+    step, _ = await tutor.match_step(wm, st, "s4")
+    assert step.id == "s4"
+
+
+async def test_fuzzy_rule_of_an_earlier_step_is_judged_on_submit(monkeypatch, env):
+    await seed()
+
+    async def fake_decide(q, context, options):
+        return "violation", 0.95
+    monkeypatch.setattr(d, "decide", fake_decide)
+    tutor.start("fz2", "wf_ap_invoice", "en")
+    st = tutor.get_state("fz2")
+    st.last_state = ScreenState.model_validate(_state(1, fields=[("Supplier", "Unknown GmbH")]))
+    st.current = "s7"  # the tracker moved to Submit before the save event is checked
+    hits = await tutor.check_guardrails(st, tutor._wm(st), boundary=True)
+    assert [g.id for g in hits] == ["g4"]
+
+
+def test_in_matches_truncated_grid_text():
+    p = {"in": ["Tools and Small Equipment", {"var": "line.expense_account"}]}
+    assert common.eval_predicate(p, {"line.expense_account": "Tools and Small Equipm..."}) is True
+    assert common.eval_predicate(p, {"line.expense_account": "Tools…"}) is False  # too short to tell
+
+
+async def test_patch_guardrail_null_predicate_keeps_the_check(monkeypatch, env):
+    await seed()
+
+    async def null_chat(messages, *, model_role="smart", json_schema=None):
+        if json_schema is debrief.PATCH_G_SCHEMA:
+            return {"text": "Subsidiary invoices need a second approval.", "predicate": None, "changed": True}
+        return None
+    monkeypatch.setattr(d, "chat", null_chat)
+    m = common.load_map("wf_ap_invoice")
+    g3 = common.guardrail_by_id(m, "g3")
+    old = g3.predicate
+    u = next(x for x in debrief.make_probes(m) if x.entity == "g3")
+    q = debrief.Quote(id="q1", speaker="Anna", speaker_id="u_anna", lang="en", t=0, session_id="x", text="Yes.")
+    await debrief.patch_guardrail(m, g3, u, "Subsidiaries, yes, a second approval.", q, "Anna Keller", "en")
+    assert g3.predicate == old and not g3.fuzzy  # live v3→v4: a null predicate deleted the deterministic check
+
+
+async def test_debrief_answer_continuation_after_a_pause_stays_with_its_question(monkeypatch, env):
+    monkeypatch.setitem(debrief.CONFIG, "continuation_ms", 3000)
+    wm = fx()
+    wm.approved_by = []
+    wm.open_unknowns = [common.new_unknown("why", "Why cost center 0400?", entity="s4", priority=0.9),
+                        common.new_unknown("coverage", "What about credit notes?", priority=0.5)]
+    await builder.publish_expert_map(wm)
+    sess = type("S", (), {"id": "deb9", "lang": "en", "workflow_id": "wf_ap_invoice", "mode": "debrief",
+                          "user": User(id="u_anna", name="Anna Keller", role="expert")})()
+    debrief.start("deb9", "wf_ap_invoice")
+    await debrief.next_debrief_utterance(sess)
+    st = debrief.get_state(sess)
+    first = st.current
+    await debrief.handle_debrief_answer(sess, "Because that cost center")
+    nxt = st.current
+    assert await debrief.handle_debrief_answer(sess, "belongs to the plant team.") == ""
+    m = common.load_map("wf_ap_invoice")
+    u1 = next(u for u in m.open_unknowns if u.id == first)
+    assert u1.resolution == "Because that cost center belongs to the plant team."
+    assert st.current == nxt and next(u for u in m.open_unknowns if u.id == nxt).status != "answered"
