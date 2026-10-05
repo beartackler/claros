@@ -111,9 +111,13 @@ class Gate:
                 n = len(v)
             if n:
                 break
+        # Stamp at the frame's own time: vision lands seconds late, and the expert has been reading meanwhile.
+        t = d.get("t")
+        off = getattr(deps.get_session(sid), "clock_offset", 0.0) or 0.0
+        frame_t = min(now, float(t) + off) if isinstance(t, (int, float)) else now
         if n:
-            s.grace_until = max(s.grace_until, now + min(self.cfg.grace_cap_ms, n * self.cfg.grace_per_word_ms))
-        s.last_change_t = now
+            s.grace_until = max(s.grace_until, frame_t + min(self.cfg.grace_cap_ms, n * self.cfg.grace_per_word_ms))
+        s.last_change_t = max(s.last_change_t, frame_t)
 
     def on_events(self, sid: str, items: Any) -> None:
         s = self.st(sid)

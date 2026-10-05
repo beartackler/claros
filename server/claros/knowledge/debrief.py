@@ -657,7 +657,10 @@ def topic_of(wm: WorkMap, u: Unknown) -> str:
         j = len(words & sw) / max(1, min(len(words), len(sw)))
         if j > sc + 0.05:
             best, sc = s_.id, j
-    return best if best and sc >= 0.3 else (u.entity or u.id)
+    if best and sc >= 0.3:
+        return best
+    # "when would you stop and ask someone?" is one question however it's worded or whichever record it names
+    return "stop_and_ask" if u.type == "stop_and_ask" else (u.entity or u.id)
 
 
 def pick_next(wm: WorkMap, st: DebriefState, expert_id: Optional[str], expert_name: Optional[str]
@@ -1179,6 +1182,16 @@ async def next_debrief_utterance(session: Any) -> str:
         await send_state(st.session_id, wm)
         return st.script
     return t("done", lang)
+
+
+def current_question(session: Any) -> Optional[str]:
+    """The debrief question waiting for an answer (None outside the questions phase)."""
+    st = get_state(session)
+    if st is None or st.phase != "questions" or not st.current:
+        return None
+    wm = load_map(st.workflow_id)
+    u = next((x for x in (wm.open_unknowns if wm else []) if x.id == st.current), None)
+    return u.spoken_question if u else None
 
 
 def _quote(session: Any, text: str, lang: str) -> Quote:

@@ -138,6 +138,31 @@ def test_debrief_next_say_after_answer(offline, monkeypatch):
     # same event delivered twice (utterance + ws.in.utterance) → handled once
     assert run(dialog.on_utterance("d1", {"role": "user", "text": "Because he owns the UK entity",
                                           "event_id": "u1"})) is None
+
+
+def test_debrief_answer_that_sounds_addressed_to_claros(offline, monkeypatch):
+    """e2e: "if you don't understand the classification" was read as a question to Claros → silence for 60 s."""
+    from claros.brain import intents
+    seen_ctx, calls = [], []
+
+    async def classify(mode, text, ctx):
+        seen_ctx.append(ctx)
+        return intents.IntentResult(intent="question_to_claros", confidence=0.6, backend="test")
+
+    async def ans(sess, text, intent=None):
+        calls.append(intent)
+        return "Got it. Next one?"
+
+    monkeypatch.setattr(dialog, "classify_intent", classify)
+    _knowledge(monkeypatch, {"debrief.handle_debrief_answer": ans, "debrief.next_debrief_utterance": ans,
+                             "debrief.current_question": lambda sess: "When would you stop and ask someone?"})
+    offline.get_session("d2").mode = "debrief"
+    r = run(dialog.on_utterance("d2", {"role": "user", "event_id": "a",
+                                       "text": "I think if you don't understand the classification of the invoice."}))
+    assert seen_ctx[-1]["pending_question"] == "When would you stop and ask someone?"
+    assert calls == ["answer"] and r["said"]
+    r = run(dialog.on_utterance("d2", {"role": "user", "event_id": "b", "text": "Can you say that again?"}))
+    assert calls == ["answer"] and says(offline.sent)[-1]["text"] == "When would you stop and ask someone?"
     # agent lines and markers are never treated as user turns
     assert run(dialog.on_utterance("d1", {"role": "agent", "text": "hello", "event_id": "a1"})) is None
     assert run(dialog.on_utterance("d1", {"role": "user", "text": "⟦say:x|hi⟧", "event_id": "u2"})) is None

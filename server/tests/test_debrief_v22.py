@@ -208,3 +208,15 @@ async def test_correction_without_llm_patches_the_rule_or_asks_which_one(monkeyp
     assert "One detail" not in r and "small tools" not in r  # only the changed sentence
     q = debrief.diff_readback(wm, [], "en", "the subsidiary approval is different")
     assert q.startswith("Which one do you mean")
+
+
+def test_stop_and_ask_is_one_topic_across_records():
+    """e2e: "when would you stop and ask someone first?" then "…before changing an invoice's coding?"."""
+    from claros.knowledge import debrief
+    from claros.models import Unknown, WorkMap
+    wm = WorkMap(id="w", workflow_id="wf", name="x")
+    a = Unknown(id="a", type="stop_and_ask", entity="ACC-PINV-2026-00027",
+                spoken_question="On invoices like this one, when would you stop and ask someone first?")
+    b = Unknown(id="b", type="stop_and_ask", entity="purchase_invoice",
+                spoken_question="When would you stop and ask someone before changing an invoice's coding?")
+    assert debrief.topic_of(wm, a) == debrief.topic_of(wm, b) == "stop_and_ask"

@@ -172,7 +172,11 @@ async def handle_turn(sid: str, text: str) -> dict:
                 r = None
             if r:
                 return {"intent": "answer_nudge", "outcome": r.get("outcome")}
-    ir = await classify_intent(mode, text, {"pending_question": pending.spoken_question if pending else None})
+    pq = pending.spoken_question if pending else None
+    if mode == "debrief":
+        cq = deps.knowledge_attr("debrief.current_question")
+        pq = (cq(sess) if cq else None) or pq
+    ir = await classify_intent(mode, text, {"pending_question": pq})
     intent = ir.intent
     deps.store_log(sid, "dialog.intent", {"text": text, "mode": mode, **ir.model_dump()})
     if intent in ("off_record", "strike_that", "end_session"):
@@ -221,8 +225,11 @@ async def _capture_turn(sid: str, intent: str, text: str, lang: str, pending: An
 
 
 async def _debrief_turn(sid: str, sess: Any, intent: str, text: str) -> dict:
-    if intent == "question_to_claros":
-        return {"intent": intent}
+    # Relay: nothing answers on its own, so a reply that only sounds addressed to Claros ("if you don't
+    # understand…") is the answer. A real question gets the pending question again instead of silence.
+    if intent == "question_to_claros" and text.rstrip().endswith("?"):
+        cq = deps.knowledge_attr("debrief.current_question")
+        return {"intent": intent, "said": await _speak(sid, cq(sess) if cq else None, "debrief")}
     ans = deps.knowledge_attr("debrief.handle_debrief_answer")
     nxt = deps.knowledge_attr("debrief.next_debrief_utterance")
     if not ans and not nxt:
@@ -230,7 +237,7 @@ async def _debrief_turn(sid: str, sess: Any, intent: str, text: str) -> dict:
     _debrief_kicked.add(sid)
     try:
         if ans:
-            it = "answer" if intent == "narration" else intent
+            it = "answer" if intent in ("narration", "question_to_claros") else intent
             try:
                 out = await ans(sess, text, it)
             except TypeError:

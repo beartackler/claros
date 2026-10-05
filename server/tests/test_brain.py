@@ -251,6 +251,11 @@ def test_gate_snooze_and_reading_grace(offline):
     g.on_screen_state("g1", {"new_words": 20})
     offline.clock.t += 1300
     assert any("reading grace" in x for x in run(g.evaluate("g1"))["reasons"])
+    # a vision result that lands 6 s after its frame: the reading time already passed, nothing new to wait for
+    s = g.st("g1")
+    s.grace_until, before = 0.0, s.last_change_t
+    g.on_screen_state("g1", {"new_words": 20, "t": offline.clock.t - 6000})
+    assert s.grace_until <= offline.clock.t and s.last_change_t == before
 
 
 # ---------------- endpoint ----------------
