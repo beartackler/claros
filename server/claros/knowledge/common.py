@@ -511,7 +511,13 @@ def _jl(p: Any, data: dict[str, Any], flat: dict[str, Any]) -> Any:
         a, b = v[0], v[1]
         if isinstance(b, list):
             return any(_eq(a, x) for x in b)
-        return isinstance(b, str) and isinstance(a, str) and a.lower() in b.lower()
+        if not (isinstance(b, str) and isinstance(a, str)):
+            return False
+        if a.lower() in b.lower():
+            return True
+        # grid text cut off on screen ("Tools and Small Equipm...") still names the literal it starts
+        rest = re.sub(r"\s*(\.\.\.|…)\s*$", "", b).strip().lower()
+        return rest != b.strip().lower() and len(rest) >= 6 and a.lower().startswith(rest)
     if op == "missing":
         return [x for x in v if flat.get(x) in (None, "")]
     raise ValueError(f"unsupported json-logic op {op}")

@@ -203,6 +203,11 @@ async def match_step(wm: WorkMap, state: ScreenState, current: Optional[str] = N
     steps = ordered_steps(wm)
     if not steps:
         return None, 0.0
+    cur = step_by_id(wm, current) if current else None
+    if cur and state.entity_id and not state.view and not state.entity_type:
+        # a record frame whose view/type wasn't read says nothing about the step: stay (live: 20 of 21 invoice frames
+        # had view=None and matched an app-only step at 1.0 while the real record steps scored 1/3)
+        return cur, 1.0
     scored = [(sig_score(s.state_signature, sig), s) for s in steps]
     top = max(sc for sc, _ in scored)
     cands = [s for sc, s in scored if sc == top]
@@ -210,7 +215,6 @@ async def match_step(wm: WorkMap, state: ScreenState, current: Optional[str] = N
         return None, top
     if len(cands) == 1:
         return cands[0], top
-    cur = step_by_id(wm, current) if current else None
     if events:
         # tie-break by similarity of what the learner just did vs. step text (+ canonical-var overlap)
         etxt = " ".join(f"{e.summary} {e.field or ''} {e.canonical or ''}" for e in events)
@@ -583,7 +587,7 @@ async def check_guardrails(st: TutorState, wm: WorkMap, *, fuzzy: bool = True, f
         elif r is False and fire:
             st.fired.pop((g.id, ent), None)  # violation cleared → a later violation is new
     if fuzzy:
-        hits += await _check_fuzzy(st, wm, ent, vars_)
+        hits += await _check_fuzzy(st, wm, ent, vars_, boundary)
     if fire:
         for g in hits:
             key = (g.id, ent)
@@ -601,14 +605,19 @@ async def check_guardrails(st: TutorState, wm: WorkMap, *, fuzzy: bool = True, f
     return hits
 
 
-async def _check_fuzzy(st: TutorState, wm: WorkMap, ent: str, vars_: Optional[dict] = None) -> list[Guardrail]:
+async def _check_fuzzy(st: TutorState, wm: WorkMap, ent: str, vars_: Optional[dict] = None,
+                       boundary: bool = False) -> list[Guardrail]:
     cur = step_by_id(wm, st.current) if st.current else None
     fz = [g for g in wm.guardrails if g.fuzzy and not g.predicate]
     if not fz or st.last_state is None:
         return []
     stext = _state_text(st.last_state)
     if cur:  # (eval: widening this to all rules when the step match is wrong doubled ERPNext false alarms; kept)
-        fz = [g for g in fz if g.id in cur.guardrail_ids]
+        # save/submit: the tracker already moved to the Save step, so rules of every step up to here still apply
+        # (live: a fuzzy rule was never judged at save/submit because its own step was already left)
+        ids = {x for s in wm.steps if s.order <= cur.order for x in s.guardrail_ids} if boundary else \
+            set(cur.guardrail_ids)
+        fz = [g for g in fz if g.id in ids]
     if not fz:
         return []
     if len(fz) > 2:

@@ -264,8 +264,10 @@ async def self_consistent_map(r: Replay, seed: dict, n: Optional[int] = None) ->
     valid = [(c, _schema_errors(c)[0]) for c in cands]
     valid = [(c, w) for c, w in valid if w is not None]
     if len(valid) < 2:
-        return cands[0] if cands else None
-    from .merge import _similarity
+        return valid[0][0] if valid else (cands[0] if cands else None)  # the one that validates, not just the first
+    from .merge import _similarity, _step_text
+    # embed each candidate once, concurrently (live: 12 sequential embed calls ≈2.6 s per build)
+    vecs = await asyncio.gather(*(d.embed([_step_text(s_) for s_ in w.steps]) for _, w in valid))
     support: list[list[int]] = []
     judged: list[list[int]] = []  # per step: how many candidates call the aligned step a judgment
     for i, (_, wi) in enumerate(valid):
@@ -274,7 +276,7 @@ async def self_consistent_map(r: Replay, seed: dict, n: Optional[int] = None) ->
         for j, (_, wj) in enumerate(valid):
             if i == j or not wi.steps or not wj.steps:
                 continue
-            sim = await _similarity(wi.steps, wj.steps)
+            sim = await _similarity(wi.steps, wj.steps, vecs[i], vecs[j])
             for k in range(len(wi.steps)):
                 best_j = max(range(len(wj.steps)), key=lambda x: sim[k][x])
                 if sim[k][best_j] >= MAJORITY_SIM:
@@ -421,16 +423,25 @@ def _repair_moment(m: Optional[Moment], r: Replay, window_ms: float = 15000,
     come only from the grounding pass (link_utterance=False), never from whatever was said nearby."""
     if m is None:
         return None
+    t = _ms(m.t, r)
     kfs = [k for k in m.keyframe_ids if k in r.keyframes]
-    utt_ids = {u["id"] for u in r.utterances}
+    utt_ids = {u["id"] for u in r.expert_utts}  # Claros's own lines are no evidence (live: s1/s2 cited the greeting)
     us = [u for u in m.utterance_ids if u in utt_ids]
     if not kfs:
-        k = _nearest(r.keyframes, m.t, window_ms)
+        k = _nearest(r.keyframes, t, window_ms)
         kfs = [k] if k else []
     if not us and link_utterance:
-        u = _nearest({x["id"]: x["t"] for x in r.expert_utts}, m.t, window_ms)
+        u = _nearest({x["id"]: x["t"] for x in r.expert_utts}, t, window_ms)
         us = [u] if u else []
-    return Moment(session_id=r.session_id, keyframe_ids=kfs, t=m.t, utterance_ids=us)
+    return Moment(session_id=r.session_id, keyframe_ids=kfs, t=t, utterance_ids=us)
+
+
+def _ms(t: float, r: Replay) -> float:
+    """timeline() prints epoch ms as seconds ([1791226645.1s]) and the LLM copies that into moment.t: back to ms
+    (live: every step t≈1.79e9 never linked a keyframe/utterance → a ~32 s repair retry on every build)."""
+    if 0 < t < 1e11 and any(x > 1e11 for x in [*r.keyframes.values(), *(u["t"] for u in r.utterances)]):
+        return t * 1000
+    return t
 
 
 def _entity_tokens(r: Replay) -> set[str]:
@@ -739,8 +750,9 @@ async def build_map(session_id: str, *, workflow_id: Optional[str] = None, exper
     wm, errs = _schema_errors(raw)
     if wm is not None:
         errs = validate_evidence(_with_repairs(wm, r), set(r.keyframes), {u["id"] for u in r.utterances})
-        # guardrail quotes/evidence are fixed by the grounding pass below (never by nearest-in-time utterances)
-        errs = [e for e in errs if not (e.startswith("guardrail ") and "has no evidence moment" in e)]
+        # guardrail quotes/evidence are fixed by the grounding pass below (never by nearest-in-time utterances); a
+        # silent step (navigation) is normal and becomes a coverage question below — neither is worth a ~32 s retry
+        errs = [e for e in errs if not re.match(r"(guardrail|step) .* has no (evidence )?moment ", e)]
     if errs and raw is not None:
         raw2 = await _llm_map(r, seed, errs, raw)
         wm2, errs2 = _schema_errors(raw2)
@@ -1118,12 +1130,23 @@ def _with_repairs(wm: WorkMap, r: Replay) -> WorkMap:
         s.moment = _repair_moment(s.moment, r)
     for g in wm.guardrails:
         g.evidence = [m for m in (_repair_moment(m, r, link_utterance=False) for m in g.evidence) if m]
+    for u in wm.open_unknowns:
+        if u.moment is not None:
+            u.moment.t = _ms(u.moment.t, r)
     return wm
 
 
 async def publish_expert_map(wm: WorkMap, session_id: Optional[str] = None) -> WorkMap:
     """Store per-expert map; if other experts mapped the workflow, publish the merge (what learners see)."""
     eid = wm.experts[0].id if wm.experts else "expert"
+    old = d.st_call("kv_get", "expert_maps", f"{wm.workflow_id}:{eid}")
+    if isinstance(old, dict) and old.get("id") != wm.id:
+        # this expert re-captured a workflow they already mapped: merge, never overwrite (live: v7 lost v6's approved
+        # guardrail g1 + answered unknowns/quotes). When they are the only expert, the published map is the debriefed one
+        from .merge import merge_maps
+        pub = load_map(wm.workflow_id)
+        prev = pub if pub and {e.id for e in pub.experts} == {eid} else WorkMap.model_validate(old)
+        wm = await merge_maps([prev, wm], newest_expert_id=eid)
     d.st_call("kv_put", "expert_maps", f"{wm.workflow_id}:{eid}", wm.model_dump(mode="json"))
     maps = [WorkMap.model_validate(x) for x in d.st_call("kv_list", "expert_maps", f"{wm.workflow_id}:", default=[]) or []]
     if len(maps) > 1:

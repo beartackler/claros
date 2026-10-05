@@ -36,7 +36,7 @@ from .common import (
 )
 
 CONFIG = {"min_questions": 3, "max_questions": 6, "max_seconds": 300, "teachback_words": 140, "teachback_target": 90, "exam_cases": 3,
-          "learner_cap": 1, "question_words": 25}
+          "learner_cap": 1, "question_words": 25, "continuation_ms": 3000}
 
 TYPE_RANK = {"limit": 0, "never": 0, "stop_and_ask": 0, "why": 1, "deliberate": 1, "conflict": 1, "coverage": 2}
 EXPERT_SCOPES = ("company", "personal_judgment")
@@ -149,6 +149,8 @@ class DebriefState:
     seq: int = 0
     probed: bool = False
     topics: list = field(default_factory=list)  # rule/step each asked question was about (one question per topic)
+    last_answer: Optional[str] = None   # unknown id answered last (a quick continuation is appended to it)
+    answered_ms: float = 0.0
 
 
 _states: dict[str, DebriefState] = {}
@@ -1331,6 +1333,8 @@ async def patch_guardrail(wm: WorkMap, g: Guardrail, u: Unknown, text: str, q: Q
             pred = out.get("predicate") if "predicate" in out else g.predicate
             if isinstance(pred, str):
                 pred = d.parse_json(pred)
+            if pred is None:  # an LLM "predicate": null never deletes a working check (live v3→v4)
+                pred = before["predicate"]
             if valid_patch_predicate(wm, before["predicate"], pred, text):
                 if isinstance(out.get("text"), str) and out["text"].strip():
                     g.text = out["text"].strip()
@@ -1456,15 +1460,22 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
     if st.phase == "questions":
         if text != SKIP_TOKEN and FILLER.match(text or ""):
             return ""  # "eh", "ok", "mm": thinking out loud, not the answer — keep waiting on this question
-        u = next((x for x in wm.open_unknowns if x.id == st.current), None)
-        st.current = None
+        skip = intent == "not_now" or bool(SKIP.search(text or "")) or text == SKIP_TOKEN
+        # the rest of the previous answer after a short pause is not the answer to the next question, which is only
+        # being handed to the voice (live: the continuation was recorded under the NEXT, unspoken question)
+        cont = next((x for x in wm.open_unknowns if x.id == st.last_answer and x.status == "answered"), None) \
+            if st.last_answer and not skip and d.now_ms() - st.answered_ms < CONFIG["continuation_ms"] else None
+        u = cont or next((x for x in wm.open_unknowns if x.id == st.current), None)
+        if cont is None:
+            st.current = None
         if u is not None:
-            if intent == "not_now" or SKIP.search(text or "") or text == SKIP_TOKEN:
+            if skip:
                 u.status = "deferred"
                 u.meta = {**(u.meta or {}), "skipped": True}
             else:
                 q = _quote(session, text, lang)
                 wm.quotes.append(q)
+                text = f"{u.resolution} {text}" if cont else text
                 u.status, u.resolution, u.resolution_source = "answered", text, "expert"
                 u.answer_utterance_ids.append(q.id)
                 ev = Moment(session_id=sid, keyframe_ids=list(u.moment.keyframe_ids) if u.moment else [],
@@ -1480,9 +1491,14 @@ async def handle_debrief_answer(session: Any, text: str, intent: Optional[str] =
                     _link_answer(wm, u, q, ev)
                     await _rule_from_answer(wm, u, text, q, ev, eid)
             await save_map(wm, sid)
+        if cont is None:
+            st.last_answer = u.id if u is not None and u.status == "answered" else None
         skipped = u is not None and (u.meta or {}).get("skipped")
-        nxt = await next_debrief_utterance(session)
-        return nxt if skipped else f"{t('thanks', lang)} {nxt}"  # a skip is not an answer: no "got it"
+        nxt = "" if cont else await next_debrief_utterance(session)
+        st.answered_ms = d.now_ms()
+        if cont or skipped:
+            return nxt  # a skip is not an answer: no "got it"; a continuation: the next question is already out
+        return f"{t('thanks', lang)} {nxt}"
 
     if st.phase == "teach_back":
         if is_confirm(text, intent):

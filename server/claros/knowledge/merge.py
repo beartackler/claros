@@ -56,9 +56,11 @@ def _assign(sim: list[list[float]]) -> list[tuple[int, int]]:
         return out
 
 
-async def _similarity(a: list[Step], b: list[Step]) -> list[list[float]]:
-    va = await d.embed([_step_text(s) for s in a])
-    vb = await d.embed([_step_text(s) for s in b])
+async def _similarity(a: list[Step], b: list[Step], va: Optional[list] = None,
+                      vb: Optional[list] = None) -> list[list[float]]:
+    if va is None or vb is None:
+        import asyncio
+        va, vb = await asyncio.gather(d.embed([_step_text(s) for s in a]), d.embed([_step_text(s) for s in b]))
     na, nb = max(len(a) - 1, 1), max(len(b) - 1, 1)
     sim = []
     for i, sa in enumerate(a):
@@ -169,10 +171,12 @@ async def merge_maps(maps: list[WorkMap], *, threshold: float = ALIGN_THRESHOLD,
                 gvecs.append(v)
                 gmap[f"{mi}:{g.id}"] = ng.id
             else:
-                dup.experts = list(dict.fromkeys(dup.experts + (g.experts or [e.id for e in m.experts])))
+                g_exp = g.experts or [e.id for e in m.experts]
+                same = bool(g_exp) and set(g_exp) <= set(dup.experts)  # same expert's re-capture: approval stands
+                dup.experts = list(dict.fromkeys(dup.experts + g_exp))
                 dup.quote_ids = list(dict.fromkeys(dup.quote_ids + g.quote_ids))
                 dup.evidence += g.evidence
-                dup.approved = dup.approved and g.approved
+                dup.approved = dup.approved and (g.approved or same)
                 if dup.predicate is None and g.predicate:
                     dup.predicate, dup.fuzzy = g.predicate, False
                 gmap[f"{mi}:{g.id}"] = dup.id
@@ -199,12 +203,15 @@ async def merge_maps(maps: list[WorkMap], *, threshold: float = ALIGN_THRESHOLD,
             gids = [gmap.get(f"{mi}:{g}", g) for g in s.guardrail_ids]
             if j in pairs:
                 tgt = merged[pairs[j]]
+                same = bool(m_experts) and set(s.experts or m_experts) <= set(tgt.experts)  # re-capture: no self-variant
                 tgt.experts = list(dict.fromkeys(tgt.experts + (s.experts or m_experts)))
                 tgt.guardrail_ids = list(dict.fromkeys(tgt.guardrail_ids + gids))
                 tgt.context_note_ids = list(dict.fromkeys(tgt.context_note_ids + s.context_note_ids))
-                tgt.approved = tgt.approved and s.approved
+                tgt.approved = tgt.approved and (s.approved or same)
                 eid = (s.experts or m_experts or ["?"])[0]
-                if decisions_conflict(tgt.decision, s.decision):
+                if same:
+                    tgt.decision = tgt.decision or s.decision
+                elif decisions_conflict(tgt.decision, s.decision):
                     conflicts.append((tgt, s, eid))
                 elif s.decision and tgt.decision and s.decision.description != tgt.decision.description:
                     tgt.variants.append(Variant(expert_id=eid, description=s.decision.description,

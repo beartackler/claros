@@ -192,3 +192,55 @@ def test_predicate_var_missing_from_canonical_vars_is_matched_to_its_screen_labe
     wm.canonical_vars["inv.amount"] = []
     obs = builder.observable_vars(wm, r)
     assert "inv.amount" in obs and wm.canonical_vars["inv.amount"] == ["Amount (EUR)"]
+
+
+async def test_recapture_by_the_same_expert_merges_instead_of_overwriting():
+    a = fx("workmap_ap.json")
+    await builder.publish_expert_map(a)
+    b = fx("workmap_ap.json")  # live v7: same expert, same workflow, no guardrails/approval/quotes yet
+    b.id, b.guardrails, b.approved_by, b.quotes = "wm_recapture", [], [], []
+    for s in b.steps:
+        s.guardrail_ids, s.approved = [], False
+    js = next(s for s in b.steps if s.decision and s.decision.kind == "judgment")
+    js.decision.to_value = "Something else entirely"
+    out = await builder.publish_expert_map(b)
+    assert [g.id for g in out.guardrails] == [g.id for g in a.guardrails] and "u_anna" in out.approved_by
+    assert len(out.steps) == len(a.steps) and {q.id for q in a.quotes} <= {q.id for q in out.quotes}
+    assert not [u for u in out.open_unknowns if u.type == "conflict"]  # no conflict with oneself
+    assert sum(len(s.variants) for s in out.steps) == sum(len(s.variants) for s in a.steps)
+
+
+async def test_epoch_second_moments_link_and_claros_lines_are_no_evidence(monkeypatch):
+    T, st = 1_791_226_640_000.0, d.store()
+    for i in range(3):
+        st.log("ep", "screen.state", {"seq": i, "t": T + i * 10000, "app": "ClaimsApp", "view": "Claim form",
+                                      "entity_type": "Claim", "entity_id": "CLM-1", "keyframe_id": f"kf{i}",
+                                      "fields": [{"label": "Amount", "value": "3,100.00"}]}, T + i * 10000)
+    for uid, role, dt, text in [("a1", "agent", 10200, "Hi, I'm Claros."), ("u1", "user", 10500, "Opening it now.")]:
+        st.log("ep", "utterance", {"event_id": uid, "t_start": T + dt, "role": role, "text": text, "lang": "en"}, T + dt)
+    cand = _cand()
+    cand["guardrails"], cand["steps"] = [], cand["steps"][:1]
+    cand["steps"][0]["moment"] = {"session_id": "ep", "keyframe_ids": [], "t": (T + 10000) / 1000,
+                                  "utterance_ids": ["a1"]}  # timeline prints seconds; the LLM copies them
+    _patch_chat(monkeypatch, [cand] * 3)
+    wm = await builder.build_map("ep", workflow_id="wf_ep", expert=User(id="e", name="Erin", role="expert"))
+    m = wm.steps[0].moment
+    assert m.keyframe_ids == ["kf1"] and m.utterance_ids == ["u1"] and m.t == T + 10000
+
+
+async def test_self_consistency_embeds_each_candidate_once(monkeypatch):
+    calls, real = [], d.embed
+
+    async def counting(inputs, task="text-matching"):
+        calls.append(len(inputs))
+        return await real(inputs, task)
+    monkeypatch.setattr(d, "embed", counting)
+    _patch_chat(monkeypatch, [_cand()] * 3)
+    await builder.self_consistent_map(builder.Replay("x"), {})
+    assert len(calls) == 4  # 3 candidates + 1 guardrail clustering (was 12 sequential + 1)
+
+
+async def test_the_only_valid_candidate_is_returned(monkeypatch):
+    _patch_chat(monkeypatch, [{"steps": 5}, _cand(), {"steps": 5}])
+    out = await builder.self_consistent_map(builder.Replay("x"), {})
+    assert out and out["name"] == "Claims triage"
