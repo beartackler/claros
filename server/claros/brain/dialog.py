@@ -1,12 +1,8 @@
-"""Dialog layer (hosted mode): the server decides WHAT/WHEN, the ElevenAgents hosted LLM speaks it.
+"""Dialog layer: the server decides WHAT/WHEN, the ElevenLabs agent speaks it.
 
-CLAROS_DIALOG_MODE=hosted (default) | custom
-- hosted: ElevenLabs runs the LLM (gemini-3.6-flash, cascade glm-52 → gemini-3.5-flash-lite). This module
-  consumes final `utterance` events → intents (rules → systemone) → control actions / ledger acks /
-  debrief + tutor turns, and pushes `say {id, text, kind, step_id?, lang}` over ws.out. The web client sends
-  `⟦say:ID|TEXT⟧` as a user message and the agent speaks TEXT verbatim.
-- custom: ElevenLabs calls /llm/v1/chat/completions (llm_endpoint) which does all of this inline; the loop here
-  stays idle (only the lookup/vars endpoints remain useful).
+Consumes final `utterance` events → intents (rules → systemone) → control actions / ledger acks / debrief + tutor
+turns, and pushes `say {id, text, kind, step_id?, lang}` over ws.out. The web client sends `⟦TEXT⟧` as a user
+message; the agent's custom LLM (llm_endpoint.relay) returns TEXT verbatim.
 
 Also serves:
   GET /api/dialog/vars?session_id=    → dynamic variables for the agent session (incl. GLM-written workflow_brief)
@@ -17,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-import os
 import re
 import time
 from typing import Any, Optional
@@ -47,15 +42,6 @@ STEP_MARKER = re.compile(r"\[\[\s*step\s*:\s*([\w\-]+)\s*\]\]")
 HIDDEN = re.compile(r"⟦[^⟧]*⟧")
 
 
-def dialog_mode() -> str:
-    m = (os.getenv("CLAROS_DIALOG_MODE") or "hosted").strip().lower()
-    return m if m in ("hosted", "custom") else "hosted"
-
-
-def hosted() -> bool:
-    return dialog_mode() == "hosted"
-
-
 # ---------------- say protocol ----------------
 
 _ids = itertools.count(1)
@@ -82,7 +68,7 @@ def split_segments(text: str) -> list[tuple[Optional[str], str]]:
 
 async def say(sid: str, text: str, kind: str = "ack", *, id: Optional[str] = None,
               step_id: Optional[str] = None, lang: Optional[str] = None) -> Optional[dict]:
-    """Push one `say` to the client (→ ⟦say:ID|TEXT⟧ → hosted agent speaks TEXT verbatim)."""
+    """Push one `say` to the client (→ ⟦TEXT⟧ → the agent speaks TEXT verbatim)."""
     t = _clean(text)
     if not sid or not t:
         return None
@@ -92,12 +78,6 @@ async def say(sid: str, text: str, kind: str = "ack", *, id: Optional[str] = Non
                            "lang": (lang or deps.session_lang(sid))[:2]}
     if step_id:
         msg["step_id"] = step_id
-    # custom mode / cascade: the endpoint can resolve ⟦say:ID⟧ from the same registry
-    try:
-        from .llm_endpoint import prewritten
-        prewritten.setdefault(sid, {})[sid_] = t
-    except Exception:  # noqa: BLE001
-        pass
     deps.store_log(sid, "dialog.say", msg)
     await deps.send(sid, msg)
     return msg
@@ -155,7 +135,7 @@ async def _speak(sid: str, text: Optional[str], kind: str, *, settle: bool = Tru
 
 async def on_utterance(sid: str, p: Any) -> Optional[dict]:
     """Final user utterance → intent → control / ack / debrief / tutor. Returns a summary (tests)."""
-    if not hosted() or not isinstance(p, dict) or p.get("role", "user") != "user":
+    if not isinstance(p, dict) or p.get("role", "user") != "user":
         return None
     text = (p.get("text") or "").strip()
     if not text or HIDDEN.search(text):
@@ -265,7 +245,7 @@ async def _debrief_turn(sid: str, sess: Any, intent: str, text: str) -> dict:
 
 async def kick_debrief(sid: str) -> list[dict]:
     """Debrief started (hello mode=debrief): push the first planned question (once per session)."""
-    if not hosted() or sid in _debrief_kicked:
+    if sid in _debrief_kicked:
         return []
     nxt = deps.knowledge_attr("debrief.next_debrief_utterance")
     if not nxt:
@@ -378,8 +358,6 @@ def context_text(sid: str) -> str:
 
 async def push_context(sid: str, force: bool = False) -> Optional[str]:
     """Throttled `context_update` (only when changed; ≥ context_min_interval_s apart)."""
-    if not hosted():
-        return None
     txt = context_text(sid)
     if not txt:
         return None
@@ -538,7 +516,7 @@ async def vars_ep(session_id: str) -> dict:
     brief = await workflow_brief(wid, lang) if mode in ("learn", "debrief", "request") else ""
     return {"session_id": session_id, "mode": mode, "user_name": name, "lang": lang,
             "workflow_name": getattr(wm, "name", None) or "this task",
-            "workflow_brief": brief or "none yet", "dialog_mode": dialog_mode()}
+            "workflow_brief": brief or "none yet"}
 
 
 # ---------------- claros_lookup webhook tool ----------------
@@ -604,7 +582,7 @@ async def lookup_ep(q: str = "", session_id: str = "") -> dict:
 # ---------------- wiring ----------------
 
 async def on_hello(sid: str, p: Any) -> None:
-    if not hosted() or not isinstance(p, dict):
+    if not isinstance(p, dict):
         return
     mode = p.get("mode")
     if mode in ("learn", "debrief", "request"):
@@ -648,5 +626,5 @@ def register(bus: Any) -> None:
     bus.subscribe("session.ended", lambda sid, p: reset(sid))
 
 
-__all__ = ["router", "register", "say", "say_script", "dialog_mode", "hosted", "on_utterance", "kick_debrief",
+__all__ = ["router", "register", "say", "say_script", "on_utterance", "kick_debrief",
            "push_context", "context_text", "workflow_brief", "template_brief", "search_map", "split_segments"]

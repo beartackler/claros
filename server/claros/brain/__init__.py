@@ -3,7 +3,6 @@
 app.py calls `register(bus)` and `include_router(router)`.
 Public helpers for other packages:
   brain.get_ledger(session_id)        → Ledger (unknowns, context_notes, snapshot())
-  brain.interventions[sid][gid] = txt → pre-written guardrail intervention text
   brain.gate.decisions(session_id)    → "why Claros asked" log
 """
 from __future__ import annotations
@@ -15,7 +14,7 @@ from fastapi import APIRouter
 from . import deps, lang as L
 from .gate import gate
 from .ledger import get_ledger, ledgers
-from .llm_endpoint import announce_debrief, apply_control, interventions, router as _llm_router
+from .llm_endpoint import announce_debrief, apply_control, router as _llm_router
 
 from . import dialog
 
@@ -97,7 +96,7 @@ def register(bus: Any) -> None:
     bus.subscribe("ws.in.control", on_control)
     bus.subscribe("ws.in.hello", on_hello)
     bus.subscribe("session.ended", on_ended)
-    dialog.register(bus)  # hosted dialog loop (no-op in CLAROS_DIALOG_MODE=custom)
+    dialog.register(bus)
 
     try:
         import asyncio
@@ -108,4 +107,4 @@ def register(bus: Any) -> None:
         pass
 
 
-__all__ = ["register", "router", "get_ledger", "ledgers", "gate", "interventions"]
+__all__ = ["register", "router", "get_ledger", "ledgers", "gate"]

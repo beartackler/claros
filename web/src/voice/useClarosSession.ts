@@ -14,7 +14,7 @@ import { now } from "@/lib/clock";
 import { connectSession, disconnectSession, getSocket, onSocketChange, type ClarosSocket } from "@/lib/ws";
 import { useClaros } from "./store";
 
-export async function createSessionApi(req: CreateSessionRequest): Promise<string> {
+async function createSessionApi(req: CreateSessionRequest): Promise<string> {
   const r = await fetch(`${API_BASE}/api/sessions`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -25,7 +25,7 @@ export async function createSessionApi(req: CreateSessionRequest): Promise<strin
   return j.session_id;
 }
 
-export async function endSessionApi(sessionId: string): Promise<void> {
+async function endSessionApi(sessionId: string): Promise<void> {
   await fetch(`${API_BASE}/api/sessions/${encodeURIComponent(sessionId)}/end`, { method: "POST" }).catch(() => {});
 }
 

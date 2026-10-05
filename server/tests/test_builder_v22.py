@@ -8,7 +8,7 @@ import pytest
 
 from claros.knowledge import _deps as d
 from claros.knowledge import builder, merge
-from claros.models import Decision, Guardrail, Moment, Quote, Step, User, WorkMap
+from claros.models import User, WorkMap
 
 FIX = Path(__file__).resolve().parents[2] / "data" / "fixtures"
 

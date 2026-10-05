@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from claros.brain import deps, dialog, ledger as ledger_mod, llm_endpoint
+from claros.brain import deps, dialog, ledger as ledger_mod
 from claros.brain.gate import gate as GATE
 from claros.models import Decision, Guardrail, Quote, Step, User, WorkMap
 
@@ -89,7 +89,6 @@ def test_say_message_shape_and_registry(offline):
     m = run(dialog.say("s1", "Why ⟦x⟧ 0400 here?", "ask", id="u1"))
     assert m == {"type": "say", "id": "u1", "text": "Why 0400 here?", "kind": "ask", "lang": "en"}
     assert offline.sent[-1][1] == m
-    assert llm_endpoint.prewritten["s1"]["u1"] == "Why 0400 here?"
     assert run(dialog.say("s1", "  ", "ack")) is None
 
 
@@ -101,17 +100,6 @@ def test_teachback_segments_carry_step_ids(offline):
     assert len({m["id"] for m in out}) == 3 and all("[[" not in m["text"] for m in out)
 
 
-def test_custom_endpoint_accepts_say_marker(offline):
-    app = FastAPI()
-    app.include_router(llm_endpoint.router)
-    run(dialog.say("e1", "Is 5,000 your limit?", "ask", id="ask-9"))
-    body = {"model": "x", "stream": False, "elevenlabs_extra_body": {"session_id": "e1"},
-            "messages": [{"role": "user", "content": "⟦say:ask-9|ignored⟧"}]}
-    r = TestClient(app).post("/llm/v1/chat/completions", json=body).json()
-    assert r["choices"][0]["message"]["content"] == "Is 5,000 your limit?"
-    body["messages"][0]["content"] = "⟦say:zz-1|Fallback text.⟧"
-    r = TestClient(app).post("/llm/v1/chat/completions", json=body).json()
-    assert r["choices"][0]["message"]["content"] == "Fallback text."
 
 
 def test_wait_floor_respects_agent_speaking(offline):
@@ -194,17 +182,6 @@ def test_capture_controls_and_ack(offline):
     assert says(offline.sent)[-1]["text"] == "Thanks! I'm putting your map together, then I'll ask a few questions."
 
 
-def test_dialog_mode_switch(offline, monkeypatch):
-    assert dialog.dialog_mode() == "hosted"
-    monkeypatch.setenv("CLAROS_DIALOG_MODE", "custom")
-    assert dialog.dialog_mode() == "custom" and not dialog.hosted()
-    assert run(dialog.on_utterance("x1", {"role": "user", "text": "off the record", "event_id": "x"})) is None
-    assert run(dialog.push_context("x1")) is None
-    assert not offline.sent
-    monkeypatch.setenv("CLAROS_DIALOG_MODE", "bogus")
-    assert dialog.dialog_mode() == "hosted"
-
-
 # ---------------- context + vars + lookup ----------------
 
 def test_context_update_compact_and_throttled(offline, monkeypatch):
@@ -231,7 +208,6 @@ def test_vars_endpoint_brief(offline, monkeypatch):
     assert j["mode"] == "learn" and j["user_name"] == "Lea" and j["lang"] == "de" and j["workflow_name"] == "AP invoice"
     b = j["workflow_brief"]
     assert len(b) <= 1500 and "2. Check the cost center" in b and "CFO approval (per Maria)" in b
-    assert j["dialog_mode"] == "hosted"
 
 
 def test_lookup_endpoint(offline, monkeypatch):

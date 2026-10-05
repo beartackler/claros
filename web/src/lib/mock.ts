@@ -3,19 +3,17 @@
 import workmap from "./mock.workmap.json";
 import type {
   CaptureRequest,
-  MasteryNode,
   ScreenEvent,
   Unknown,
   User,
   WorkMap,
 } from "@/lib/contracts";
 
-export const ANNA: User = { id: "u_anna", name: "Anna Keller", role: "expert" };
-export const MARCO: User = { id: "u_marco", name: "Marco Ruiz", role: "expert" };
+const ANNA: User = { id: "u_anna", name: "Anna Keller", role: "expert" };
 /** The expert persona this browser acts as (demo has no auth). */
 export const EXPERT = ANNA;
 export const LEA: User = { id: "u_lea", name: "Lea Martin", role: "learner" };
-export const IVAN: User = { id: "u_ivan", name: "Ivan Petrov", role: "learner" };
+const IVAN: User = { id: "u_ivan", name: "Ivan Petrov", role: "learner" };
 
 /** Snapshot of GET /api/workflows/wf_ap_invoice after POST /api/knowledge/seed
  *  (data/fixtures/workmap_ap.json + workmap_ap_expert2.json merged), so mock == live. */
@@ -83,21 +81,3 @@ export const MOCK_UNKNOWNS: Unknown[] = [
   { id: "u5", type: "why", scope: "universal", about_event_ids: ["ev3"], entity: "Capital Equipment", priority: 0.2, status: "resolved", created_t: 35_500, answer_utterance_ids: [], resolution: "Capex is capitalised and depreciated.", resolution_source: "llm" },
 ];
 
-export const MOCK_MASTERY: MasteryNode[] = MOCK_MAP.steps.map((st, i) => ({
-  step_id: st.id,
-  level: (["unaided", "hinted", "caught", "unaided", "unseen", "hinted", "unaided"] as const)[i % 7],
-  attempts: 1,
-}));
-
-/** Plausible wrong answers for learner prediction prompts (desirable difficulty). Keyed by step/guardrail id. */
-export const MOCK_DISTRACTORS: Record<string, string[]> = {
-  s2: ["Process it anyway and flag it later", "Create the supplier yourself from the invoice"],
-  s3: ["Skip the receipt if the PO matches", "Reject any quantity difference"],
-  s4: ["Book all equipment to office expense", "Capitalise anything over 500"],
-  s5: ["Pay immediately to keep the discount", "Reject the invoice back to the supplier"],
-  g1: ["The supplier asked for it", "Expense accounts are full at month end"],
-  g2: ["December payments are processed by another team", "The bank is closed over the holidays"],
-  g3: ["Subsidiaries use a different currency", "The system can't submit them"],
-  g4: ["New suppliers get a discount", "The system needs a day to sync"],
-  h2: ["New suppliers get a discount", "The system needs a day to sync"],
-};

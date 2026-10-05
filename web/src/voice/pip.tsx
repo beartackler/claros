@@ -16,7 +16,7 @@ function dpip(): DocumentPictureInPicture | undefined {
   return (window as unknown as { documentPictureInPicture?: DocumentPictureInPicture }).documentPictureInPicture;
 }
 
-export function pipSupported() {
+function pipSupported() {
   return !!dpip();
 }
 

@@ -14,7 +14,7 @@ from typing import Any, Optional
 from pydantic import ValidationError
 
 from claros.models import (
-    ContextNote, Guardrail, Moment, OnetMatch, Quote, ScreenEvent, ScreenState, Step, Unknown, User, WorkMap,
+    ContextNote, Guardrail, Moment, Quote, ScreenEvent, ScreenState, Unknown, User, WorkMap,
 )
 
 from . import _deps as d

@@ -80,8 +80,8 @@ Server → client:
   and pushes `say`. It waits for the floor (agent listening + user quiet) before speaking. On `hello mode=debrief` it
   pushes the first debrief question. It also pushes throttled `context_update` (≤400 chars: screen, current Work Map
   step, open questions, learner mastery hint).
-- **custom**: ElevenLabs calls the brain endpoint below (`agents/set_custom_llm.sh [url]`, default Render URL); the
-  dialog loop is idle. Thinking surface in both modes = GLM-5.3-Flash via `claros.llm` (server-side, async).
+- **relay** (agent side, `agents/set_custom_llm.sh`): the agent's custom LLM is `/llm/v1/chat/completions`, which
+  returns the pending `⟦TEXT⟧` verbatim or `skip_turn`. The server dialog loop runs the same either way.
 - Agent prompt rules (hosted): ⟦say:ID|TEXT⟧ → speak TEXT exactly; user working/answering/commanding → `skip_turn`;
   general question → ≤2 sentences from `{{workflow_brief}}` + context updates + `claros_lookup`, never invent rules;
   answer in the user's language; never read ⟦⟧.

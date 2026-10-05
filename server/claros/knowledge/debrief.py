@@ -31,7 +31,7 @@ from claros.models import (
 from . import _deps as d
 from .common import (
     PRIOR_VARS,
-    OPEN_STATUSES, checks_pass, eval_predicate, well_formed, guardrail_by_id, load_map, ordered_steps, predicate_vars, save_map,
+    OPEN_STATUSES, eval_predicate, well_formed, guardrail_by_id, load_map, ordered_steps, predicate_vars, save_map,
     step_by_id,
 )
 

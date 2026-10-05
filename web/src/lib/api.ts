@@ -3,7 +3,6 @@
 import type {
   CaptureRequest,
   Coverage,
-  MasteryNode,
   Moment,
   OnetMatch,
   ScreenState,
@@ -12,7 +11,6 @@ import type {
 } from "@/lib/contracts";
 import {
   MOCK_MAP,
-  MOCK_MASTERY,
   MOCK_REQUESTS,
   MOCK_WORKFLOWS,
   type WorkflowSummary,
@@ -57,7 +55,7 @@ export const exportUrls = (workflowId: string) => ({
 });
 
 /** Server timestamps may be epoch seconds; UI uses ms. */
-export const toMs = (t?: number | null) => (t == null ? undefined : t < 1e12 ? t * 1000 : t);
+const toMs = (t?: number | null) => (t == null ? undefined : t < 1e12 ? t * 1000 : t);
 
 function toSummary(w: Partial<WorkMap> & Partial<WorkflowSummary>): WorkflowSummary {
   return {
@@ -88,13 +86,6 @@ export function getWorkflow(id: string): Promise<Result<WorkMap>> {
   return withFallback(
     () => req<WorkMap>(`/api/workflows/${encodeURIComponent(id)}`),
     () => ({ ...MOCK_MAP, workflow_id: id === MOCK_MAP.workflow_id ? id : MOCK_MAP.workflow_id }),
-  );
-}
-
-export function getCoverage(id: string): Promise<Result<Coverage>> {
-  return withFallback(
-    () => req<Coverage>(`/api/workflows/${encodeURIComponent(id)}/coverage`),
-    () => MOCK_WORKFLOWS.find((w) => w.workflow_id === id)?.coverage ?? MOCK_MAP.coverage,
   );
 }
 
@@ -219,17 +210,4 @@ export function endSession(id: string): Promise<Result<unknown>> {
     () => ({ ok: true }),
   );
 }
-
-export function getMastery(learnerId: string, workflowId: string): Promise<Result<MasteryNode[]>> {
-  return withFallback(
-    async () => {
-      const raw = await req<unknown>(`/api/learners/${encodeURIComponent(learnerId)}/mastery?workflow_id=${encodeURIComponent(workflowId)}`);
-      return (Array.isArray(raw) ? raw : ((raw as { nodes?: unknown[] })?.nodes ?? [])) as MasteryNode[];
-    },
-    () => MOCK_MASTERY,
-  );
-}
-
-export const wsUrl = (sessionId: string) =>
-  `${API_BASE.replace(/^http/, "ws")}/ws/session/${encodeURIComponent(sessionId)}`;
 

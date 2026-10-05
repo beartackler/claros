@@ -21,7 +21,7 @@ frontend `https://<project>.vercel.app`.
 ## Backend image (`server/Dockerfile`, build context = repo root)
 `CLAROS_PROFILE=slim` (default build arg + env) targets the 512 MB free instance:
 - Heavy deps live in the optional extra `local` in `server/pyproject.toml` (gliner2[local]/torch, crawl4ai,
-  scipy, presidio); the slim image installs without it (local dev: `uv sync --extra local`). PII redaction = regex layer only
+  scipy); the slim image installs without it (local dev: `uv sync --extra local`). PII redaction = regex layer only
   (`CLAROS_PII_MODEL=off`); ledger rule extraction = LLM → regex (`CLAROS_GLINER2=0`).
 - RapidOCR (onnxruntime, PP-OCRv5 mobile) kept; models are downloaded at build time. `CLAROS_OCR_THREADS=1`.
 - Crawl4AI off (`CLAROS_CRAWL4AI=0`); web reads use Exa → Jina Reader.

@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 
 from claros.brain.lang import detect_lang
 from claros.knowledge.builder import _drop_identifier_literals
 from claros.models import Guardrail
-from claros.perception.state import StateTracker, VisionState
+from claros.perception.state import StateTracker
 
 
 def test_single_foreign_word_does_not_flip_reply_language():

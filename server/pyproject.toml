@@ -12,9 +12,6 @@ dependencies = [
     "sqlite-vec>=0.1.6",
     "numpy>=1.26",
     "pillow>=10",
-    "instructor>=1.5",
-    "openai>=1.40",
-    "json-logic-qubit>=0.9",
     "fastmcp>=2.0",
     "rapidocr>=3.4",
     "onnxruntime>=1.17",
@@ -27,7 +24,6 @@ local = [
     "gliner2[local]",
     "crawl4ai",
     "scipy",
-    "presidio-analyzer>=2.2",
 ]
 
 [dependency-groups]

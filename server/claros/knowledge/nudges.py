@@ -588,18 +588,9 @@ def _explain(wm: WorkMap, step: Optional[Step], lang: str) -> Optional[str]:
 
 
 async def _speak(st: Any, text: str) -> None:
-    """Feedback goes through the same say protocol as every other tutor line (hosted); custom mode resolves the
-    id from the prewritten registry."""
-    try:
-        from claros.brain.dialog import hosted, say
-        if hosted():
-            await say(st.session_id, text, "tutor", lang=st.lang)
-            return
-    except Exception:  # noqa: BLE001
-        pass
-    key = f"nfb-{d.new_id('x')[-6:]}"
-    d.register_prewritten(key, text, st.session_id, kind="ask")
-    await d.send(st.session_id, {"type": "ask", "unknown_id": key, "text": text})
+    """Feedback goes through the same say protocol as every other tutor line."""
+    from claros.brain.dialog import say
+    await say(st.session_id, text, "tutor", lang=st.lang)
 
 
 async def novel_case(st: Any, wm: WorkMap, n: OpenNudge, text: Optional[str]) -> None:

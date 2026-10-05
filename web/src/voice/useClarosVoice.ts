@@ -414,7 +414,7 @@ export function useClarosVoice({ sessionId, mode, lang, userName = "", workflowN
     voiceMark("vars");
     const vars: Record<string, string> = {
       session_id: sessionId, mode, lang, user_name: userName || "there", workflow_name: workflowName, workflow_brief: "none yet",
-      ...Object.fromEntries(Object.entries(dv).filter(([k]) => k !== "dialog_mode" && k !== "session_id" && k !== "mode")),
+      ...Object.fromEntries(Object.entries(dv).filter(([k]) => k !== "session_id" && k !== "mode")),
     };
     if (userName) vars.user_name = userName;
     const shortLang = (lang || "en").slice(0, 2);
@@ -499,6 +499,6 @@ const OFF_LINES: Record<string, Record<"off" | "on" | "still", string>> = {
   fr: { off: "Hors enregistrement — je ne regarde ni n'écoute. Touchez Reprendre quand vous êtes prêt.", on: "On reprend l'enregistrement.", still: "Toujours hors enregistrement — touchez Reprendre quand vous êtes prêt." },
   es: { off: "Fuera de grabación — no miro ni escucho. Toca Reanudar cuando estés listo.", on: "Volvemos a grabar.", still: "Sigue fuera de grabación — toca Reanudar cuando estés listo." },
 };
-export function offRecordLine(lang: string, k: "off" | "on" | "still") {
+function offRecordLine(lang: string, k: "off" | "on" | "still") {
   return (OFF_LINES[(lang || "en").slice(0, 2)] ?? OFF_LINES.en)[k];
 }

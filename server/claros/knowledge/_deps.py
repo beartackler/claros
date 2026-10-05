@@ -358,7 +358,7 @@ async def decide(question: str, context: str, options: list[str], timeout: Optio
     return lab, float(getattr(r, "confidence", 0.0) or 0.0)
 
 
-# Pre-written texts the brain streams verbatim for ⟦intervene:G⟧ / ⟦ask:X⟧.
+# Pre-written texts (guardrail interventions, asks), keyed by id and session:id.
 PREWRITTEN: dict[str, str] = {}
 
 
@@ -366,33 +366,6 @@ def register_prewritten(key: str, text: str, session_id: Optional[str] = None, k
     PREWRITTEN[key] = text
     if session_id:
         PREWRITTEN[f"{session_id}:{key}"] = text
-    try:
-        import claros.brain as brain  # type: ignore
-        for mod_name in ("registry", "llm_endpoint", "endpoint"):
-            mod = getattr(brain, mod_name, None)
-            if mod is None:
-                try:
-                    import importlib
-                    mod = importlib.import_module(f"claros.brain.{mod_name}")
-                except Exception:  # noqa: BLE001
-                    continue
-            for fn_name in (f"register_{kind}", "register_intervention", "register_text", "register"):
-                fn = getattr(mod, fn_name, None)
-                if callable(fn):
-                    try:
-                        fn(key, text) if session_id is None else _call_reg(fn, key, text, session_id)
-                        return
-                    except Exception:  # noqa: BLE001
-                        continue
-    except Exception:  # noqa: BLE001
-        pass
-
-
-def _call_reg(fn: Any, key: str, text: str, session_id: str) -> None:
-    try:
-        fn(key, text, session_id=session_id)
-    except TypeError:
-        fn(key, text)
 
 
 def get_prewritten(key: str, session_id: Optional[str] = None) -> Optional[str]:

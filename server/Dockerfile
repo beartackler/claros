@@ -3,7 +3,7 @@
 #   docker run --rm -p 8787:8787 --memory=512m --env-file .env claros-server
 #
 # CLAROS_PROFILE=slim (default) fits Render's free 512 MB instance:
-#   - no `local` extra: no torch/GLiNER2, crawl4ai, scipy, presidio (regex PII; LLM/regex rule extraction)
+#   - no `local` extra: no torch/GLiNER2, crawl4ai, scipy (regex PII; LLM/regex rule extraction)
 #   - RapidOCR (onnxruntime, PP-OCRv5 mobile) kept, models baked into the image, 1 OCR thread
 #   - Crawl4AI off, no Ollama (System One decider: Fastino GLiDE if FASTINO_API_KEY, else LLM, else rules)
 #   - fixtures auto-seeded on boot (free tier disk is ephemeral)
@@ -18,7 +18,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never \
     UV_PROJECT_ENVIRONMENT=/app/.venv UV_NO_CACHE=1
 WORKDIR /app/server
 COPY server/pyproject.toml server/uv.lock ./
-# slim: base deps only. full: + the `local` extra (torch/GLiNER2, crawl4ai, scipy, presidio).
+# slim: base deps only. full: + the `local` extra (torch/GLiNER2, crawl4ai, scipy).
 RUN if [ "$CLAROS_PROFILE" = "slim" ]; then EXTRA=""; else EXTRA="--extra local"; fi && \
     uv sync --locked --no-dev --no-install-project $EXTRA
 

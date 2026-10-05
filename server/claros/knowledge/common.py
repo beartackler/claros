@@ -461,7 +461,7 @@ def _nest(flat: dict[str, Any]) -> dict[str, Any]:
 
 
 def _jl(p: Any, data: dict[str, Any], flat: dict[str, Any]) -> Any:
-    """Small json-logic evaluator (subset) used when json_logic lib is unavailable."""
+    """Small json-logic evaluator (the subset guardrail predicates use)."""
     if not isinstance(p, dict) or len(p) != 1:
         return [_jl(x, data, flat) for x in p] if isinstance(p, list) else p
     op, args = next(iter(p.items()))

@@ -34,8 +34,3 @@ export function onClockSync(client_t: number, server_t: number): void {
 export function clockInfo() {
   return { offset, rtt: bestRtt };
 }
-
-export function resetClock() {
-  offset = 0;
-  bestRtt = Infinity;
-}

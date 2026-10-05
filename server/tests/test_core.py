@@ -1,7 +1,6 @@
 """Core tests: bus, store (log, kv, FTS5, vec), ws hello/clock_sync, llm fallback ordering."""
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 

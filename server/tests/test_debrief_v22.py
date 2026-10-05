@@ -2,13 +2,11 @@
 expert first, probe answers patch the rule, teach-back ≤140 words, diff-only readback, confirm publishes (no exam)."""
 from __future__ import annotations
 
-import json
 
-import pytest
 
 from claros.knowledge import _deps as d
 from claros.knowledge import builder, common, debrief
-from claros.models import Decision, Step, Unknown, User, Variant
+from claros.models import Unknown, User, Variant
 
 from test_knowledge import fx  # noqa: F401  (fixture loader)
 from test_knowledge import env  # noqa: F401  (autouse store/bus/llm fixture)

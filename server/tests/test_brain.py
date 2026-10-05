@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from claros.brain import deps, intents, lang as L, ledger as ledger_mod, llm_endpoint
+from claros.brain import deps, intents, ledger as ledger_mod, llm_endpoint
 from claros.brain.gate import Gate, GateConfig, gate as GATE
 
 
@@ -67,7 +67,6 @@ def offline(monkeypatch):
     monkeypatch.setattr(deps, "classify_scope", no_scope)
     ledger_mod.ledgers.clear()
     GATE.states.clear()
-    llm_endpoint.interventions.clear()
     return SimpleNamespace(clock=clock, sessions=sessions, sent=sent, get_session=get_session)
 
 
@@ -291,17 +290,6 @@ def _body(text, sid="e1", tools=None, system=None):
 SKIP_TOOLS = [{"type": "function", "function": {"name": "skip_turn", "parameters": {"type": "object"}}}]
 
 
-def test_endpoint_ask_passthrough(offline, client):
-    lg = ledger_mod.get_ledger("e1")
-    opened = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))
-    u = opened[0]
-    r = client.post("/llm/v1/chat/completions", json=_body(f"⟦ask:{u.id}⟧"))
-    assert r.headers["content-type"].startswith("text/event-stream")
-    ch = _sse(r)
-    assert ch[0]["object"] == "chat.completion.chunk"
-    assert _content(ch) == u.spoken_question
-    assert ch[-1]["choices"][0]["finish_reason"] == "stop"
-    assert u.status == "asked"
 
 
 def test_endpoint_narration_skip_turn(offline, client):
@@ -315,48 +303,12 @@ def test_endpoint_narration_skip_turn(offline, client):
     assert _content(ch) == ""
 
 
-def test_endpoint_session_from_system_prompt_and_russian(offline, client):
-    offline.get_session("ru1").lang = "ru"
-    r = client.post("/llm/v1/chat/completions",
-                    json={"stream": True, "messages": [
-                        {"role": "system", "content": "Agent.\nclaros-session: ru1"},
-                        {"role": "user", "content": "не записывай это"}]})
-    assert _content(_sse(r)) == L.phrase("off_record", "ru")
-    assert offline.get_session("ru1").off_record is True
-    assert any(m[2].get("action") == "off_record_on" for m in offline.sent if m[1] == "ws.out")
 
 
-def test_endpoint_answer_ack_and_not_now(offline, client):
-    lg = ledger_mod.get_ledger("e2")
-    u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
-    lg.mark_asked(u.id)
-    ch = _sse(client.post("/llm/v1/chat/completions",
-                          json=_body("Because group vendors always go to 0400", sid="e2")))
-    txt = _content(ch)
-    assert len(txt.split()) <= 4
-    assert u.status == "answered"
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("not now", sid="e2")))
-    assert _content(ch) == "Sure, later."
-    assert GATE.st("e2").snooze_until > offline.clock.t
 
 
-def test_endpoint_intervene_registry(offline, client):
-    llm_endpoint.interventions["e3"] = {"g1": "Stop — invoices over 5,000 need the CFO."}
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦intervene:g1⟧", sid="e3")))
-    assert _content(ch) == "Stop — invoices over 5,000 need the CFO."
 
 
-def test_endpoint_llm_buffer_phrase(offline, client, monkeypatch):
-    monkeypatch.setattr(llm_endpoint, "BUFFER_AFTER_S", 0.05)
-
-    async def slow_stream(messages, model_role="fast"):
-        await asyncio.sleep(0.2)
-        yield "I think it's the group vendor rule — right?"
-
-    monkeypatch.setattr(deps, "llm_stream", slow_stream)
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("Claros, what do you think this is?", sid="e4")))
-    txt = _content(ch)
-    assert txt.startswith("Hmm, let me think.") and "group vendor" in txt
 
 
 def test_systemone_confidence_recomputed():
@@ -367,15 +319,6 @@ def test_systemone_confidence_recomputed():
 
 # ---------------- follow-ups: |text suffix, PRISM, hypotheses ----------------
 
-def test_endpoint_ask_suffix_fallback(offline, client):
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦ask:u_unknown|Why 0400 here?⟧", sid="e5")))
-    assert _content(ch) == "Why 0400 here?"
-    lg = ledger_mod.get_ledger("e5")
-    u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body(f"⟦ask:{u.id}|other text⟧", sid="e5")))
-    assert _content(ch) == u.spoken_question
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦intervene:gx|Stop, needs CFO.⟧", sid="e5")))
-    assert _content(ch) == "Stop, needs CFO."
 
 
 def test_gate_prism_numbers_logged(offline):
@@ -430,61 +373,18 @@ def _fake_knowledge(monkeypatch, table):
     monkeypatch.setattr(deps, "knowledge_attr", lambda path: table.get(path))
 
 
-def test_debrief_routing_and_markers(offline, client, monkeypatch):
-    monkeypatch.setattr(llm_endpoint, "SPEECH_S_PER_WORD", 0)
-    llm_endpoint._debrief_started.clear()
-    calls = []
-
-    async def nxt(sess):
-        calls.append(("next", sess.id))
-        return "[[step:s1]] First you open the invoice. [[step:s2]] Then you check the cost center. Right?"
-
-    async def ans(sess, text, intent=None):
-        calls.append(("answer", text, intent))
-        return "Got it. [[step:s3]] Over 5,000 goes to the CFO."
-
-    _fake_knowledge(monkeypatch, {"debrief.next_debrief_utterance": nxt, "debrief.handle_debrief_answer": ans})
-    offline.get_session("d1").mode = "debrief"
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("hi", sid="d1")))
-    txt = _content(ch)
-    assert "[[" not in txt and txt.startswith("First you open the invoice.") and "Then you check" in txt
-    hl = [m[2]["step_id"] for m in offline.sent if m[1] == "ws.out" and m[2].get("type") == "highlight_step"]
-    assert hl == ["s1", "s2"]
-    ch = _sse(client.post("/llm/v1/chat/completions",
-                          json=_body("Because the vendor is in our group of companies", sid="d1")))
-    assert _content(ch) == "Got it. Over 5,000 goes to the CFO."
-    assert calls[-1][0] == "answer" and calls[-1][2] in ("answer", "narration", "correction", "confirm") \
-        and calls[-1][2] != "narration"
 
 
-def test_learn_ask_prewritten_and_tutor(offline, client, monkeypatch):
-    async def handle_intent(sess, intent, text):
-        return f"tutor:{intent}"
-
-    _fake_knowledge(monkeypatch, {"tutor.handle_intent": handle_intent,
-                                  "_deps.get_prewritten": lambda k, sid: "What do you do next?" if k == "pred-s2" else None})
-    offline.get_session("l1").mode = "learn"
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦ask:pred-s2|fallback⟧", sid="l1")))
-    assert _content(ch) == "What do you do next?"
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("⟦ask:hint-s9|Try the cost center.⟧", sid="l1")))
-    assert _content(ch) == "Try the cost center."
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("что дальше?", sid="l1")))
-    assert _content(ch) == "tutor:what_next"
 
 
-def test_capture_end_moves_to_debrief(offline, client):
+def test_capture_end_moves_to_debrief(offline):
     llm_endpoint._phase_sent.clear()
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body("I'm done", sid="c9")))
-    assert _content(ch) == "Thanks! I'm putting your map together, then I'll ask a few questions."
+    run(llm_endpoint.announce_debrief("c10"))
     out = [m[2] for m in offline.sent if m[1] == "ws.out"]
     assert {"type": "phase", "phase": "debrief", "workflow_id": None} in out
     assert any(m.get("text") == "debrief_ready" for m in out)
-    # ws control path (no voice): phase + spoken line via ⟦ask:phase-debrief⟧
-    offline.sent.clear()
-    run(llm_endpoint.announce_debrief("c10"))
-    ask = next(m[2] for m in offline.sent if m[2].get("type") == "ask")
-    ch = _sse(client.post("/llm/v1/chat/completions", json=_body(f"⟦ask:{ask['unknown_id']}⟧", sid="c10")))
-    assert _content(ch) == "Thanks! I'm putting your map together, then I'll ask a few questions."
+    ask = next(m for m in out if m.get("type") == "ask")
+    assert ask["text"] == "Thanks! I'm putting your map together, then I'll ask a few questions."
 
 
 def test_first_ask_never_uses_truncated_or_fragment_values(offline):
