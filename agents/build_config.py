@@ -283,7 +283,16 @@ def build():
                 "silence_end_call_timeout": -1,
                 "soft_timeout_config": {"timeout_seconds": -1, "use_llm_generated_message": False},
             },
-            "conversation": {"text_only": False, "max_duration_seconds": 3600},
+            "conversation": {
+                "text_only": False,
+                "max_duration_seconds": 3600,
+                # the defaults + client tools + vad_score: without vad_score the server's pause gate never hears
+                # the expert speak (web onVadScore → ws `vad` → gate.on_vad)
+                "client_events": ["conversation_initiation_metadata", "asr_initiation_metadata", "ping", "audio",
+                                  "interruption", "user_transcript", "tentative_user_transcript", "agent_response",
+                                  "agent_response_correction", "client_tool_call", "agent_tool_response",
+                                  "vad_score"],
+            },
         },
         "platform_settings": {
             "overrides": {

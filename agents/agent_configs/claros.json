@@ -152,7 +152,21 @@
         },
         "conversation": {
             "text_only": false,
-            "max_duration_seconds": 3600
+            "max_duration_seconds": 3600,
+            "client_events": [
+                "conversation_initiation_metadata",
+                "asr_initiation_metadata",
+                "ping",
+                "audio",
+                "interruption",
+                "user_transcript",
+                "tentative_user_transcript",
+                "agent_response",
+                "agent_response_correction",
+                "client_tool_call",
+                "agent_tool_response",
+                "vad_score"
+            ]
         }
     },
     "platform_settings": {

@@ -263,14 +263,34 @@ def test_gate_snooze_and_reading_grace(offline):
     g.snooze("g1")
     assert any("snoozed" in x for x in run(g.evaluate("g1"))["reasons"])
     g.st("g1").snooze_until = 0
-    g.on_screen_state("g1", {"new_words": 20})
+    # grace comes from words new since the last frame (no upstream counter exists: it never fired in prod)
+    g.on_screen_state("g1", {"fields": [{"label": "Note", "value": " ".join(f"w{i}" for i in range(20))}]})
     offline.clock.t += 1300
     assert any("reading grace" in x for x in run(g.evaluate("g1"))["reasons"])
-    # a vision result that lands 6 s after its frame: the reading time already passed, nothing new to wait for
     s = g.st("g1")
-    s.grace_until, before = 0.0, s.last_change_t
-    g.on_screen_state("g1", {"new_words": 20, "t": offline.clock.t - 6000})
+    s.grace_until = 0.0
+    g.on_screen_state("g1", {"fields": [{"label": "Note", "value": " ".join(f"w{i}" for i in range(20))}]})
+    assert s.grace_until == 0.0  # same screen again: nothing new to read
+    # a vision result that lands 6 s after its frame: the reading time already passed, nothing new to wait for
+    before = s.last_change_t
+    g.on_screen_state("g1", {"dialogs": [" ".join(f"d{i}" for i in range(20))], "t": offline.clock.t - 6000})
     assert s.grace_until <= offline.clock.t and s.last_change_t == before
+
+
+def test_gate_hears_the_expert_without_vad(offline):
+    """Live: the agent never forwarded vad_score, so the gate asked over the expert and over Claros' own reply."""
+    from claros.brain import dialog
+    g, lg = _gate_ready(offline)
+    offline.get_session("g1").clock_offset = 500.0
+    g.on_utterance("g1", {"role": "user", "text": "so this goes to capex", "t_end": offline.clock.t - 1000})
+    assert any("recent speech" in x for x in run(g.evaluate("g1"))["reasons"])
+    offline.clock.t += 2000
+
+    async def mid_turn():
+        async with dialog._lock("g1"):
+            return await g.evaluate("g1")
+    assert "dialog turn" in run(mid_turn())["reasons"]
+    assert run(g.evaluate("g1"))["decision"] == "ask_now"
 
 
 # ---------------- endpoint ----------------

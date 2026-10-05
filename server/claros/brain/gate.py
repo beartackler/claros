@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import re
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -55,6 +56,7 @@ class GateState:
     sig_t: float = 0.0
     last_decide_t: float = 0.0
     last_reasons: Optional[tuple] = None
+    screen_words: set = field(default_factory=set)
     log: deque = field(default_factory=lambda: deque(maxlen=300))
 
 
@@ -93,6 +95,18 @@ class Gate:
             if isinstance(p.get(k), (int, float)):
                 s.p_end = float(p[k])
 
+    def _server_t(self, sid: str, t: Any, now: float) -> float:
+        """Client timestamp → server time (session clock_offset), never in the future; `now` when absent."""
+        off = getattr(deps.get_session(sid), "clock_offset", 0.0) or 0.0
+        return min(now, float(t) + off) if isinstance(t, (int, float)) else now
+
+    def on_utterance(self, sid: str, p: Any) -> None:
+        # Backstop for `vad`: the agent may not forward vad_score, and then the gate never heard the expert talk
+        # (asked over them). A final user transcript means they spoke until t_end.
+        if isinstance(p, dict) and p.get("role", "user") == "user":
+            s = self.st(sid)
+            s.last_speech_t = max(s.last_speech_t, self._server_t(sid, p.get("t_end"), deps.now_ms()))
+
     def on_agent_state(self, sid: str, p: dict) -> None:
         s = self.st(sid)
         s.agent_mode = p.get("mode", "listening")
@@ -102,19 +116,14 @@ class Gate:
     def on_screen_state(self, sid: str, p: Any) -> None:
         s, now = self.st(sid), deps.now_ms()
         d = p if isinstance(p, dict) else getattr(p, "__dict__", {}) | (getattr(p, "model_extra", None) or {})
-        n = 0
-        for k in ("new_words", "new_word_count", "ocr_new_words"):
-            v = d.get(k)
-            if isinstance(v, (int, float)):
-                n = int(v)
-            elif isinstance(v, list):
-                n = len(v)
-            if n:
-                break
+        # reading grace = words that weren't on screen last frame (nothing upstream counts them for us)
+        vals = [f.get("value") if isinstance(f, dict) else getattr(f, "value", None) for f in d.get("fields") or []]
+        vals += [c for tb in d.get("tables") or [] for r in tb.get("rows") or [] if isinstance(r, list) for c in r]
+        vals += list(d.get("dialogs") or [])
+        words = {w for v in vals if v for w in re.findall(r"\w+", str(v).lower())}
+        n, s.screen_words = len(words - s.screen_words), words
         # Stamp at the frame's own time: vision lands seconds late, and the expert has been reading meanwhile.
-        t = d.get("t")
-        off = getattr(deps.get_session(sid), "clock_offset", 0.0) or 0.0
-        frame_t = min(now, float(t) + off) if isinstance(t, (int, float)) else now
+        frame_t = self._server_t(sid, d.get("t"), now)
         if n:
             s.grace_until = max(s.grace_until, frame_t + min(self.cfg.grace_cap_ms, n * self.cfg.grace_per_word_ms))
         s.last_change_t = max(s.last_change_t, frame_t)
@@ -155,6 +164,9 @@ class Gate:
             r.append("speech" if s.speaking else f"recent speech ({int(now - s.last_speech_t)}ms)")
         if s.agent_mode != "listening":
             r.append(f"agent {s.agent_mode}")
+        from .dialog import _locks  # lazy: dialog imports gate
+        if (lk := _locks.get(sid)) is not None and lk.locked():
+            r.append("dialog turn")  # the expert just spoke and Claros is still answering them
         if s.activity == "typing" and now - s.activity_t < 5000:
             r.append("typing")
         if s.activity == "away":

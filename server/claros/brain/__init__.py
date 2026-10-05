@@ -90,6 +90,7 @@ def register(bus: Any) -> None:
     bus.subscribe("screen.state", lambda sid, p: gate.on_screen_state(sid, p))
     bus.subscribe("utterance", on_utt)
     bus.subscribe("ws.in.utterance", on_utt)  # deduped by event_id in the ledger
+    bus.subscribe("ws.in.utterance", lambda sid, p: gate.on_utterance(sid, p))
     bus.subscribe("ws.in.activity", lambda sid, p: gate.on_activity(sid, p))
     bus.subscribe("ws.in.vad", lambda sid, p: gate.on_vad(sid, p))
     bus.subscribe("ws.in.agent_state", lambda sid, p: gate.on_agent_state(sid, p))
