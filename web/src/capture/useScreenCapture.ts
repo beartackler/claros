@@ -118,7 +118,8 @@ export function useScreenCapture(opts: CaptureOptions = {}) {
     try {
       // Non-standard-but-supported Chrome options are passed through as-is.
       const constraints = {
-        video: { displaySurface: "window", frameRate: { max: 5 } },
+        // no pointer in the frames: mouse moves were tile changes read as typing
+        video: { displaySurface: "window", frameRate: { max: 5 }, cursor: "never" },
         audio: false,
         selfBrowserSurface: "exclude",
         surfaceSwitching: "include",
@@ -149,7 +150,7 @@ export function useScreenCapture(opts: CaptureOptions = {}) {
         case "activity": {
           const sock = getSocket();
           if (optsRef.current.send !== false && sock && !useClaros.getState().offRecord)
-            sock.send({ type: "activity", t: toSession(m.t), kind: m.kind, tiles_changed: m.tiles_changed, dims: m.dims });
+            sock.send({ type: "activity", t: toSession(m.t), kind: m.kind, tiles_changed: m.tiles_changed, rects: m.rects, dims: m.dims });
           optsRef.current.onActivity?.(m.kind);
           setState((s) => (s.activity === m.kind ? s : { ...s, activity: m.kind }));
           setStore({ activity: m.kind, activityT: Date.now() });

@@ -374,7 +374,9 @@ class StateTracker:
         heur = analyze(lines, dims)
         if self.state is None or self.prev_lines is None:
             return True, "first"
-        if reason == "boundary":
+        # a click into a field / an opened dropdown also fires "boundary": on a screen vision already knows that's
+        # not structural (the vision read would replace the template with an overlay-covered one)
+        if reason == "boundary" and self._current_key(heur, lines) not in self.templates:
             return True, "boundary"
         if lines and sum(ln.conf for ln in lines) / len(lines) < 0.7:
             return True, "low_conf"
@@ -434,7 +436,7 @@ class StateTracker:
         return st
 
     def _compose(self, seq: int, t: float, lines: list[OcrLine], dims: tuple[int, int], heur: Heuristic,
-                 keyframe_id: Optional[str]) -> ScreenState:
+                 keyframe_id: Optional[str], record: bool = True) -> ScreenState:
         key = self._current_key(heur, lines)
         self.current_key = key
         tpl = self.templates.get(key)
@@ -483,8 +485,10 @@ class StateTracker:
                         # multi-row lists: vision values on their own frame only (row geometry is too fragile)
                         cell = None if multi else _cell_below(lines, col, ri)
                         if cell is not None:
-                            visible[k] = Field_(label=lab, value=cell.text, bbox=cell.bbox,
-                                                normalized=normalize(cell.text, ui_lang))
+                            # an empty cell shows its column name as placeholder (live: "Maintenance → Cost Center")
+                            empty = label_key(cell.text) == label_key(col)
+                            visible[k] = Field_(label=lab, value=None if empty else cell.text, bbox=cell.bbox,
+                                                normalized=None if empty else normalize(cell.text, ui_lang))
                         elif tpl.seq == seq and ci < len(row):
                             visible[k] = Field_(label=lab, value=row[ci], bbox=None,
                                                 normalized=normalize(row[ci], ui_lang))
@@ -509,6 +513,8 @@ class StateTracker:
                     vb = [vf.bbox[0] + dx, vf.bbox[1] + dy, vf.bbox[2], vf.bbox[3]]
                     vals = [ln for ln in lines if ln is not lab_now and intersects(ln.bbox, vb)]
                     val = " ".join(ln.text for ln in sorted(vals, key=lambda ln: ln.bbox[0])) if vals else ""
+                    if label_key(val) == k:  # placeholder = the field's own label: empty
+                        val = ""
                     visible[k] = Field_(label=vf.label, value=val or None, bbox=vb,
                                         normalized=normalize(val, ui_lang))
                 elif tpl.seq == seq:
@@ -528,8 +534,8 @@ class StateTracker:
                 visible[k] = visible[k].model_copy(update={"bbox": None})
         # accumulate per entity (fields seen so far, even if scrolled off)
         model = self.entity_models.setdefault(key, {})
-        for k, f in visible.items():
-            model[k] = f
+        if record:  # not for an older frame (re-baseline): its values would revert off-screen fields
+            model.update(visible)
         fields = list(visible.values()) + [
             Field_(label=f.label, value=f.value, canonical=f.canonical, normalized=f.normalized, bbox=None)
             for k, f in model.items() if k not in visible]
@@ -611,7 +617,7 @@ class StateTracker:
         """State of an OLDER frame under the current templates (diff baseline when vision lands late)."""
         keep = self.current_key
         try:
-            return self._compose(seq, t, lines, dims, analyze(lines, dims), keyframe_id)
+            return self._compose(seq, t, lines, dims, analyze(lines, dims), keyframe_id, record=False)
         finally:
             self.current_key = keep
 

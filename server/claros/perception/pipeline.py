@@ -24,7 +24,7 @@ from .state import StateTracker, VisionState, summarize, vision_messages
 log = logging.getLogger("claros.perception")
 
 CONTEXT_MIN_INTERVAL_S = 3.0
-MUST_REASONS = {"boundary", "toast"}
+MUST_REASONS = {"toast"}  # + a "boundary" the router kept structural (why == "boundary")
 
 VisionFn = Callable[[list[dict], bytes], Awaitable[Optional[VisionState]]]
 
@@ -80,6 +80,7 @@ class VisionJob:
     dims: tuple[int, int]
     must: bool
     why: str
+    share: int = 0
 
 
 class SessionPipeline:
@@ -94,6 +95,9 @@ class SessionPipeline:
         self.differ = Differ(session_id)
         self.lock = asyncio.Lock()
         self.last_seq = -1
+        self.share = 0  # bumps when a re-share restarts seq at 0
+        self.carry: Optional[list] = []  # changed tiles of coalesced (skipped) keyframes; None = chain broken
+        self.waiting = 0  # keyframes queued on the lock
         self.published: Optional[ScreenState] = None
         self.pending: list[VisionJob] = []
         self.vision_wakeup = asyncio.Event()
@@ -130,7 +134,25 @@ class SessionPipeline:
             return None
         reason = msg.get("reason")
         tiles = msg.get("changed_tiles") or None
+        self.waiting += 1
         async with self.lock:
+            self.waiting -= 1
+            if seq == 0 and self.last_seq >= 0:
+                # a new share restarts seq at 0: without this every frame is "stored, not applied" and tile OCR
+                # carries the old share's lines
+                self.share += 1
+                self.last_seq, self.published, self.carry, self.pending = -1, None, [], []
+                self.tracker.prev_lines, self.tracker.last_vision_seq = None, -1
+            # changed_tiles are vs the client's previous keyframe: only valid on the next seq (a frame dropped by
+            # the client, off the record, or here breaks the chain → full OCR)
+            chain = seq == self.last_seq + 1 and bool(tiles) and self.carry is not None
+            if self.waiting and reason in ("settle", "heartbeat") and seq > self.last_seq:
+                # coalesce: a newer keyframe is already queued (serial ~1.3 s OCR built a 2-4 s backlog);
+                # its OCR covers this frame's changes too
+                self.carry = self.carry + tiles if chain else None
+                self.last_seq = seq
+                return None
+            tiles = self.carry + tiles if chain else None
             prev_lines = self.tracker.prev_lines
             stale = seq <= self.last_seq
             t0 = time.perf_counter()
@@ -157,14 +179,15 @@ class SessionPipeline:
             structural, why = self.tracker.route(res.lines, res.dims, reason)
             prev = self.published
             st = self.tracker.update(seq, t, res.lines, res.dims, kid)
-            self.last_seq = seq
+            self.last_seq, self.carry = seq, []
             self._emit(prev, st, tiles)
             if why == "no_template" and (self.pending or self.in_flight):
                 structural = False  # a template for this screen is already on its way
-            if structural or reason in MUST_REASONS:
+            forced = reason in MUST_REASONS or why == "boundary"
+            if structural or forced:
                 self._enqueue(VisionJob(seq, t, res.jpeg, list(res.lines), res.dims,
-                                        must=reason in MUST_REASONS or why in ("first", "dialog", "entity", "title"),
-                                        why=why))
+                                        must=forced or why in ("first", "dialog", "entity", "title"),
+                                        why=why, share=self.share))
             return st
 
     async def _warn_self_capture(self) -> None:
@@ -185,9 +208,9 @@ class SessionPipeline:
 
     # ---------------- emit ----------------
     def _emit(self, prev: Optional[ScreenState], st: ScreenState,
-              tiles: Optional[list[list[int]]] = None) -> list[ScreenEvent]:
+              tiles: Optional[list[list[int]]] = None, rebase: bool = False) -> list[ScreenEvent]:
         key = self.tracker.current_key
-        evs = self.differ.diff(prev, st, tiles, self.tracker.kinds.get(key, {}))
+        evs = self.differ.diff(prev, st, tiles, self.tracker.kinds.get(key, {}), rebase)
         self.published = st
         self.publish(self.sid, "screen.state", st)
         if self.persist:
@@ -282,18 +305,22 @@ class SessionPipeline:
                 if vs is not None:
                     async with self.lock:
                         had_tpl = self.tracker.current_key in self.tracker.templates
-                        st = self.tracker.apply_vision(job.seq, vs, job.lines)
+                        # a previous share's read: its seqs are void
+                        st = self.tracker.apply_vision(job.seq, vs, job.lines) if job.share == self.share else None
                         if st is not None:
-                            prev = self.published
+                            prev, rebase = self.published, False
                             # only when this screen had no template: then the cheap path couldn't see edits yet.
                             # With one, it already reported them and re-diffing an older frame repeats each
                             # change (a repeat reads as "set it back" and drops the real question)
-                            if not had_tpl and job.seq < st.seq and prev is not None and prev.entity_id == st.entity_id:
+                            if not had_tpl and job.seq < st.seq and prev is not None:
                                 # vision read an older frame of this screen: re-baseline the diff on that frame
                                 # so a change made during the vision latency (e.g. a tag added right after
                                 # opening) is still an edit event, not hidden behind unreliable OCR pairs
-                                prev = self.tracker.compose_frame(job.seq, job.t, job.lines, job.dims)
-                            self._emit(prev, st)
+                                base = self.tracker.compose_frame(job.seq, job.t, job.lines, job.dims)
+                                # only if that frame shows this screen (else the re-diff re-emits open/navigate)
+                                if base.entity_id == st.entity_id and (st.entity_id or base.view == st.view):
+                                    prev, rebase = base, True
+                            self._emit(prev, st, rebase=rebase)
             except Exception as e:  # noqa: BLE001
                 log.warning("vision call failed (%s); heuristics only for 30s", e)
                 self.vision_disabled_until = time.monotonic() + 30

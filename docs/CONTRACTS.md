@@ -47,7 +47,7 @@ All messages JSON `{type, ...}`; client stamps `t` = ms on the session clock
 Client → server:
 - `hello {session_id, mode, user:{id,name,role}, lang, workflow_id?}`
 - `clock_sync {client_t}` → server replies `clock_sync {client_t, server_t}`
-- `activity {t, kind: typing|scrolling|navigating|idle|away, tiles_changed, dims:[w,h]}` (≤2/s)
+- `activity {t, kind: typing|scrolling|navigating|idle|away, tiles_changed, rects?: typing rects [x,y,w,h] in keyframe coords, dims:[w,h]}` (≤2/s)
 - `keyframe {t, seq, reason: settle|boundary|heartbeat|toast, jpeg_b64, dims:[w,h], changed_tiles:[[x,y,w,h]]}`
 - `vad {t, speaking: bool, score}` (on change)
 - `utterance {t_start, t_end, role: user|agent, text, lang?, event_id}` (final transcripts from ElevenLabs onMessage)

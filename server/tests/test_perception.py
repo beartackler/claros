@@ -511,3 +511,131 @@ def test_panel_over_an_amount_is_not_an_edit():
     evs, _ = run_seq(frames, [{"t": t, "kind": "typing", "tiles_changed": 3} for t in (1500, 3500, 4800, 5400, 5900)])
     edits = [(e.kind, e.old, e.new) for e in evs if e.field == "Grand Total"]
     assert edits == [("edit", "12.400,00 €", "13.000,00 €")]
+
+
+def test_rediff_after_vision_sees_typing_before_settle():
+    """Re-diff from the vision frame runs on a frame the cheap path already diffed: typing that stopped 1.2 s+
+    before the settle keyframe fell out of the window and the edit read as system."""
+    tr, df = StateTracker(), Differ("s")
+    s0 = tr.update(0, 0, form(), DIMS)
+    df.diff(None, s0)
+    df.note_activity({"t": 1500, "kind": "typing", "tiles_changed": 2})
+    s1 = tr.update(1, 3000, form(cost="Production"), DIMS)
+    df.last_t = 3000  # the cheap path already diffed frame 1
+    assert [(e.kind, e.source) for e in df.diff(s0, s1, rebase=True)] == [("edit", "typed")]
+
+
+def test_typing_rects_beat_keyframe_tiles_for_source():
+    """Activity carried only a tile count, so the keyframe's tiles (autofilled total included) marked autofill typed."""
+    tr, df = StateTracker(), Differ("s")
+    df.note_activity({"t": 1700, "kind": "typing", "tiles_changed": 2, "rects": [[40, 300, 300, 60]]})
+    s0 = tr.update(0, 0, form(), DIMS)
+    df.diff(None, s0)
+    s1 = tr.update(1, 2000, form(cost="Production", typed_extra="13.000,00 €"), DIMS)
+    evs = df.diff(s0, s1, [[0, 280, 1280, 80]])  # keyframe tiles cover both fields
+    assert {e.field: e.source for e in evs if e.kind == "edit"} == {"Cost Center": "typed", "Grand Total": "system"}
+
+
+def test_field_placeholder_is_empty_not_a_value():
+    """Live: an emptied Cost Center showed its placeholder "Cost Center" → phantom edit "Maintenance → Cost Center"."""
+    tr = StateTracker()
+    tr.update(0, 0, form(cost="Maintenance"), DIMS)
+    tr.apply_vision(0, VisionState(entity_id="ACC-PINV-0004", entity_type="Purchase Invoice",
+                                   fields=[VField(label="Cost Center", value="Maintenance", bbox=[56, 314, 520, 40])]),
+                    form(cost="Maintenance"))
+    st = tr.update(1, 1000, form(cost="Cost Center"), DIMS)
+    assert [f.value for f in st.fields if f.label == "Cost Center"] == [None]
+
+
+def test_boundary_on_known_screen_is_cheap():
+    """Clicking into a field fired "boundary" → forced vision read of an overlay-covered frame."""
+    tr = StateTracker()
+    tr.update(0, 0, form(), DIMS)
+    assert tr.route(form(), DIMS, "boundary") == (True, "boundary")  # no template yet
+    tr.apply_vision(0, VisionState(entity_id="ACC-PINV-0004", entity_type="Purchase Invoice"), form())
+    assert tr.route(form(cost="Production"), DIMS, "boundary") == (False, "cheap")
+
+
+def test_compose_frame_does_not_revert_entity_model():
+    tr = StateTracker()
+    tr.update(0, 0, form(), DIMS)
+    tr.apply_vision(0, VisionState(entity_id="ACC-PINV-0004", entity_type="Purchase Invoice",
+                                   fields=[VField(label="Cost Center", bbox=[56, 314, 520, 40])]), form())
+    tr.update(1, 1000, form(cost="Production"), DIMS)
+    tr.compose_frame(0, 0, form(), DIMS)
+    assert tr.entity_models["id:ACC-PINV-0004"]["cost center"].value == "Production"
+
+
+@pytest.fixture
+def ocr_args(scripted, monkeypatch):
+    """scripted + record (tiles, prev_lines) each redaction got."""
+    calls, inner = [], pl.redact_frame
+
+    def rec(jpeg, tiles=None, prev=None):
+        calls.append((tiles, prev))
+        return inner(jpeg, tiles, prev)
+
+    monkeypatch.setattr(pl, "redact_frame", rec)
+    return calls
+
+
+async def _novision(m, j):
+    return None
+
+
+async def test_reshare_seq_restart_applies_new_frames(scripted, ocr_args):
+    """A re-share restarts seq at 0: every new frame was "stored, not applied" with the old share's OCR lines."""
+    p = pl.SessionPipeline("s1", Bus(), vision=_novision, persist=False)
+    scripted += [form(), form(), form(title_id="ACC-PINV-0009")]
+    for s in (0, 1, 0):
+        st = await p.on_keyframe({"t": s, "seq": s, "jpeg_b64": _jpeg(), "changed_tiles": [[0, 0, 9, 9]]})
+    assert st is not None and st.entity_id == "ACC-PINV-0009" and ocr_args[-1][1] is None
+    p.close()
+
+
+async def test_seq_gap_forces_full_ocr(scripted, ocr_args):
+    """changed_tiles are vs the client's previous keyframe; after a dropped frame they miss its changes."""
+    p = pl.SessionPipeline("s1", Bus(), vision=_novision, persist=False)
+    scripted += [form(), form(), form()]
+    for s in (0, 1, 3):
+        await p.on_keyframe({"t": s, "seq": s, "jpeg_b64": _jpeg(), "changed_tiles": [[s, 0, 9, 9]]})
+    assert [a[0] for a in ocr_args] == [[[0, 0, 9, 9]], [[1, 0, 9, 9]], None]
+    p.close()
+
+
+async def test_queued_settle_keyframe_coalesced_into_next(scripted, ocr_args):
+    """Serial OCR under the lock built a 2-4 s backlog; a settle frame with a newer one queued is skipped and its
+    tiles ride along with the next frame."""
+    p = pl.SessionPipeline("s1", Bus(), vision=_novision, persist=False)
+    scripted += [form(), form()]
+    await p.on_keyframe({"t": 0, "seq": 0, "jpeg_b64": _jpeg()})
+    async with p.lock:
+        a = asyncio.create_task(p.on_keyframe({"t": 1, "seq": 1, "reason": "settle", "jpeg_b64": _jpeg(),
+                                               "changed_tiles": [[1, 0, 9, 9]]}))
+        b = asyncio.create_task(p.on_keyframe({"t": 2, "seq": 2, "reason": "settle", "jpeg_b64": _jpeg(),
+                                               "changed_tiles": [[2, 0, 9, 9]]}))
+        await asyncio.sleep(0.01)
+    assert await a is None and (await b).seq == 2
+    assert ocr_args[-1][0] == [[1, 0, 9, 9], [2, 0, 9, 9]] and len(ocr_args) == 2
+    p.close()
+
+
+async def test_rebaseline_on_other_screen_does_not_reopen(scripted):
+    """Vision on the previous record's frame re-baselined the diff on it: "Opened" repeated for the current one."""
+    bus, gate, calls = Bus(), asyncio.Event(), []
+
+    async def vision(msgs, jpeg):
+        calls.append(1)
+        if len(calls) > 1:
+            return None
+        await gate.wait()
+        return VisionState(entity_id="ACC-PINV-0004", entity_type="Purchase Invoice")
+
+    p = pl.SessionPipeline("s1", bus, vision=vision, persist=False)
+    scripted += [form(), form(title_id="ACC-PINV-0005")]
+    await p.on_keyframe({"t": 0, "seq": 0, "reason": "boundary", "jpeg_b64": _jpeg()})
+    await p.on_keyframe({"t": 1000, "seq": 1, "reason": "boundary", "jpeg_b64": _jpeg()})
+    gate.set()
+    await p.drain()
+    assert [e.kind for batch in bus.of("screen.events") for e in batch].count("open") == 2
+    p.close()

@@ -127,12 +127,15 @@ class Differ:
 
     def note_activity(self, msg: dict) -> None:
         try:
+            # `rects` = the typing frame's own changed rects; `tiles_changed` is only a count from the client
             self.activity.append(Activity(float(msg.get("t") or 0), str(msg.get("kind") or ""),
-                                          _tiles(msg.get("tiles_changed"))))
+                                          _tiles(msg.get("rects")) or _tiles(msg.get("tiles_changed"))))
         except (TypeError, ValueError):
             pass
 
-    def _window(self, t: float) -> list[Activity]:
+    def _window(self, t: float, since: Optional[float] = None) -> list[Activity]:
+        if since is not None:  # re-diff from an older baseline frame: everything since it, however long vision took
+            return [a for a in self.activity if since - 500 <= a.t <= t + 250]
         lo = max(t - ACTIVITY_WINDOW_MS, self.last_t - 500 if self.last_t > float("-inf") else t - ACTIVITY_WINDOW_MS)
         return [a for a in self.activity if lo <= a.t <= t + 250]
 
@@ -143,7 +146,8 @@ class Differ:
 
     def diff(self, prev: Optional[ScreenState], cur: ScreenState,
              changed_tiles: Optional[list[list[int]]] = None,
-             kinds: Optional[dict[str, str]] = None) -> list[ScreenEvent]:
+             kinds: Optional[dict[str, str]] = None, rebase: bool = False) -> list[ScreenEvent]:
+        """`rebase`: `prev` is an older frame re-composed after vision landed (cur was already diffed once)."""
         evs: list[ScreenEvent] = []
         kinds = kinds or {}
         ent = cur.entity_type or cur.view or "screen"
@@ -186,7 +190,7 @@ class Differ:
                 continue
             if (p.value or "") != (f.value or "") and not same_value(p, f) and not _covered(p, f):
                 changes.append((k, p, f))
-        win = self._window(cur.t)
+        win = self._window(cur.t, prev.t if rebase else None)
         typing = [a for a in win if a.kind == "typing"]
         user = [a for a in win if a.kind in USER_KINDS]
         if not typing:
@@ -196,7 +200,8 @@ class Differ:
             changes = [(k, p, f) for k, p, f in changes if p.value and f.value and not only_scroll]
         sources: dict[str, str] = {}
         for k, p, f in changes:
-            spatial_tiles = [tl for a in typing for tl in a.tiles] + (list(changed_tiles or []) if typing else [])
+            # the typing frames' own rects; keyframe tiles only as fallback (they also cover autofilled fields)
+            spatial_tiles = [tl for a in typing for tl in a.tiles] or (list(changed_tiles or []) if typing else [])
             if typing and f.bbox and spatial_tiles:
                 sources[k] = "typed" if any(intersects(f.bbox, tl, 4) for tl in spatial_tiles) else "?"
             elif typing:

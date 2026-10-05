@@ -304,6 +304,8 @@ export interface ActivityMsg {
   t: number;
   kind: ActivityKind;
   tiles_changed: number;
+  /** typing frames' changed rects (keyframe coords) since the last activity message */
+  rects?: Rect[];
   dims: [number, number];
 }
 export interface KeyframeMsg {
