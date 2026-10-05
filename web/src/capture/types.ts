@@ -24,6 +24,7 @@ export interface WorkerActivity {
   t: number;
   kind: ActivityKind;
   tiles_changed: number;
+  rects: Rect[];
   dims: [number, number];
 }
 

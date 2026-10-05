@@ -49,7 +49,8 @@ let lastKfT = 0;
 let seq = 0;
 let encoding = false;
 let pendingBoundary: { at: number; reason: KeyframeReason } | null = null;
-let smallChangeTimes: number[] = [];
+let smallChanges: { t: number; idx: number[] }[] = [];
+let typingRects: Rect[] = []; // keyframe-coord rects of typing frames since the last activity post
 let reportedKind: ActivityKind = "idle";
 let lastActivityPost = 0;
 let lastTilesChanged = 0;
@@ -164,10 +165,11 @@ function detectScroll(a: Float32Array, b: Float32Array, idx: number[]): number {
   return bestE < e0 * 0.55 ? best : 0;
 }
 
-/** Toast-like: compact new cluster of tiles (not typing), ideally near an edge. */
+/** Toast-like: compact new cluster of tiles (not typing) near an edge. Mid-screen clusters are a focused field or
+ * an opened dropdown — tagging those "boundary" forced a vision read of the overlay-covered form. */
 function toastLike(idx: number[], t: number): KeyframeReason | null {
   if (idx.length < 3 || idx.length > 24) return null;
-  if (smallChangeTimes.some((st) => t - st < 1000)) return null;
+  if (smallChanges.some((s) => t - s.t < 1000)) return null;
   let minX = TX, maxX = -1, minY = TY, maxY = -1;
   for (const i of idx) {
     const x = i % TX, y = Math.floor(i / TX);
@@ -177,7 +179,21 @@ function toastLike(idx: number[], t: number): KeyframeReason | null {
   const area = (maxX - minX + 1) * (maxY - minY + 1);
   if (area > TX * TY * 0.2 || idx.length / area < 0.5) return null;
   const nearEdge = minX === 0 || maxX === TX - 1 || minY === 0 || maxY === TY - 1;
-  return nearEdge ? "toast" : "boundary";
+  return nearEdge ? "toast" : null;
+}
+
+/** Caret-like: all tiles on one row, or within a 2x2 block (a moving mouse pointer jumps around). */
+function caretLike(idx: number[]): boolean {
+  const xs = idx.map((i) => i % TX), ys = idx.map((i) => Math.floor(i / TX));
+  const dx = Math.max(...xs) - Math.min(...xs), dy = Math.max(...ys) - Math.min(...ys);
+  return dy === 0 || (dx <= 1 && dy <= 1);
+}
+
+/** Keyframe pixel size for the current source. */
+function kfSize(): [number, number] {
+  const [w, h] = lastSrcDims;
+  const scale = Math.min(1, MAX_LONG_EDGE / Math.max(w, h));
+  return [Math.round(w * scale), Math.round(h * scale)];
 }
 
 function setLastSrc(src: Src) {
@@ -225,9 +241,12 @@ function analyse(src: Src) {
     if (scroll !== 0) kind = "scrolling";
     else if (idx.length > TX * TY * 0.3 || hd > 0.25) kind = "navigating";
     else if (idx.length <= 3) {
-      smallChangeTimes = smallChangeTimes.filter((st) => t - st < 1500);
-      smallChangeTimes.push(t);
-      kind = smallChangeTimes.length >= 2 ? "typing" : "other";
+      smallChanges = smallChanges.filter((s) => t - s.t < 1500);
+      const last = smallChanges[smallChanges.length - 1];
+      smallChanges.push({ t, idx });
+      // two small changes in 1.5 s = typing only if they stay together (caret); mouse moves read as typing
+      kind = last && caretLike([...last.idx, ...idx]) ? "typing" : "other";
+      if (kind === "typing") typingRects.push(...tilesToRects(diff, ...kfSize()));
     } else {
       const tl = toastLike(idx, t);
       if (tl) pendingBoundary = { at: t + 250, reason: tl }; // let it finish animating in
@@ -257,7 +276,9 @@ function maybeReportActivity(t: number) {
     if (t - lastActivityPost < ACTIVITY_MIN_GAP) return; // ≤2/s; tick() retries
     reportedKind = k;
     lastActivityPost = t;
-    post({ type: "activity", t, kind: k, tiles_changed: lastTilesChanged, dims: lastSrcDims });
+    // rects: where the typing happened, so the server tells the typed field from autofilled ones
+    post({ type: "activity", t, kind: k, tiles_changed: lastTilesChanged, rects: typingRects, dims: lastSrcDims });
+    typingRects = [];
   }
 }
 
@@ -283,8 +304,7 @@ async function emitKeyframe(reason: KeyframeReason) {
   const t = now();
   const [w, h] = lastSrcDims;
   if (!w || !h) return;
-  const scale = Math.min(1, MAX_LONG_EDGE / Math.max(w, h));
-  const kw = Math.round(w * scale), kh = Math.round(h * scale);
+  const [kw, kh] = kfSize();
 
   const g = prevGray;
   let rects: Rect[] = [[0, 0, kw, kh]];
