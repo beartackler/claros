@@ -164,6 +164,17 @@ def test_tau_relaxes_at_a_task_boundary_until_three_live_questions():
     assert g.tau(lg, u, boundary=True)["tau"] == 0.75
 
 
+def test_mandatory_question_bar_also_drops_at_a_boundary():
+    """The boundary relief was an elif after the mandatory one: mandatory questions had a higher τ at a save."""
+    from claros.brain.gate import Gate
+    from claros.brain.ledger import Ledger
+    from claros.models import Unknown
+    g, lg = Gate(), Ledger("s_tau2")
+    u = Unknown(id="u1", type="why")
+    lg.meta["u1"] = {"tag": "mandatory"}
+    assert g.tau(lg, u, boundary=True)["tau"] < g.tau(lg, u)["tau"] < 0.75
+
+
 def test_typing_run_on_one_field_is_one_question(offline):
     """Live 2026-10-04: "plan" → "plant" → "Plants and Machiner" opened a question per keystroke read."""
     lg = ledger_mod.get_ledger("p_typing")

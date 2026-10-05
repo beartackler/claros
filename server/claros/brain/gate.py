@@ -225,7 +225,7 @@ class Gate:
             c_miss *= 2  # missing a guardrail is costly
         if tag == "mandatory" and len(lg.asked_ids) < 3:
             c_miss *= 1.5  # requirement guard: ≥3 live questions
-        elif len(lg.asked_ids) < LIVE_TARGET and boundary:
+        if len(lg.asked_ids) < LIVE_TARGET and boundary:  # not elif: a mandatory one got the HIGHER bar here
             # fewer than 3 live questions so far and the expert just saved / went back to the list: that IS the
             # natural pause (e2e: a judgment question waited at p≈0.56 < τ 0.75 through two saves and expired)
             c_miss *= 3
