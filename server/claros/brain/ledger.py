@@ -559,7 +559,8 @@ class Ledger:
                 u.about_event_ids.append(e.id)
                 m["dupes"] = m.get("dupes", 0) + 1
                 m["salience"] = min(1.0, m.get("salience", 0.6) + 0.1)
-                if u.status == "open":
+                if u.status == "open" or (u.status == "deferred" and u.id not in self.asked_ids):
+                    u.status = "open"  # never asked and the expert does it again: it's live again, not a dupe
                     u.created_t = now
                     u.expires_t = now + EXPIRE_MS
                 return None

@@ -205,6 +205,16 @@ def test_only_a_real_revert_drops_the_question(offline):
     assert lg.unknowns[u.id].status == "dropped"
 
 
+def test_repeat_of_an_expired_never_asked_question_reopens_it(offline):
+    lg = ledger_mod.get_ledger("dd1")
+    u = run(lg.on_events([ev(1, "hold", field="Status", new="On Hold", summary="Invoice put on hold")]))[0]
+    offline.clock.t += 61_000
+    lg.expire()
+    assert u.status == "deferred"
+    assert not run(lg.on_events([ev(2, "hold", field="Status", new="On Hold", summary="Invoice put on hold")]))
+    assert u.status == "open" and u.expires_t > offline.clock.t
+
+
 def test_off_record_ignores_events(offline):
     offline.get_session("s4").off_record = True
     assert run(ledger_mod.get_ledger("s4").on_events([ev(1, "hold")])) == []
