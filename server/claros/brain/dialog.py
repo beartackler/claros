@@ -176,7 +176,12 @@ async def handle_turn(sid: str, text: str) -> dict:
     if mode == "debrief":
         cq = deps.knowledge_attr("debrief.current_question")
         pq = (cq(sess) if cq else None) or pq
-    ir = await classify_intent(mode, text, {"pending_question": pq})
+    ctx: dict = {"pending_question": pq}
+    if mode == "capture":
+        ctx["pending_confident"] = _confident(pending)
+        ctx["pending_recent"] = bool(pending) and \
+            deps.now_ms() - lg.meta.get(pending.id, {}).get("asked_ms", 0) <= 20_000
+    ir = await classify_intent(mode, text, ctx)
     intent = ir.intent
     deps.store_log(sid, "dialog.intent", {"text": text, "mode": mode, **ir.model_dump()})
     if intent in ("off_record", "strike_that", "end_session"):
@@ -201,12 +206,16 @@ async def _control_turn(sid: str, mode: str, intent: str, lang: str) -> dict:
 FILLER = re.compile(r"^\W*((mm+|hm+|uh+|um+|er+|ah+|okay|ok|yeah|so|well|hmm+|ммм?|э+|ну)\W*){1,3}$", re.I)
 
 
+def _confident(u: Any) -> bool:
+    return bool(u and u.hypothesis and u.hypothesis_confidence >= 0.7)
+
+
 async def _capture_turn(sid: str, intent: str, text: str, lang: str, pending: Any) -> dict:
     lg = get_ledger(sid)
-    if intent == "answer" and FILLER.match(text or ""):
+    if (intent == "answer" or intent == "confirm" and not _confident(pending)) and FILLER.match(text or ""):
         return {"intent": "narration"}  # thinking noise, not the answer (live: "Mm." got "Got it, thanks")
     if intent in ("answer", "correction", "confirm"):
-        target = pending or lg.last_asked(180_000)
+        target = pending  # asked ≤60 s ago; older and they've moved on (the ledger's own matching can still resolve it)
         if target is None:
             return {"intent": "narration"}  # talking about the screen, not to Claros
         # rule extraction takes up to ~7 s: ack now, extract in the background (live: stopped at 115.7 s, "Got it"

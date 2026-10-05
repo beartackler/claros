@@ -229,6 +229,19 @@ def test_ack_does_not_wait_for_rule_extraction_and_answer_recorded_once(offline,
     assert lg.unknowns[u.id].resolution == "Because that department pays for it"
 
 
+def test_yeah_plus_narration_is_not_a_confirm(offline):
+    """Live: "Yeah, now I open the next invoice from the list" matched the confirm rule → the open why-question
+    was marked answered and Claros said "Great, noted."."""
+    lg = ledger_mod.get_ledger("cf1")
+    from tests.test_brain import ev
+    u = run(lg.on_events([ev(1, "edit", field="Cost Center", old="4711", new="0400", source="typed")]))[0]
+    lg.mark_asked(u.id)
+    lg.meta[u.id]["asked_ms"] -= 30_000
+    for i, text in enumerate(["Yeah, now I open the next invoice from the list", "Yeah."]):
+        r = run(dialog.on_utterance("cf1", {"role": "user", "text": text, "event_id": f"cf-{i}"}))
+        assert r["intent"] == "narration" and lg.unknowns[u.id].status == "asked" and not says(offline.sent)
+
+
 # ---------------- context + vars + lookup ----------------
 
 def test_context_update_compact_and_throttled(offline, monkeypatch):

@@ -144,8 +144,8 @@ def _default(mode: str, text: str, context: dict) -> str:
         if context.get("pending_prediction"):
             return "answer_prediction"
         return "why_this" if t.endswith("?") else "off_topic"
-    if context.get("pending_question"):
-        return "answer"
+    if context.get("pending_question") and context.get("pending_recent", True):
+        return "answer"  # classifier timed out: only call it an answer right after the ask
     if t.endswith("?") and re.search(r"claros|клар", t.lower()):
         return "question_to_claros"
     return "narration"
@@ -155,6 +155,8 @@ async def classify_intent(mode: str, text: str, context: Optional[dict] = None,
                           *, timeout: float = 0.9) -> IntentResult:
     context = context or {}
     r = rule_intent(mode, text)
+    if r == "confirm" and len(text.split()) > 3 and context.get("pending_confident") is False:
+        r = None  # "Yeah, now I open the next invoice" is narration; a long "yes…" only confirms a stated guess
     if r:
         return IntentResult(intent=r, confidence=0.95, backend="rules")
     labels = LEARNER_INTENTS if _family(mode) == "learner" else EXPERT_INTENTS
