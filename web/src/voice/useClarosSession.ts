@@ -100,7 +100,16 @@ export function useClarosSession() {
   }, []);
 
   const join = useCallback((hello: Omit<HelloMsg, "type">) => {
-    if (!useClaros.getState().phase) useClaros.getState().set({ phase: hello.mode });
+    const st = useClaros.getState();
+    // a new session (home Start creates it over REST): drop the last run's state, or its "debrief" phase
+    // sends the fresh capture straight to the debrief page
+    if (st.sessionId && st.sessionId !== hello.session_id) {
+      const { voiceStatus, wsStatus } = st; // the voice connection outlives the session switch
+      st.reset();
+      useClaros.getState().set({ voiceStatus, wsStatus });
+    }
+    if (!useClaros.getState().phase || useClaros.getState().sessionId !== hello.session_id)
+      useClaros.getState().set({ phase: hello.mode });
     openSession(hello);
     setSessionId(hello.session_id);
   }, []);
