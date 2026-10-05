@@ -43,23 +43,23 @@ _EXPERT_RULES: list[tuple[str, list[str]]] = [
         r"не записывай", r"не записывать", r"не для записи", r"без записи", r"выключи запись", r"останови запись",
     ]),
     ("strike_that", [
-        r"strike that", r"scratch that", r"forget (that|what i said)", r"delete that", r"ignore that",
+        r"strike that", r"scratch that", r"(forget|delete|ignore) (that|what i said)$",
         r"streich das", r"vergiss das", r"das l[öo]schen", r"l[öo]sch das",
         r"oublie (ça|ca)", r"efface (ça|ca)", r"raye (ça|ca)",
         r"olv[ií]dalo", r"borra eso", r"tacha eso", r"olvida eso",
         r"забудь", r"удали (это|последнее)", r"вычеркни", r"сотри (это)?",
     ]),
     ("not_now", [
-        r"not now", r"^(maybe )?later\b", r"ask me later", r"^hold on", r"^one sec", r"not right now",
-        r"nicht jetzt", r"^sp[äa]ter", r"frag (mich )?sp[äa]ter", r"^moment mal",
-        r"pas maintenant", r"^plus tard", r"demande(-moi)? plus tard",
-        r"ahora no", r"^m[áa]s tarde", r"^luego\b", r"preg[úu]ntame (luego|despu[ée]s|m[áa]s tarde)",
-        r"не сейчас", r"^(давай )?потом\b", r"^позже", r"спроси (потом|позже)", r"^подожди",
+        r"not now", r"^(maybe )?later$", r"ask me later", r"^hold on", r"^one sec", r"not right now",
+        r"nicht jetzt", r"^sp[äa]ter$", r"frag (mich )?sp[äa]ter", r"^moment mal",
+        r"pas maintenant", r"^plus tard$", r"demande(-moi)? plus tard",
+        r"ahora no", r"^m[áa]s tarde$", r"^luego$", r"preg[úu]ntame (luego|despu[ée]s|m[áa]s tarde)",
+        r"не сейчас", r"^(давай )?потом$", r"^позже$", r"спроси (потом|позже)", r"^подожди",
     ]),
     ("end_session", [
-        r"(i'?m|we'?re) done", r"that'?s it for (today|now)", r"end (the )?session",
-        r"ich bin fertig", r"das war'?s", r"j'ai fini", r"c'est fini", r"he terminado", r"eso es todo",
-        r"я закончил", r"закончили", r"на сегодня всё", r"конец сессии",
+        r"(i'?m|we'?re) (all )?done( here| for (today|now))?$", r"that'?s it for (today|now)", r"end (the )?session",
+        r"ich bin fertig$", r"das war'?s", r"j'ai fini$", r"c'est fini", r"he terminado$", r"eso es todo",
+        r"я закончил(а)?$", r"закончили$", r"на сегодня всё", r"конец сессии",
     ]),
     ("confirm", [
         r"^(yes|yeah|yep|right|exactly|correct|that'?s right)\b",
@@ -108,12 +108,32 @@ def _family(mode: str) -> str:
     return "learner" if mode in ("learn", "request") else "expert"
 
 
+# Controls act on the whole session, so they must BE the utterance, not sit inside narration (live: "Okay, I'm done
+# with the expense head, now the cost center" ended capture; "Later in the month we close the books" snoozed 5 min).
+# off_record stays a substring match: its phrases are unambiguous, and missing one records what shouldn't be.
+_CONTROL = {"strike_that", "not_now", "end_session"}
+_CONTROL_MAX_WORDS = 6
+_LEAD = re.compile(r"^(\W*\b(ok(ay)?|so|um+|uh+|well|alright|also|alors|bueno|ну|ладно)\b)+")
+_POLITE = re.compile(r"(\W*\b(please|thanks|thank you|bitte|danke|s'il (te|vous) pla[iî]t|merci|por favor|gracias|"
+                     r"пожалуйста|спасибо))+\W*$")
+
+
+def _core(t: str) -> str:
+    """'okay, later, please.' → 'later' (leading filler, trailing politeness and punctuation off)."""
+    return re.sub(r"^\W+|\W+$", "", _POLITE.sub("", _LEAD.sub("", t)))
+
+
 def rule_intent(mode: str, text: str) -> Optional[str]:
     t = (text or "").lower().strip()
     if not t:
         return None
+    core = _core(t)
+    short = len(core.split()) <= _CONTROL_MAX_WORDS
     for intent, pats in _COMPILED[_family(mode)]:
-        if any(p.search(t) for p in pats):
+        if intent in _CONTROL:
+            if short and any(p.search(core) for p in pats):
+                return intent
+        elif any(p.search(t) for p in pats):
             return intent
     return None
 

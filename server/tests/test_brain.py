@@ -95,6 +95,21 @@ def test_expert_rules_multilingual(text, intent):
 
 
 @pytest.mark.parametrize("text,intent", [
+    # live: control phrases inside narration fired session controls
+    ("Okay, I'm done with the expense head, now the cost center", None),
+    ("Ignore that warning, it always shows", None),
+    ("Later in the month we close the books", None),
+    ("Я закончил с этим полем, теперь центр затрат", None),
+    # the commands themselves still work, with filler and politeness around them
+    ("Okay, I'm done.", "end_session"), ("Ich bin fertig", "end_session"), ("J'ai fini", "end_session"),
+    ("Ignore that, please", "strike_that"), ("Später, bitte", "not_now"), ("Más tarde", "not_now"),
+    ("Ну, позже", "not_now"), ("Plus tard", "not_now"),
+])
+def test_control_intents_only_as_whole_utterances(text, intent):
+    assert intents.rule_intent("capture", text) == intent
+
+
+@pytest.mark.parametrize("text,intent", [
     ("Проведи меня по шагам", "walk_through"),
     ("что дальше?", "what_next"),
     ("Почему здесь 0400?", "why_this"),
