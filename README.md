@@ -97,6 +97,27 @@ Open http://localhost:3000. Keys in `.env`:
 
 Every component degrades gracefully when its key is missing.
 
+### Fast decisions on your own machine (optional)
+
+Claros makes many small, frequent decisions: is this edit a judgment call, what did the person just say, how welcome would a question be right now. You can run them locally on [Ollama](https://ollama.com), so they stay on your machine, cost nothing and skip a network hop:
+
+```bash
+brew install ollama        # or download it from ollama.com
+ollama pull clef-flash     # the decision model, a ~10 GB download
+ollama serve               # serves the System One API on :11434
+```
+
+Keep `OLLAMA_URL=http://localhost:11434` in `.env` (it's already in `.env.example`). Check that it answers:
+
+```bash
+curl -s localhost:11434/v1/systemone -H 'content-type: application/json' -d '{"model":"clef-flash",
+  "state":{"utterance":"off the record please"},
+  "questions":{"intent":{"type":"choice","instructions":"Classify the utterance",
+  "criteria":{"off_record":"wants to pause recording","other":"anything else"}}}}'
+```
+
+Ollama is tried first. When it isn't running, Claros moves on to Cloudflare Workers AI, then Fastino GLiDE, then the main LLM, then plain rules, so a decision always comes back. `CLAROS_DECIDER_OLLAMA=0` skips Ollama; `CLAROS_DECIDER_MODEL` picks a different local model.
+
 ### Test apps
 
 Claros doesn't need these — it works on whatever window you share — but they give you realistic, resettable data:
