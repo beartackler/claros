@@ -280,6 +280,18 @@ def test_gate_budget_and_gap(offline):
     assert r["decision"] == "blocked" and any("budget" in x for x in r["reasons"])
 
 
+def test_gate_log_reaches_the_store_once_per_blocked_reason(offline, tmp_path):
+    """store_log called the store module's logging.Logger (TypeError, swallowed): nothing was ever logged.
+    And blocked reasons carry ms counters, so the dedupe never matched."""
+    from claros.store import store
+    store.open(str(tmp_path / "t.db"))
+    g = Gate(GateConfig())
+    for ms in (812, 1103):
+        g._log("lg1", {"t": 1.0, "unknown_id": "u1", "decision": "blocked", "reasons": [f"recent speech ({ms}ms)"]})
+    assert len(g.decisions("lg1")) == 1
+    assert [r["kind"] for r in store.iter_log("lg1")] == ["gate"]
+
+
 def test_question_born_with_an_ask_survives_the_min_gap(offline):
     """min gap 45 s vs recency τ 60 s and 60 s expiry: a second unknown opened alongside an ask decayed and
     expired while the gap held it back."""

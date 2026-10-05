@@ -42,9 +42,8 @@ async def send(session_id: str, msg: dict) -> None:
 def store_log(session_id: str, kind: str, payload: Any, t: Optional[float] = None) -> None:
     try:
         from claros import store as st  # type: ignore
-        fn = getattr(st, "log", None) or getattr(getattr(st, "store", None), "log", None)
-        if fn:
-            fn(session_id, kind, payload, t if t is not None else now_ms())
+        # st.store.log, not st.log: the module's `log` is its logging.Logger (calling it raised, swallowed below)
+        st.store.log(session_id, kind, payload, t if t is not None else now_ms())
     except Exception:  # noqa: BLE001
         pass
 

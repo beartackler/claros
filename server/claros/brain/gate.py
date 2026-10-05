@@ -182,7 +182,9 @@ class Gate:
 
     def _log(self, sid: str, entry: dict) -> None:
         s = self.st(sid)
-        sig = (entry.get("decision"), entry.get("unknown_id"), tuple(entry.get("reasons", [])))
+        # reasons carry ms/s counters ("recent speech (812ms)"): compare without them, or nothing ever dedupes
+        sig = (entry.get("decision"), entry.get("unknown_id"),
+               tuple(re.sub(r"\d+", "", x) for x in entry.get("reasons", [])))
         if entry.get("decision") == "blocked" and s.last_reasons and sig == s.last_reasons:
             return
         s.last_reasons = sig
